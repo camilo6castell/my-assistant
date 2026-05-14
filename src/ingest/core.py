@@ -3,21 +3,19 @@ import pickle
 import faiss
 import numpy as np
 
-from FlagEmbedding import FlagModel
+from sentence_transformers import SentenceTransformer
 
 from src.utils.logger import logger
 
-from src.utils.env import (
+from src.config.settings import (
     BASE_VECTOR_PATH,
     EMBED_MODEL,
     CHUNK_SIZE,
     CHUNK_OVERLAP,
 )
 
-model = FlagModel(
+model = SentenceTransformer(
     EMBED_MODEL,
-    use_fp16=False,
-    trust_remote_code=False,
 )
 
 
@@ -111,13 +109,12 @@ def encode_chunks(
     chunks: list[str],
 ) -> np.ndarray:
 
-    logger.info(f"Generando embeddings " f"({len(chunks)} chunks)")
-
-    embeddings = model.encode(chunks)
+    embeddings = model.encode(
+        chunks,
+        normalize_embeddings=True,
+    )
 
     embeddings = np.array(embeddings).astype("float32")
-
-    faiss.normalize_L2(embeddings)
 
     return embeddings
 

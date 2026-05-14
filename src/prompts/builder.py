@@ -1,6 +1,6 @@
 from typing import List
 
-from src.utils.env import MAX_TURNS
+from src.config.settings import MAX_TURNS
 
 
 def build_prompt(

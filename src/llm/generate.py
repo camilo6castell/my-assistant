@@ -2,7 +2,7 @@ from openai import OpenAIError
 
 from src.llm.client import client
 
-from src.utils.env import LLM_MODEL
+from src.config.settings import LLM_MODEL
 
 from src.utils.logger import logger
 

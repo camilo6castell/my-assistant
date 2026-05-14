@@ -14,7 +14,7 @@ from readability import Document
 
 from src.utils.logger import logger
 
-from src.utils.env import (
+from src.config.settings import (
     MAX_PAGES,
     DELAY,
 )

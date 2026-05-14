@@ -3,21 +3,19 @@ from typing import List, Tuple, Optional
 import faiss
 import numpy as np
 
-from FlagEmbedding import FlagModel
+from sentence_transformers import SentenceTransformer
 
 from src.utils.logger import logger
 
-from src.utils.env import (
+from src.config.settings import (
     EMBED_MODEL,
     BASE_TOP_K_INITIAL,
     BASE_TOP_K_FINAL,
     MAX_TURNS,
 )
 
-model = FlagModel(
+model = SentenceTransformer(
     EMBED_MODEL,
-    use_fp16=False,
-    trust_remote_code=False,
 )
 
 
@@ -79,11 +77,12 @@ def search(
 
     for q in queries:
 
-        emb = model.encode([q])
+        emb = model.encode(
+            [q],
+            normalize_embeddings=True,
+        )
 
         emb = np.array(emb).astype("float32")
-
-        faiss.normalize_L2(emb)
 
         query_embeddings.append(emb[0])
 
@@ -116,11 +115,12 @@ def search(
 
             chunk_text = metadata[idx]["text"]
 
-            chunk_embedding = model.encode([chunk_text])
+            chunk_embedding = model.encode(
+                [chunk_text],
+                normalize_embeddings=True,
+            )
 
             chunk_embedding = np.array(chunk_embedding).astype("float32")
-
-            faiss.normalize_L2(chunk_embedding)
 
             chunk_vector = chunk_embedding[0]
 

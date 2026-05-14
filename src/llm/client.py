@@ -1,6 +1,6 @@
 from openai import OpenAI
 
-from src.utils.env import (
+from src.config.settings import (
     LLM_BASE_URL,
     LLM_API_KEY,
 )

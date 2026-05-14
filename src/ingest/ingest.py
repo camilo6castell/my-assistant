@@ -9,7 +9,7 @@ from bs4 import BeautifulSoup
 
 from src.utils.logger import logger
 
-from src.utils.env import DATA_PATH
+from src.config.settings import DATA_PATH
 
 from src.ingest.core import (
     chunk_text,
@@ -18,6 +18,21 @@ from src.ingest.core import (
     save_collection,
     build_metadata,
 )
+
+# def read_pdf(path: Path):
+
+#     reader = PdfReader(str(path))
+
+#     pages = []
+
+#     for i, page in enumerate(reader.pages):
+
+#         text = page.extract_text()
+
+#         if text:
+#             pages.append((i + 1, text))
+
+#     return pages
 
 
 def read_pdf(path: Path):
@@ -28,10 +43,27 @@ def read_pdf(path: Path):
 
     for i, page in enumerate(reader.pages):
 
-        text = page.extract_text()
+        try:
 
-        if text:
-            pages.append((i + 1, text))
+            text = page.extract_text()
+
+            if text and text.strip():
+
+                pages.append((i + 1, text))
+
+            else:
+
+                logger.warning(f"Página vacía en " f"{path.name} | page={i + 1}")
+
+        except Exception as e:
+
+            logger.warning(
+                f"No se pudo extraer "
+                f"texto de {path.name} "
+                f"| page={i + 1} | error={e}"
+            )
+
+            continue
 
     return pages
 

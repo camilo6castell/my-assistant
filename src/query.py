@@ -15,7 +15,7 @@ from src.context.manager import (
 
 from src.utils.logger import logger
 
-from src.utils.env import (
+from src.config.settings import (
     INTERPRETATIVE_MODE,
     BASE_VECTOR_PATH,
 )

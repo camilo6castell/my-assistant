@@ -4,7 +4,7 @@ import faiss
 import numpy as np
 
 from src.utils.logger import logger
-from src.utils.env import BASE_VECTOR_PATH
+from src.config.settings import BASE_VECTOR_PATH
 
 
 def list_contexts() -> list[str]:
