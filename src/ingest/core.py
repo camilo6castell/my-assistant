@@ -1,5 +1,6 @@
 from pathlib import Path
 import pickle
+
 import faiss
 import numpy as np
 
@@ -21,6 +22,11 @@ model = SentenceTransformer(
 
 def chunk_text(text: str) -> list[str]:
 
+    text = text.strip()
+
+    if not text:
+        return []
+
     chunks = []
 
     start = 0
@@ -29,7 +35,10 @@ def chunk_text(text: str) -> list[str]:
 
         end = start + CHUNK_SIZE
 
-        chunks.append(text[start:end])
+        chunk = text[start:end].strip()
+
+        if chunk:
+            chunks.append(chunk)
 
         start += CHUNK_SIZE - CHUNK_OVERLAP
 
@@ -49,9 +58,9 @@ def get_collection_paths(
 
     return {
         "vector_path": vector_path,
-        "index_file": (vector_path / "index.faiss"),
-        "metadata_file": (vector_path / "metadata.pkl"),
-        "vectors_file": (vector_path / "vectors.npy"),
+        "index_file": vector_path / "index.faiss",
+        "metadata_file": vector_path / "metadata.pkl",
+        "vectors_file": vector_path / "vectors.npy",
     }
 
 
@@ -60,14 +69,12 @@ def load_collection(collection: str):
     paths = get_collection_paths(collection)
 
     index_file = paths["index_file"]
-
     metadata_file = paths["metadata_file"]
-
     vectors_file = paths["vectors_file"]
 
     if index_file.exists():
 
-        logger.info(f"Cargando colección: " f"{collection}")
+        logger.info(f"Cargando colección: {collection}")
 
         index = faiss.read_index(str(index_file))
 
@@ -77,21 +84,21 @@ def load_collection(collection: str):
         ) as f:
             metadata = pickle.load(f)
 
+        vectors = None
+
         if vectors_file.exists():
 
             vectors = np.load(vectors_file)
 
-            logger.info("vectors.npy cargado.")
+            logger.info("Embeddings cargados.")
 
         else:
 
             logger.warning("vectors.npy no encontrado.")
 
-            vectors = None
-
     else:
 
-        logger.info(f"Creando nueva colección: " f"{collection}")
+        logger.info(f"Creando nueva colección: {collection}")
 
         index = None
         metadata = []
@@ -109,39 +116,40 @@ def encode_chunks(
     chunks: list[str],
 ) -> np.ndarray:
 
+    logger.info(f"Generando embeddings para {len(chunks)} chunks")
+
     embeddings = model.encode(
         chunks,
         normalize_embeddings=True,
+        show_progress_bar=True,
     )
 
-    embeddings = np.array(embeddings).astype("float32")
-
-    return embeddings
+    return np.array(
+        embeddings,
+        dtype="float32",
+    )
 
 
 def create_faiss_index(
     dimension: int,
 ):
 
-    logger.info(f"Creando índice FAISS " f"(dim={dimension})")
+    logger.info(f"Creando índice FAISS (dim={dimension})")
 
     return faiss.IndexFlatIP(dimension)
 
 
 def save_collection(
-    collection_data,
-    new_embeddings,
-    new_metadata,
+    collection_data: dict,
+    new_embeddings: np.ndarray,
+    new_metadata: list[dict],
 ):
 
     logger.info("Guardando colección...")
 
     index = collection_data["index"]
-
     metadata = collection_data["metadata"]
-
     existing_vectors = collection_data["vectors"]
-
     paths = collection_data["paths"]
 
     if existing_vectors is not None:
@@ -181,13 +189,18 @@ def save_collection(
         paths["metadata_file"],
         "wb",
     ) as f:
-        pickle.dump(metadata, f)
+
+        pickle.dump(
+            metadata,
+            f,
+        )
 
     logger.info("Colección guardada correctamente.")
 
 
 def build_metadata(
     source: str,
+    source_type: str,
     page: int,
     chunk: str,
     chunk_index: int,
@@ -196,6 +209,7 @@ def build_metadata(
 
     return {
         "source": source,
+        "source_type": source_type,
         "page": page,
         "text": chunk,
         "chunk_index": chunk_index,

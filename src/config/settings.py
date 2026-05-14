@@ -1,17 +1,34 @@
-from pathlib import Path
-from dotenv import load_dotenv
+# src/config/settings.py
+
 import os
+
+from pathlib import Path
+
+from dotenv import load_dotenv
+
+from src.utils.tools import env_bool
 
 load_dotenv()
 
 # ======================================================
-# PATHS
+# ROOT
 # ======================================================
 
 AI_HOME = Path(
     os.getenv(
         "AI_HOME",
         "/srv/ai",
+    )
+)
+
+# ======================================================
+# PATHS
+# ======================================================
+
+DATA_PATH = Path(
+    os.getenv(
+        "DATA_PATH",
+        f"{AI_HOME}/data",
     )
 )
 
@@ -22,17 +39,19 @@ BASE_VECTOR_PATH = Path(
     )
 )
 
-DATA_PATH = Path(
+LOG_PATH = Path(
     os.getenv(
-        "DATA_PATH",
-        f"{AI_HOME}/data",
+        "LOG_PATH",
+        f"{AI_HOME}/logs",
     )
 )
 
-LOG_PATH = AI_HOME / "logs"
-
-HF_HOME = Path(os.environ["HF_HOME"])
-
+HF_HOME = Path(
+    os.getenv(
+        "HF_HOME",
+        f"{AI_HOME}/hf",
+    )
+)
 
 # ======================================================
 # EMBEDDINGS
@@ -42,7 +61,6 @@ EMBED_MODEL = os.getenv(
     "EMBED_MODEL",
     "BAAI/bge-small-en-v1.5",
 )
-
 
 # ======================================================
 # CHUNKING
@@ -62,7 +80,6 @@ CHUNK_OVERLAP = int(
     )
 )
 
-
 # ======================================================
 # RETRIEVAL
 # ======================================================
@@ -81,6 +98,20 @@ BASE_TOP_K_FINAL = int(
     )
 )
 
+INTERPRETATIVE_TOP_K_INITIAL = int(
+    os.getenv(
+        "INTERPRETATIVE_TOP_K_INITIAL",
+        25,
+    )
+)
+
+INTERPRETATIVE_TOP_K_FINAL = int(
+    os.getenv(
+        "INTERPRETATIVE_TOP_K_FINAL",
+        7,
+    )
+)
+
 MAX_TURNS = int(
     os.getenv(
         "MAX_TURNS",
@@ -88,14 +119,10 @@ MAX_TURNS = int(
     )
 )
 
-INTERPRETATIVE_MODE = (
-    os.getenv(
-        "INTERPRETATIVE_MODE",
-        "False",
-    ).lower()
-    == "true"
+DEFAULT_INTERPRETATIVE_MODE = env_bool(
+    "DEFAULT_INTERPRETATIVE_MODE",
+    False,
 )
-
 
 # ======================================================
 # LLM
@@ -121,9 +148,22 @@ LLM_MODEL = os.getenv(
     "qwen3-it:4b",
 )
 
+LLM_TEMPERATURE = float(
+    os.getenv(
+        "LLM_TEMPERATURE",
+        0.2,
+    )
+)
+
+LLM_TIMEOUT = int(
+    os.getenv(
+        "LLM_TIMEOUT",
+        120,
+    )
+)
 
 # ======================================================
-# WEB CRAWLER
+# WEB INGEST
 # ======================================================
 
 MAX_PAGES = int(

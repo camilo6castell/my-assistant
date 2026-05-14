@@ -1,152 +1,185 @@
-from typing import List, Tuple, Optional
+from typing import List
 
-import faiss
 import numpy as np
 
 from sentence_transformers import SentenceTransformer
 
-from src.utils.logger import logger
+from src.chat.modes import ChatMode
 
 from src.config.settings import (
     EMBED_MODEL,
     BASE_TOP_K_INITIAL,
     BASE_TOP_K_FINAL,
+    INTERPRETATIVE_TOP_K_INITIAL,
+    INTERPRETATIVE_TOP_K_FINAL,
     MAX_TURNS,
 )
+
+from src.context.models import SearchResult
 
 model = SentenceTransformer(
     EMBED_MODEL,
 )
 
 
-def build_search_query(
-    question: str,
-    interpretative_mode: bool,
-    chat_memory: List[dict],
-) -> List[str]:
+def cosine_similarity(a, b):
 
-    if not interpretative_mode:
+    return np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b))
+
+
+def build_queries(
+    question: str,
+    mode: str,
+    memory: list[dict],
+):
+
+    if mode == ChatMode.RIGOROUS:
         return [question]
 
-    history_text = ""
+    history = ""
 
-    for turn in chat_memory[-MAX_TURNS:]:
-
-        history_text += f"{turn['user']} " f"{turn['assistant']} "
-
-    base_query = history_text + question
+    for turn in memory[-MAX_TURNS:]:
+        history += f"{turn['user']} {turn['assistant']} "
 
     return [
-        base_query,
-        f"Explica conceptualmente: {question}",
-        f"Principio general relacionado con: {question}",
+        question,
+        history + question,
+        f"Explica el concepto: {question}",
+        f"Relaciona ideas sobre: {question}",
     ]
 
 
-def search(
-    question: str,
-    interpretative_mode: bool,
-    chat_memory: List[dict],
-    index: faiss.Index,
-    metadata: List[dict],
-    chunk_vectors: Optional[np.ndarray],
-) -> Tuple[List[int], float]:
+def encode_queries(queries):
 
-    queries = build_search_query(
-        question=question,
-        interpretative_mode=interpretative_mode,
-        chat_memory=chat_memory,
+    embeddings = model.encode(
+        queries,
+        normalize_embeddings=True,
     )
 
-    if interpretative_mode:
-        top_k_initial = 25
-        top_k_final = 7
-    else:
-        top_k_initial = BASE_TOP_K_INITIAL
-        top_k_final = BASE_TOP_K_FINAL
-
-    logger.info(
-        f"Ejecutando búsqueda | "
-        f"queries={len(queries)} | "
-        f"top_k_initial={top_k_initial}"
+    return np.array(
+        embeddings,
+        dtype="float32",
     )
 
-    all_candidate_indices = set()
 
-    query_embeddings = []
+def retrieve(
+    query_embeddings,
+    collections,
+    top_k_initial,
+):
 
-    for q in queries:
+    results = []
 
-        emb = model.encode(
-            [q],
-            normalize_embeddings=True,
-        )
+    for collection in collections:
 
-        emb = np.array(emb).astype("float32")
+        index = collection["index"]
 
-        query_embeddings.append(emb[0])
+        if index is None:
+            continue
 
-        _, indices = index.search(
-            emb,
-            top_k_initial,
-        )
+        metadata = collection["metadata"]
 
-        for idx in indices[0]:
+        vectors = collection["vectors"]
 
-            if idx != -1:
-                all_candidate_indices.add(int(idx))
-
-    candidate_indices = list(all_candidate_indices)
-
-    logger.info(f"Candidates recuperados: " f"{len(candidate_indices)}")
-
-    if not candidate_indices:
-        return [], 0.0
-
-    scores = []
-
-    for idx in candidate_indices:
-
-        if chunk_vectors is not None:
-
-            chunk_vector = chunk_vectors[idx]
-
-        else:
-
-            chunk_text = metadata[idx]["text"]
-
-            chunk_embedding = model.encode(
-                [chunk_text],
-                normalize_embeddings=True,
-            )
-
-            chunk_embedding = np.array(chunk_embedding).astype("float32")
-
-            chunk_vector = chunk_embedding[0]
-
-        score_sum = 0.0
+        collection_name = collection["collection_name"]
 
         for q_emb in query_embeddings:
-            score_sum += float(np.dot(q_emb, chunk_vector))
 
-        avg_score = score_sum / len(query_embeddings)
+            q_emb = np.array([q_emb])
 
-        scores.append(avg_score)
+            scores, indices = index.search(
+                q_emb,
+                top_k_initial,
+            )
 
-    sorted_pairs = sorted(
-        zip(candidate_indices, scores),
-        key=lambda x: x[1],
+            for score, idx in zip(scores[0], indices[0]):
+
+                if idx == -1:
+                    continue
+
+                item = metadata[idx]
+
+                results.append(
+                    SearchResult(
+                        score=float(score),
+                        text=item["text"],
+                        source=item["source"],
+                        page=item["page"],
+                        collection=collection_name,
+                        chunk_index=item["chunk_index"],
+                    )
+                )
+
+    return results
+
+
+def rerank(results):
+
+    results.sort(
+        key=lambda x: x.score,
         reverse=True,
     )
 
-    top_pairs = sorted_pairs[:top_k_final]
+    dedup = []
 
-    top_indices = [idx for idx, _ in top_pairs]
+    seen = set()
 
-    top_scores = [score for _, score in top_pairs]
+    for r in results:
 
-    avg_confidence = sum(top_scores) / len(top_scores) if top_scores else 0.0
+        key = (
+            r.collection,
+            r.source,
+            r.chunk_index,
+        )
 
-    logger.info(f"Top chunks seleccionados: " f"{len(top_indices)}")
+        if key in seen:
+            continue
 
-    return top_indices, avg_confidence
+        seen.add(key)
+
+        dedup.append(r)
+
+    return dedup
+
+
+def search(
+    question,
+    mode,
+    chat_memory,
+    collections,
+):
+
+    if mode == ChatMode.INTERPRETATIVE:
+
+        top_k_initial = INTERPRETATIVE_TOP_K_INITIAL
+        top_k_final = INTERPRETATIVE_TOP_K_FINAL
+
+    else:
+
+        top_k_initial = BASE_TOP_K_INITIAL
+        top_k_final = BASE_TOP_K_FINAL
+
+    queries = build_queries(
+        question,
+        mode,
+        chat_memory,
+    )
+
+    embeddings = encode_queries(queries)
+
+    results = retrieve(
+        embeddings,
+        collections,
+        top_k_initial,
+    )
+
+    results = rerank(results)
+
+    final_results = results[:top_k_final]
+
+    if not final_results:
+        return [], 0.0
+
+    confidence = sum(r.score for r in final_results) / len(final_results)
+
+    return final_results, confidence

@@ -1,4 +1,4 @@
-# python -m src.ingest.ingest react
+# python -m src.ingest.ingest sociologia la-sociedad-del-espectaculo
 
 import sys
 
@@ -19,27 +19,22 @@ from src.ingest.core import (
     build_metadata,
 )
 
-# def read_pdf(path: Path):
-
-#     reader = PdfReader(str(path))
-
-#     pages = []
-
-#     for i, page in enumerate(reader.pages):
-
-#         text = page.extract_text()
-
-#         if text:
-#             pages.append((i + 1, text))
-
-#     return pages
-
 
 def read_pdf(path: Path):
 
-    reader = PdfReader(str(path))
+    logger.info(f"Leyendo PDF: {path.name}")
 
     pages = []
+
+    try:
+
+        reader = PdfReader(str(path))
+
+    except Exception as e:
+
+        logger.error(f"No se pudo abrir PDF: {path.name} | {e}")
+
+        return pages
 
     for i, page in enumerate(reader.pages):
 
@@ -49,18 +44,24 @@ def read_pdf(path: Path):
 
             if text and text.strip():
 
-                pages.append((i + 1, text))
+                pages.append(
+                    (
+                        i + 1,
+                        text,
+                    )
+                )
 
             else:
 
-                logger.warning(f"Página vacía en " f"{path.name} | page={i + 1}")
+                logger.warning(f"Página vacía | " f"{path.name} | " f"page={i + 1}")
 
         except Exception as e:
 
             logger.warning(
-                f"No se pudo extraer "
-                f"texto de {path.name} "
-                f"| page={i + 1} | error={e}"
+                f"No se pudo leer página | "
+                f"{path.name} | "
+                f"page={i + 1} | "
+                f"error={e}"
             )
 
             continue
@@ -69,6 +70,8 @@ def read_pdf(path: Path):
 
 
 def read_html(path: Path):
+
+    logger.info(f"Leyendo HTML: {path.name}")
 
     with open(
         path,
@@ -81,15 +84,14 @@ def read_html(path: Path):
             "html.parser",
         )
 
-    return [
-        (
-            1,
-            soup.get_text(separator="\n"),
-        )
-    ]
+    text = soup.get_text(separator="\n")
+
+    return [(1, text)]
 
 
 def read_txt(path: Path):
+
+    logger.info(f"Leyendo TXT: {path.name}")
 
     with open(
         path,
@@ -97,22 +99,43 @@ def read_txt(path: Path):
         encoding="utf-8",
     ) as f:
 
-        return [(1, f.read())]
+        text = f.read()
+
+    return [(1, text)]
+
+
+def read_file(path: Path):
+
+    suffix = path.suffix.lower()
+
+    if suffix == ".pdf":
+        return read_pdf(path)
+
+    if suffix == ".html":
+        return read_html(path)
+
+    if suffix == ".txt":
+        return read_txt(path)
+
+    logger.warning(f"Formato no soportado: {path.name}")
+
+    return []
 
 
 def main():
 
-    if len(sys.argv) < 2:
+    if len(sys.argv) != 3:
 
-        logger.error("Collection no especificada.")
-
-        print("Uso: python -m " "src.ingest.ingest " "<collection>")
+        print("Uso: python -m src.ingest.ingest " "<categoria> <coleccion>")
 
         return
 
-    collection = sys.argv[1]
+    category = sys.argv[1]
+    collection_name = sys.argv[2]
 
-    logger.info(f"Iniciando ingest " f"para '{collection}'")
+    collection = f"{category}/{collection_name}"
+
+    logger.info(f"Iniciando ingest: {collection}")
 
     collection_data = load_collection(collection)
 
@@ -121,32 +144,31 @@ def main():
     existing_sources = {m["source"] for m in metadata}
 
     new_chunks = []
-
     new_metadata = []
 
-    for file in DATA_PATH.iterdir():
+    files = list(DATA_PATH.iterdir())
+
+    if not files:
+
+        logger.warning("No hay archivos en data/")
+
+        print("No hay archivos en data/")
+
+        return
+
+    for file in files:
 
         if file.name in existing_sources:
 
-            logger.info(f"Omitiendo ya indexado: " f"{file.name}")
+            logger.info(f"Omitiendo ya indexado: {file.name}")
 
             continue
 
-        if file.suffix == ".pdf":
+        pages = read_file(file)
 
-            pages = read_pdf(file)
+        if not pages:
 
-        elif file.suffix == ".html":
-
-            pages = read_html(file)
-
-        elif file.suffix == ".txt":
-
-            pages = read_txt(file)
-
-        else:
-
-            logger.warning(f"Formato no soportado: " f"{file.name}")
+            logger.warning(f"No se pudo extraer contenido: {file.name}")
 
             continue
 
@@ -156,7 +178,7 @@ def main():
 
             chunks = chunk_text(text)
 
-            logger.info(f"Chunks generados: " f"{len(chunks)}")
+            logger.info(f"Chunks generados: {len(chunks)} " f"| page={page_number}")
 
             for i, chunk in enumerate(chunks):
 
@@ -165,6 +187,7 @@ def main():
                 new_metadata.append(
                     build_metadata(
                         source=file.name,
+                        source_type="file",
                         page=page_number,
                         chunk=chunk,
                         chunk_index=i,
@@ -174,23 +197,27 @@ def main():
 
     if not new_chunks:
 
-        logger.warning("No hay documentos nuevos.")
+        logger.warning("No hay contenido nuevo.")
 
-        print("No hay documentos nuevos.")
+        print("No hay contenido nuevo.")
 
         return
 
-    new_embeddings = encode_chunks(new_chunks)
+    embeddings = encode_chunks(new_chunks)
 
     save_collection(
-        collection_data,
-        new_embeddings,
-        new_metadata,
+        collection_data=collection_data,
+        new_embeddings=embeddings,
+        new_metadata=new_metadata,
     )
 
-    logger.info(f"Ingest finalizado " f"({len(new_chunks)} chunks)")
+    logger.info(f"Ingest finalizado " f"| chunks={len(new_chunks)}")
 
-    print(f"Se añadieron " f"{len(new_chunks)} nuevos chunks " f"a '{collection}'.")
+    print()
+
+    print(f"Se añadieron " f"{len(new_chunks)} chunks " f"a '{collection}'.")
+
+    print()
 
 
 if __name__ == "__main__":

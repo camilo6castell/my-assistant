@@ -183,6 +183,7 @@ def main():
             new_metadata.append(
                 build_metadata(
                     source=url,
+                    source_type="url",
                     page=1,
                     chunk=chunk,
                     chunk_index=i,

@@ -1,6 +1,7 @@
-# python -m src.ingest.web_ingest react https://sitio.com
+# python -m src.ingest.web_ingest programacion ddd-destilado https://example.com
 
 import sys
+
 import requests
 
 from bs4 import BeautifulSoup
@@ -41,38 +42,32 @@ def extract_main_content(
 
         text = soup.get_text(separator="\n")
 
-        logger.info(f"Contenido extraído correctamente.")
-
         return text
-
-    except requests.RequestException as e:
-
-        logger.error(f"Error HTTP en {url}: {e}")
-
-        return None
 
     except Exception as e:
 
-        logger.error(f"Error extrayendo " f"contenido de {url}: {e}")
+        logger.error(f"Error extrayendo contenido " f"de {url}: {e}")
 
         return None
 
 
 def main():
 
-    if len(sys.argv) < 3:
+    if len(sys.argv) != 4:
 
-        logger.error("Argumentos insuficientes.")
-
-        print("Uso: python -m " "src.ingest.web_ingest " "<collection> <URL>")
+        print(
+            "Uso: python -m " "src.ingest.web_ingest " "<categoria> <coleccion> <url>"
+        )
 
         return
 
-    collection = sys.argv[1]
+    category = sys.argv[1]
+    collection_name = sys.argv[2]
+    url = sys.argv[3]
 
-    url = sys.argv[2]
+    collection = f"{category}/{collection_name}"
 
-    logger.info(f"Iniciando web ingest | " f"collection={collection}")
+    logger.info(f"Iniciando web ingest: {collection}")
 
     collection_data = load_collection(collection)
 
@@ -82,19 +77,15 @@ def main():
 
     if url in existing_sources:
 
-        logger.warning(f"URL ya indexada: {url}")
+        logger.warning("URL ya indexada.")
 
         print("URL ya indexada.")
 
         return
 
-    logger.info(f"Procesando URL: {url}")
-
     text = extract_main_content(url)
 
     if not text:
-
-        logger.error("No se pudo extraer contenido.")
 
         print("No se pudo extraer contenido.")
 
@@ -102,19 +93,16 @@ def main():
 
     chunks = chunk_text(text)
 
-    logger.info(f"Chunks generados: " f"{len(chunks)}")
-
-    new_chunks = []
+    logger.info(f"Chunks generados: {len(chunks)}")
 
     new_metadata = []
 
     for i, chunk in enumerate(chunks):
 
-        new_chunks.append(chunk)
-
         new_metadata.append(
             build_metadata(
                 source=url,
+                source_type="url",
                 page=1,
                 chunk=chunk,
                 chunk_index=i,
@@ -122,19 +110,19 @@ def main():
             )
         )
 
-    logger.info("Generando embeddings...")
-
-    new_embeddings = encode_chunks(new_chunks)
+    embeddings = encode_chunks(chunks)
 
     save_collection(
-        collection_data,
-        new_embeddings,
-        new_metadata,
+        collection_data=collection_data,
+        new_embeddings=embeddings,
+        new_metadata=new_metadata,
     )
 
-    logger.info(f"Web ingest finalizado | " f"chunks={len(chunks)}")
+    print()
 
     print(f"Se indexaron " f"{len(chunks)} chunks " f"en '{collection}'.")
+
+    print()
 
 
 if __name__ == "__main__":

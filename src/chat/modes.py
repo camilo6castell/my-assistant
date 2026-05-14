@@ -1,0 +1,10 @@
+# src/chat/modes.py
+
+
+class ChatMode:
+    RIGOROUS = "RIGUROSO"
+    INTERPRETATIVE = "INTERPRETATIVO"
+
+
+RIGOROUS = ChatMode.RIGOROUS
+INTERPRETATIVE = ChatMode.INTERPRETATIVE
