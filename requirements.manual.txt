@@ -1,0 +1,10 @@
+pip install --upgrade pip wheel setuptools
+pip install torch --index-url https://download.pytorch.org/whl/cpu
+
+# Clean dependencies
+# pip install pipreqs
+# pipreqs . --force
+
+# requirements limpio
+# pip install pip-tools
+# pip-compile requirements.in
