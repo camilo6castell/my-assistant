@@ -1,3 +1,9 @@
+"""
+src/chat/session.py
+
+Estado de la sesión de chat activa: contextos cargados, modo y memoria.
+"""
+
 from src.context.manager import ContextManager
 
 from src.chat.modes import (
@@ -9,11 +15,8 @@ from src.chat.modes import (
 class ChatSession:
 
     def __init__(self):
-
         self.context_manager = ContextManager()
-
-        self.interpretative_mode = True
-
+        self.interpretative_mode = False
         self.chat_memory = []
 
     # =====================================================
@@ -38,16 +41,12 @@ class ChatSession:
 
     @property
     def mode(self):
-
         if self.interpretative_mode:
             return INTERPRETATIVE
-
         return RIGOROUS
 
     def toggle_mode(self):
-
         self.interpretative_mode = not self.interpretative_mode
-
         return self.mode
 
     # =====================================================
@@ -62,7 +61,6 @@ class ChatSession:
         user: str,
         assistant: str,
     ):
-
         self.chat_memory.append(
             {
                 "user": user,
@@ -74,13 +72,25 @@ class ChatSession:
     # UI
     # =====================================================
 
-    def get_prompt_header(self):
+    def get_prompt_header(self) -> str:
+        """
+        Genera el prompt del input acortando los nombres de colección
+        al basename (la parte después de /) para que el header no se
+        desborde en pantallas estrechas.
 
+        Ejemplos:
+          [debord, freud | INTERP] >
+          [SIN-CONTEXTO | RIG] >
+        """
         active = self.get_active_contexts()
 
-        if not active:
-            ctx = "SIN-CONTEXTO"
-        else:
-            ctx = ", ".join(sorted(active))
+        mode_label = "INTERP" if self.interpretative_mode else "RIG"
 
-        return f"[{ctx} | {self.mode}] > "
+        if not active:
+            ctx_label = "SIN-CONTEXTO"
+        else:
+            # Usa solo el basename de cada colección (parte tras "/")
+            names = [ctx.split("/")[-1] for ctx in sorted(active)]
+            ctx_label = ", ".join(names)
+
+        return f"[{ctx_label} | {mode_label}] > "

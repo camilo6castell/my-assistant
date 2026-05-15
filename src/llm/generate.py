@@ -1,9 +1,19 @@
+"""
+src/llm/generate.py
+
+Consulta al LLM local vía cliente OpenAI-compatible.
+Timeout y temperatura se leen de settings/env para poder
+ajustarlos sin tocar código.
+"""
+
 from openai import OpenAIError
 
 from src.llm.client import client
 
 from src.config.settings import (
     LLM_MODEL,
+    LLM_TEMPERATURE,
+    LLM_TIMEOUT,
 )
 
 from src.utils.logger import logger
@@ -27,7 +37,6 @@ def build_messages(
     prompt: str,
     chat_memory: list[dict],
 ):
-
     messages = [
         {
             "role": "system",
@@ -36,27 +45,10 @@ def build_messages(
     ]
 
     for turn in chat_memory:
+        messages.append({"role": "user", "content": turn["user"]})
+        messages.append({"role": "assistant", "content": turn["assistant"]})
 
-        messages.append(
-            {
-                "role": "user",
-                "content": turn["user"],
-            }
-        )
-
-        messages.append(
-            {
-                "role": "assistant",
-                "content": turn["assistant"],
-            }
-        )
-
-    messages.append(
-        {
-            "role": "user",
-            "content": prompt,
-        }
-    )
+    messages.append({"role": "user", "content": prompt})
 
     return messages
 
@@ -66,32 +58,30 @@ def ask_llm(
     chat_memory: list[dict],
 ) -> str:
 
+    logger.info(
+        f"Consultando LLM | model={LLM_MODEL} "
+        f"| timeout={LLM_TIMEOUT}s | temp={LLM_TEMPERATURE}"
+    )
+
     try:
-
-        logger.info(f"Consultando LLM: {LLM_MODEL}")
-
         response = client.chat.completions.create(
             model=LLM_MODEL,
             messages=build_messages(
                 prompt=prompt,
                 chat_memory=chat_memory,
             ),
-            temperature=0.2,
-            timeout=120,
+            temperature=LLM_TEMPERATURE,
+            timeout=LLM_TIMEOUT,
         )
 
         content = response.choices[0].message.content
 
         if not content:
-
             logger.warning("El modelo devolvió respuesta vacía.")
-
             return "El modelo no devolvió respuesta."
 
         return content.strip()
 
     except OpenAIError as e:
-
         logger.exception("Error consultando LLM")
-
         return f"Error consultando modelo: {e}"

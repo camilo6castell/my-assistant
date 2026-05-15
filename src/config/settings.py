@@ -155,10 +155,13 @@ LLM_TEMPERATURE = float(
     )
 )
 
+# Timeout generoso para modelos locales cuantizados.
+# Un 8B en modo interpretativo puede tardar varios minutos
+# con prompts densos. Ajustable via env: LLM_TIMEOUT=300
 LLM_TIMEOUT = int(
     os.getenv(
         "LLM_TIMEOUT",
-        120,
+        600,
     )
 )
 

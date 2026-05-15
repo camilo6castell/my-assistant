@@ -1,146 +1,109 @@
 """
 src/cli/commands.py
 
-Handlers para cada opción del menú principal.
-Cada función recibe la sesión activa y realiza la acción correspondiente,
-delegando en la lógica de negocio de session/context_manager.
+Handlers informativos del menú principal.
+El menú es deliberadamente simple: Chat es donde ocurre todo.
+Las opciones 2-4 son solo consulta, sin modificar estado.
 """
 
-from src.chat.interface import start_chat
+from src.config.settings import BASE_VECTOR_PATH
 
 # ======================================================
-# 1. CHAT
-# ======================================================
-
-
-def run_chat(session):
-    start_chat(session)
-
-
-# ======================================================
-# 2. VER CONTEXTOS (todos los disponibles en disco)
+# 2. SHOW CONTEXTS
 # ======================================================
 
 
 def show_contexts(session):
+    """Lista todas las colecciones disponibles en vector_stores."""
+
     contexts = session.context_manager.list_all()
 
     print()
 
     if not contexts:
-        print("No hay contextos disponibles.\n")
+        print("  No hay contextos disponibles.")
+        print(f"  Directorio: {BASE_VECTOR_PATH}\n")
         return
 
-    print("Contextos disponibles:\n")
+    print("  Contextos disponibles:\n")
+
+    current_ns = None
 
     for ctx in contexts:
-        print(f"  - {ctx}")
+        ns, name = ctx.split("/", 1)
+
+        if ns != current_ns:
+            print(f"  [{ns}]")
+            current_ns = ns
+
+        print(f"    - {name}")
 
     print()
 
 
 # ======================================================
-# 3. CONTEXTOS ACTIVOS (cargados en memoria)
+# 3. SHOW MODES
 # ======================================================
 
 
-def show_active_contexts(session):
-    active = session.get_active_contexts()
+def show_modes(session):
+    """Describe los modos de respuesta disponibles."""
 
-    print()
+    current = session.mode
 
-    if not active:
-        print("No hay contextos activos.\n")
-        return
+    print(f"""
+  Modo actual: {current}
 
-    print("Contextos activos:\n")
+  RIGUROSO (por defecto)
+    Responde usando únicamente el contenido del contexto cargado.
+    No infiere ni conecta ideas externas al texto.
+    Ideal para consultas precisas y verificables.
 
-    for ctx in active:
-        print(f"  - {ctx}")
+  INTERPRETATIVO
+    Puede sintetizar y conectar conceptos entre fuentes.
+    Genera más variantes de búsqueda semántica.
+    Ideal para análisis, comparaciones y síntesis conceptual.
 
-    print()
-
-
-# ======================================================
-# 4. ACTIVAR CONTEXTO
-# ======================================================
-
-
-def activate_context(session):
-    print()
-
-    pattern = input("Patrón a activar (ej: sociologia/* o sociologia/libro): ").strip()
-
-    if not pattern:
-        print("Patrón inválido.\n")
-        return
-
-    loaded = session.load_context(pattern)
-
-    print()
-
-    if not loaded:
-        print("No se encontraron contextos para ese patrón.\n")
-    else:
-        for ctx in loaded:
-            print(f"  + {ctx}")
-        print()
+  Cambia el modo dentro del chat con: /mode
+""")
 
 
 # ======================================================
-# 5. DESACTIVAR CONTEXTO
+# 4. ABOUT
 # ======================================================
 
 
-def deactivate_context(session):
-    active = session.get_active_contexts()
+def show_about(_session):
+    """Información del sistema."""
 
-    print()
+    from src.config.settings import (
+        EMBED_MODEL,
+        LLM_MODEL,
+        CHUNK_SIZE,
+        CHUNK_OVERLAP,
+        BASE_TOP_K_FINAL,
+        INTERPRETATIVE_TOP_K_FINAL,
+        BASE_VECTOR_PATH,
+        DATA_PATH,
+    )
 
-    if not active:
-        print("No hay contextos activos.\n")
-        return
+    print(f"""
+  RAG SYSTEM v2
+  ─────────────────────────────────────
+  Embedding model : {EMBED_MODEL}
+  LLM model       : {LLM_MODEL}
+  Chunk size      : {CHUNK_SIZE} chars  (overlap {CHUNK_OVERLAP})
+  Top-K riguroso  : {BASE_TOP_K_FINAL} resultados finales
+  Top-K interpret : {INTERPRETATIVE_TOP_K_FINAL} resultados finales
+  Vector stores   : {BASE_VECTOR_PATH}
+  Data path       : {DATA_PATH}
 
-    print("Contextos activos:\n")
-    for ctx in active:
-        print(f"  - {ctx}")
-    print()
+  Ingest de archivos:
+    python -m src.ingest.ingest <namespace> <coleccion>
 
-    pattern = input(
-        "Patrón a desactivar (ej: sociologia/* o sociologia/libro): "
-    ).strip()
+  Ingest de URL única:
+    python -m src.ingest.web_ingest <namespace> <coleccion> <url>
 
-    if not pattern:
-        print("Patrón inválido.\n")
-        return
-
-    removed = session.unload_context(pattern)
-
-    print()
-
-    if not removed:
-        print("No se encontraron contextos activos para ese patrón.\n")
-    else:
-        for ctx in removed:
-            print(f"  - {ctx}")
-        print()
-
-
-# ======================================================
-# 6. RESETEAR CONTEXTOS (desactiva todos)
-# ======================================================
-
-
-def reset_contexts(session):
-    session.clear_contexts()
-    print("\nTodos los contextos fueron desactivados.\n")
-
-
-# ======================================================
-# 7. CAMBIAR MODO
-# ======================================================
-
-
-def toggle_mode(session):
-    mode = session.toggle_mode()
-    print(f"\nModo actual: {mode}\n")
+  Ingest crawler:
+    python -m src.ingest.web_crawler <coleccion> <url_base>
+""")

@@ -1,11 +1,33 @@
+"""
+src/chat/interface.py
+
+Interfaz de chat. Gestiona el loop de comandos y preguntas.
+
+Comandos disponibles:
+  /context <tokens...>   carga uno o más contextos
+  /remove  <tokens...>   descarga uno o más contextos
+  /list                  muestra todos los contextos disponibles
+  /active                muestra los contextos activos
+  /clear                 descarga todos los contextos
+  /reset                 limpia la memoria de conversación
+  /mode                  alterna entre RIGUROSO e INTERPRETATIVO
+  /help                  muestra esta ayuda
+  /exit                  vuelve al menú principal
+
+Sintaxis de <tokens>:
+  sociologia             → todas las colecciones bajo sociologia/
+  sociologia/debord      → colección exacta
+  sociologia react       → sociologia/* + react/*
+  sociologia/debord react/hooks psicologia
+                         → mezcla de exactos y namespaces
+"""
+
 import warnings
 
 from src.chat.session import ChatSession
-
+from src.context.selector import match_contexts
 from src.llm.generate import ask_llm
-
 from src.retrieval.search import search
-
 from src.prompts.builder import build_prompt
 
 warnings.filterwarnings(
@@ -13,75 +35,159 @@ warnings.filterwarnings(
     message="You're using a BertTokenizerFast tokenizer.*",
 )
 
+HELP = """
+  Comandos:
 
-COMMANDS = """
-Comandos:
+  /context <tokens>   cargar contexto(s)
+  /remove  <tokens>   descargar contexto(s)
+  /list               ver contextos disponibles
+  /active             ver contextos activos
+  /clear              descargar todos los contextos
+  /reset              limpiar memoria de conversación
+  /mode               alternar modo (RIGUROSO / INTERPRETATIVO)
+  /help               mostrar esta ayuda
+  /exit               volver al menú principal
 
-/context <pattern>
-/remove <pattern>
-/list
-/active
-/clear
-/reset
-/mode
-/exit
+  Sintaxis de tokens:
+    sociologia                    → todo el namespace
+    sociologia/debord             → colección exacta
+    sociologia react              → dos namespaces
+    sociologia/debord react/hooks → mezcla exactos y namespaces
 """
 
 
-def print_available_contexts(session):
+# ======================================================
+# HELPERS DE PRESENTACIÓN
+# ======================================================
 
+
+def _print_contexts_tree(contexts: list[str], label: str):
+    """Imprime una lista de colecciones agrupada por namespace."""
+
+    if not contexts:
+        return
+
+    print(f"\n  {label}:\n")
+
+    current_ns = None
+
+    for ctx in sorted(contexts):
+        ns, name = ctx.split("/", 1)
+
+        if ns != current_ns:
+            print(f"  [{ns}]")
+            current_ns = ns
+
+        print(f"    - {name}")
+
+    print()
+
+
+def _print_available(session):
     contexts = session.context_manager.list_all()
 
     print()
 
     if not contexts:
-
-        print("No hay contextos disponibles")
-
+        print("  No hay contextos disponibles.\n")
         return
 
-    print("Contextos disponibles:\n")
-
-    for ctx in contexts:
-        print(f" - {ctx}")
-
-    print()
+    _print_contexts_tree(contexts, "Disponibles")
 
 
-def print_active_contexts(session):
-
+def _print_active(session):
     active = session.get_active_contexts()
 
     print()
 
     if not active:
-
-        print("No hay contextos activos")
-
+        print("  No hay contextos activos.\n")
         return
 
-    print("Contextos activos:\n")
+    _print_contexts_tree(active, "Activos")
 
-    for ctx in active:
-        print(f" - {ctx}")
+
+# ======================================================
+# HANDLER DE /context Y /remove
+# ======================================================
+
+
+def _handle_context(session, raw_tokens: str):
+    """Carga uno o más contextos a partir de tokens separados por espacio."""
+
+    if not raw_tokens:
+        print("\n  Uso: /context <tokens>  (ej: /context sociologia react)\n")
+        return
+
+    available = session.context_manager.list_all()
+    targets = match_contexts(raw_tokens, available)
+
+    if not targets:
+        print(f"\n  Sin coincidencias para: {raw_tokens!r}\n")
+        return
+
+    loaded = []
+
+    for ctx in targets:
+        result = session.load_context(ctx)
+        loaded.extend(result)
+
+    print()
+
+    if not loaded:
+        already = ", ".join(targets)
+        print(f"  Ya activos: {already}")
+    else:
+        for ctx in loaded:
+            print(f"  + {ctx}")
 
     print()
 
 
-def handle_question(
-    session,
-    question,
-):
+def _handle_remove(session, raw_tokens: str):
+    """Descarga uno o más contextos a partir de tokens separados por espacio."""
 
+    if not raw_tokens:
+        print("\n  Uso: /remove <tokens>  (ej: /remove sociologia)\n")
+        return
+
+    available = session.context_manager.list_all()
+    targets = match_contexts(raw_tokens, available)
+
+    if not targets:
+        print(f"\n  Sin coincidencias para: {raw_tokens!r}\n")
+        return
+
+    removed = []
+
+    for ctx in targets:
+        result = session.unload_context(ctx)
+        removed.extend(result)
+
+    print()
+
+    if not removed:
+        print(f"  Ninguno de esos contextos estaba activo.")
+    else:
+        for ctx in removed:
+            print(f"  - {ctx}")
+
+    print()
+
+
+# ======================================================
+# HANDLER DE PREGUNTAS
+# ======================================================
+
+
+def _handle_question(session, question: str):
     collections = session.context_manager.get_loaded_collections()
 
     if not collections:
-
-        print("\nDebes cargar un contexto\n")
-
+        print("\n  Carga un contexto primero.  Ej: /context sociologia\n")
         return
 
-    print("\nBuscando contexto...\n")
+    print("\n  Buscando...\n")
 
     results, confidence = search(
         question=question,
@@ -91,22 +197,15 @@ def handle_question(
     )
 
     if not results:
-
-        print("No se encontró contexto relevante")
-
+        print("  No se encontró contexto relevante.\n")
         return
 
     context_chunks = []
 
-    for result in results:
-
-        context_chunks.append(f"""
-FUENTE: {result.source}
-COLECCION: {result.collection}
-PAGINA: {result.page}
-
-{result.text}
-""")
+    for r in results:
+        context_chunks.append(
+            f"FUENTE: {r.source}\nCOLECCION: {r.collection}\nPAGINA: {r.page}\n\n{r.text}"
+        )
 
     prompt = build_prompt(
         context_chunks=context_chunks,
@@ -120,115 +219,80 @@ PAGINA: {result.page}
         chat_memory=session.chat_memory,
     )
 
-    print("\nRespuesta:\n")
-
+    print(f"  Respuesta:\n")
     print(answer)
+    print(f"\n  [confidence: {confidence:.4f}]\n")
 
-    print(f"\nConfidence: {confidence:.4f}\n")
+    session.add_to_memory(user=question, assistant=answer)
 
-    session.add_to_memory(
-        user=question,
-        assistant=answer,
-    )
+
+# ======================================================
+# LOOP PRINCIPAL
+# ======================================================
 
 
 def start_chat(session: ChatSession):
-
-    print("\n=== CHAT RAG ===\n")
-
-    print(COMMANDS)
+    print("\n  === CHAT ===")
+    print("  Escribe /help para ver los comandos disponibles.\n")
 
     while True:
-
-        command = input(session.get_prompt_header()).strip()
+        try:
+            command = input(session.get_prompt_header()).strip()
+        except (EOFError, KeyboardInterrupt):
+            print()
+            break
 
         if not command:
             continue
 
+        # ── salida ────────────────────────────────────────
         if command == "/exit":
+            print()
             break
 
-        if command == "/list":
-
-            print_available_contexts(session)
-
+        # ── ayuda ─────────────────────────────────────────
+        if command in ("/help", "/?"):
+            print(HELP)
             continue
 
-        if command == "/active":
-
-            print_active_contexts(session)
-
-            continue
-
+        # ── contextos ─────────────────────────────────────
         if command.startswith("/context"):
-
-            pattern = command.replace(
-                "/context",
-                "",
-                1,
-            ).strip()
-
-            loaded = session.load_context(pattern)
-
-            print()
-
-            if not loaded:
-                print("No se cargaron contextos")
-            else:
-                for item in loaded:
-                    print(f"+ {item}")
-
-            print()
-
+            _handle_context(session, command[len("/context") :].strip())
             continue
 
         if command.startswith("/remove"):
+            _handle_remove(session, command[len("/remove") :].strip())
+            continue
 
-            pattern = command.replace(
-                "/remove",
-                "",
-                1,
-            ).strip()
+        if command == "/list":
+            _print_available(session)
+            continue
 
-            removed = session.unload_context(pattern)
-
-            print()
-
-            if not removed:
-                print("No se removieron contextos")
-            else:
-                for item in removed:
-                    print(f"- {item}")
-
-            print()
-
+        if command == "/active":
+            _print_active(session)
             continue
 
         if command == "/clear":
-
             session.clear_contexts()
-
-            print("\nContextos limpiados\n")
-
+            print("\n  Contextos descargados.\n")
             continue
 
+        # ── memoria ───────────────────────────────────────
         if command == "/reset":
-
             session.reset_memory()
-
-            print("\nMemoria limpiada\n")
-
+            print("\n  Memoria de conversación limpiada.\n")
             continue
 
+        # ── modo ──────────────────────────────────────────
         if command == "/mode":
-
             mode = session.toggle_mode()
-
-            print(f"\nModo actual: {mode}\n")
-
+            print(f"\n  Modo: {mode}\n")
             continue
 
-        handle_question(
-            session,
-            command,
-        )
+        # ── comando desconocido ───────────────────────────
+        if command.startswith("/"):
+            print(f"\n  Comando desconocido: {command!r}  (escribe /help)\n")
+            continue
+
+        # ── pregunta ──────────────────────────────────────
+        _handle_question(session, command)
