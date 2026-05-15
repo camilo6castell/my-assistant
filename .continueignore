@@ -1,0 +1,7 @@
+.venv
+.vscode
+
+docs
+
+requirements.txt
+requirements.manual.txt

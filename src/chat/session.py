@@ -12,7 +12,7 @@ class ChatSession:
 
         self.context_manager = ContextManager()
 
-        self.interpretative_mode = False
+        self.interpretative_mode = True
 
         self.chat_memory = []
 

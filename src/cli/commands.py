@@ -1,4 +1,25 @@
+"""
+src/cli/commands.py
+
+Handlers para cada opción del menú principal.
+Cada función recibe la sesión activa y realiza la acción correspondiente,
+delegando en la lógica de negocio de session/context_manager.
+"""
+
 from src.chat.interface import start_chat
+
+# ======================================================
+# 1. CHAT
+# ======================================================
+
+
+def run_chat(session):
+    start_chat(session)
+
+
+# ======================================================
+# 2. VER CONTEXTOS (todos los disponibles en disco)
+# ======================================================
 
 
 def show_contexts(session):
@@ -10,77 +31,116 @@ def show_contexts(session):
         print("No hay contextos disponibles.\n")
         return
 
-    print("Contextos disponibles:")
+    print("Contextos disponibles:\n")
 
-    for context in contexts:
-        print(f" - {context}")
+    for ctx in contexts:
+        print(f"  - {ctx}")
 
     print()
+
+
+# ======================================================
+# 3. CONTEXTOS ACTIVOS (cargados en memoria)
+# ======================================================
 
 
 def show_active_contexts(session):
+    active = session.get_active_contexts()
+
     print()
 
-    if not session.active_contexts:
+    if not active:
         print("No hay contextos activos.\n")
         return
 
-    print("Contextos activos:")
+    print("Contextos activos:\n")
 
-    for context in session.active_contexts:
-        print(f" - {context}")
+    for ctx in active:
+        print(f"  - {ctx}")
 
     print()
+
+
+# ======================================================
+# 4. ACTIVAR CONTEXTO
+# ======================================================
 
 
 def activate_context(session):
     print()
 
-    context_name = input("Contexto a activar: ").strip()
+    pattern = input("Patrón a activar (ej: sociologia/* o sociologia/libro): ").strip()
 
-    if not context_name:
-        print("Nombre inválido.\n")
+    if not pattern:
+        print("Patrón inválido.\n")
         return
 
-    success = session.load_context(context_name)
+    loaded = session.load_context(pattern)
 
-    if success:
-        print(f"\nContexto activado: {context_name}\n")
+    print()
+
+    if not loaded:
+        print("No se encontraron contextos para ese patrón.\n")
     else:
-        print(f"\nNo se pudo cargar: {context_name}\n")
+        for ctx in loaded:
+            print(f"  + {ctx}")
+        print()
+
+
+# ======================================================
+# 5. DESACTIVAR CONTEXTO
+# ======================================================
 
 
 def deactivate_context(session):
+    active = session.get_active_contexts()
+
     print()
 
-    if not session.active_contexts:
+    if not active:
         print("No hay contextos activos.\n")
         return
 
-    context_name = input("Contexto a desactivar: ").strip()
+    print("Contextos activos:\n")
+    for ctx in active:
+        print(f"  - {ctx}")
+    print()
 
-    if context_name not in session.active_contexts:
-        print("\nEse contexto no está activo.\n")
+    pattern = input(
+        "Patrón a desactivar (ej: sociologia/* o sociologia/libro): "
+    ).strip()
+
+    if not pattern:
+        print("Patrón inválido.\n")
         return
 
-    session.unload_context(context_name)
+    removed = session.unload_context(pattern)
 
-    print(f"\nContexto desactivado: {context_name}\n")
+    print()
+
+    if not removed:
+        print("No se encontraron contextos activos para ese patrón.\n")
+    else:
+        for ctx in removed:
+            print(f"  - {ctx}")
+        print()
+
+
+# ======================================================
+# 6. RESETEAR CONTEXTOS (desactiva todos)
+# ======================================================
 
 
 def reset_contexts(session):
-    session.reset_contexts()
-
+    session.clear_contexts()
     print("\nTodos los contextos fueron desactivados.\n")
 
 
+# ======================================================
+# 7. CAMBIAR MODO
+# ======================================================
+
+
 def toggle_mode(session):
-    session.toggle_mode()
-
-    mode = "INTERPRETATIVO" if session.interpretative_mode else "RIGUROSO"
-
+    mode = session.toggle_mode()
     print(f"\nModo actual: {mode}\n")
-
-
-def run_chat(session):
-    start_chat(session)
