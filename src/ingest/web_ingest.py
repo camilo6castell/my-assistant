@@ -1,6 +1,7 @@
 # python -m src.ingest.web_ingest programacion ddd-destilado https://example.com
 
 import sys
+from typing import Any
 
 import requests
 
@@ -20,27 +21,27 @@ from src.ingest.core import (
 
 def extract_main_content(
     url: str,
-):
+) -> str | None:
 
     try:
 
         logger.info(f"Descargando URL: {url}")
 
-        response = requests.get(
+        response: requests.Response = requests.get(
             url,
             timeout=10,
         )
 
         response.raise_for_status()
 
-        doc = Document(response.text)
+        doc: Document = Document(response.text)
 
-        soup = BeautifulSoup(
+        soup: BeautifulSoup = BeautifulSoup(
             doc.summary(),
             "html.parser",
         )
 
-        text = soup.get_text(separator="\n")
+        text: str = soup.get_text(separator="\n")
 
         return text
 
@@ -51,7 +52,7 @@ def extract_main_content(
         return None
 
 
-def main():
+def main() -> None:
 
     if len(sys.argv) != 4:
 
@@ -61,19 +62,19 @@ def main():
 
         return
 
-    category = sys.argv[1]
-    collection_name = sys.argv[2]
-    url = sys.argv[3]
+    category: str = sys.argv[1]
+    collection_name: str = sys.argv[2]
+    url: str = sys.argv[3]
 
-    collection = f"{category}/{collection_name}"
+    collection: str = f"{category}/{collection_name}"
 
     logger.info(f"Iniciando web ingest: {collection}")
 
-    collection_data = load_collection(collection)
+    collection_data: dict[str, Any] = load_collection(collection)
 
-    metadata = collection_data["metadata"]
+    metadata: list[dict[str, Any]] = collection_data["metadata"]
 
-    existing_sources = {m["source"] for m in metadata}
+    existing_sources: set[str] = {m["source"] for m in metadata}
 
     if url in existing_sources:
 
@@ -83,7 +84,7 @@ def main():
 
         return
 
-    text = extract_main_content(url)
+    text: str | None = extract_main_content(url)
 
     if not text:
 
@@ -91,11 +92,11 @@ def main():
 
         return
 
-    chunks = chunk_text(text)
+    chunks: list[str] = chunk_text(text)
 
     logger.info(f"Chunks generados: {len(chunks)}")
 
-    new_metadata = []
+    new_metadata: list[dict[str, Any]] = []
 
     for i, chunk in enumerate(chunks):
 
@@ -110,7 +111,7 @@ def main():
             )
         )
 
-    embeddings = encode_chunks(chunks)
+    embeddings: Any = encode_chunks(chunks)
 
     save_collection(
         collection_data=collection_data,

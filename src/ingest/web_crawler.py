@@ -3,6 +3,7 @@
 import sys
 import time
 import requests
+from typing import Any
 
 from urllib.parse import (
     urljoin,
@@ -28,27 +29,27 @@ from src.ingest.core import (
 )
 
 
-def extract_main_content(url: str):
+def extract_main_content(url: str) -> str | None:
 
     try:
 
         logger.info(f"Descargando contenido: {url}")
 
-        response = requests.get(
+        response: requests.Response = requests.get(
             url,
             timeout=10,
         )
 
         response.raise_for_status()
 
-        doc = Document(response.text)
+        doc: Document = Document(response.text)
 
-        soup = BeautifulSoup(
+        soup: BeautifulSoup = BeautifulSoup(
             doc.summary(),
             "html.parser",
         )
 
-        text = soup.get_text(separator="\n")
+        text: str = soup.get_text(separator="\n")
 
         logger.info(f"Contenido extraído correctamente: " f"{url}")
 
@@ -70,41 +71,41 @@ def extract_main_content(url: str):
 def get_links(
     url: str,
     domain: str,
-):
+) -> set[str]:
 
     try:
 
         logger.info(f"Extrayendo links desde: {url}")
 
-        response = requests.get(
+        response: requests.Response = requests.get(
             url,
             timeout=10,
         )
 
         response.raise_for_status()
 
-        soup = BeautifulSoup(
+        soup: BeautifulSoup = BeautifulSoup(
             response.text,
             "html.parser",
         )
 
-        links = set()
+        links: set[str] = set()
 
         for a in soup.find_all(
             "a",
             href=True,
         ):
 
-            href = urljoin(
+            href: str = urljoin(
                 url,
                 a["href"],
             )
 
-            parsed = urlparse(href)
+            parsed: Any = urlparse(href)
 
             if parsed.netloc == domain:
 
-                clean = parsed.scheme + "://" + parsed.netloc + parsed.path
+                clean: str = parsed.scheme + "://" + parsed.netloc + parsed.path
 
                 links.add(clean)
 
@@ -125,7 +126,7 @@ def get_links(
         return set()
 
 
-def main():
+def main() -> None:
 
     if len(sys.argv) < 3:
 
@@ -135,27 +136,27 @@ def main():
 
         return
 
-    collection = sys.argv[1]
+    collection: str = sys.argv[1]
 
-    start_url = sys.argv[2]
+    start_url: str = sys.argv[2]
 
     logger.info(f"Iniciando crawler | " f"collection={collection}")
 
-    collection_data = load_collection(collection)
+    collection_data: dict[str, Any] = load_collection(collection)
 
-    domain = urlparse(start_url).netloc
+    domain: str = urlparse(start_url).netloc
 
-    visited = set()
+    visited: set[str] = set()
 
-    to_visit = [start_url]
+    to_visit: list[str] = [start_url]
 
-    new_chunks = []
+    new_chunks: list[str] = []
 
-    new_metadata = []
+    new_metadata: list[dict[str, Any]] = []
 
     while to_visit and len(visited) < MAX_PAGES:
 
-        url = to_visit.pop(0)
+        url: str = to_visit.pop(0)
 
         if url in visited:
             continue
@@ -164,7 +165,7 @@ def main():
 
         logger.info(f"Crawling: {url}")
 
-        text = extract_main_content(url)
+        text: str | None = extract_main_content(url)
 
         if not text:
 
@@ -172,7 +173,7 @@ def main():
 
             continue
 
-        chunks = chunk_text(text)
+        chunks: list[str] = chunk_text(text)
 
         logger.info(f"Chunks generados " f"({len(chunks)}) " f"para {url}")
 
@@ -191,7 +192,7 @@ def main():
                 )
             )
 
-        links = get_links(
+        links: set[str] = get_links(
             url,
             domain,
         )
@@ -215,7 +216,7 @@ def main():
 
     logger.info(f"Generando embeddings " f"para {len(new_chunks)} chunks")
 
-    new_embeddings = encode_chunks(new_chunks)
+    new_embeddings: Any = encode_chunks(new_chunks)
 
     save_collection(
         collection_data,

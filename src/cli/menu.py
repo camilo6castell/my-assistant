@@ -1,4 +1,4 @@
-MENU = """
+MENU: str = """
 ╔══════════════════════════════╗
 ║        RAG SYSTEM v2         ║
 ╠══════════════════════════════╣
@@ -11,5 +11,5 @@ MENU = """
 """
 
 
-def show_main_menu():
+def show_main_menu() -> None:
     print(MENU)

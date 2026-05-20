@@ -10,15 +10,15 @@ from src.config.settings import (
 
 
 def build_history_block(
-    chat_memory: List[dict],
+    chat_memory: List[dict[str, str]],
 ) -> str:
 
     if not chat_memory:
         return "No hay historial previo."
 
-    history_lines = []
+    history_lines: List[str] = []
 
-    recent_turns = chat_memory[-MAX_TURNS:]
+    recent_turns: List[dict[str, str]] = chat_memory[-MAX_TURNS:]
 
     for turn in recent_turns:
 
@@ -71,14 +71,14 @@ def build_prompt(
     context_chunks: List[str],
     question: str,
     mode: str,
-    chat_memory: List[dict],
+    chat_memory: List[dict[str, str]],
 ) -> str:
 
-    context_block = build_context_block(context_chunks)
+    context_block: str = build_context_block(context_chunks)
 
-    history_block = build_history_block(chat_memory)
+    history_block: str = build_history_block(chat_memory)
 
-    rules_block = build_rules_block(mode)
+    rules_block: str = build_rules_block(mode)
 
     return f"""
 Eres un asistente RAG.

@@ -1,4 +1,4 @@
-from typing import List
+from typing import Any
 
 import numpy as np
 
@@ -17,26 +17,26 @@ from src.config.settings import (
 
 from src.context.models import SearchResult
 
-model = SentenceTransformer(
+model: SentenceTransformer = SentenceTransformer(
     EMBED_MODEL,
 )
 
 
-def cosine_similarity(a, b):
+def cosine_similarity(a: Any, b: Any) -> float:
 
-    return np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b))
+    return float(np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b)))
 
 
 def build_queries(
     question: str,
     mode: str,
-    memory: list[dict],
-):
+    memory: list[dict[str, str]],
+) -> list[str]:
 
     if mode == ChatMode.RIGOROUS:
         return [question]
 
-    history = ""
+    history: str = ""
 
     for turn in memory[-MAX_TURNS:]:
         history += f"{turn['user']} {turn['assistant']} "
@@ -49,9 +49,9 @@ def build_queries(
     ]
 
 
-def encode_queries(queries):
+def encode_queries(queries: list[str]) -> np.ndarray:
 
-    embeddings = model.encode(
+    embeddings: Any = model.encode(
         queries,
         normalize_embeddings=True,
     )
@@ -63,25 +63,25 @@ def encode_queries(queries):
 
 
 def retrieve(
-    query_embeddings,
-    collections,
-    top_k_initial,
-):
+    query_embeddings: np.ndarray,
+    collections: list[dict[str, Any]],
+    top_k_initial: int,
+) -> list[SearchResult]:
 
-    results = []
+    results: list[SearchResult] = []
 
     for collection in collections:
 
-        index = collection["index"]
+        index: Any = collection["index"]
 
         if index is None:
             continue
 
-        metadata = collection["metadata"]
+        metadata: list[dict[str, Any]] = collection["metadata"]
 
-        vectors = collection["vectors"]
+        vectors: Any = collection["vectors"]
 
-        collection_name = collection["collection_name"]
+        collection_name: str = collection["collection_name"]
 
         for q_emb in query_embeddings:
 
@@ -97,7 +97,7 @@ def retrieve(
                 if idx == -1:
                     continue
 
-                item = metadata[idx]
+                item: dict[str, Any] = metadata[idx]
 
                 results.append(
                     SearchResult(
@@ -113,20 +113,20 @@ def retrieve(
     return results
 
 
-def rerank(results):
+def rerank(results: list[SearchResult]) -> list[SearchResult]:
 
     results.sort(
         key=lambda x: x.score,
         reverse=True,
     )
 
-    dedup = []
+    dedup: list[SearchResult] = []
 
-    seen = set()
+    seen: set[tuple[str, str, int]] = set()
 
     for r in results:
 
-        key = (
+        key: tuple[str, str, int] = (
             r.collection,
             r.source,
             r.chunk_index,
@@ -143,31 +143,31 @@ def rerank(results):
 
 
 def search(
-    question,
-    mode,
-    chat_memory,
-    collections,
-):
+    question: str,
+    mode: str,
+    chat_memory: list[dict[str, str]],
+    collections: list[dict[str, Any]],
+) -> tuple[list[SearchResult], float]:
 
     if mode == ChatMode.INTERPRETATIVE:
 
-        top_k_initial = INTERPRETATIVE_TOP_K_INITIAL
-        top_k_final = INTERPRETATIVE_TOP_K_FINAL
+        top_k_initial: int = INTERPRETATIVE_TOP_K_INITIAL
+        top_k_final: int = INTERPRETATIVE_TOP_K_FINAL
 
     else:
 
         top_k_initial = BASE_TOP_K_INITIAL
         top_k_final = BASE_TOP_K_FINAL
 
-    queries = build_queries(
+    queries: list[str] = build_queries(
         question,
         mode,
         chat_memory,
     )
 
-    embeddings = encode_queries(queries)
+    embeddings: np.ndarray = encode_queries(queries)
 
-    results = retrieve(
+    results: list[SearchResult] = retrieve(
         embeddings,
         collections,
         top_k_initial,
@@ -175,11 +175,11 @@ def search(
 
     results = rerank(results)
 
-    final_results = results[:top_k_final]
+    final_results: list[SearchResult] = results[:top_k_final]
 
     if not final_results:
         return [], 0.0
 
-    confidence = sum(r.score for r in final_results) / len(final_results)
+    confidence: float = sum(r.score for r in final_results) / len(final_results)
 
     return final_results, confidence

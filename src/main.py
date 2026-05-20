@@ -10,13 +10,13 @@ from src.cli.menu import show_main_menu
 from src.cli.commands import show_contexts, show_modes, show_about
 
 
-def main():
-    session = ChatSession()
+def main() -> None:
+    session: ChatSession = ChatSession()
 
     while True:
         show_main_menu()
 
-        choice = input("> ").strip()
+        choice: str = input("> ").strip()
 
         if choice == "1":
             start_chat(session)

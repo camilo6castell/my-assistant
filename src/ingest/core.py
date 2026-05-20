@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import Any
 import pickle
 
 import faiss
@@ -15,7 +16,7 @@ from src.config.settings import (
     CHUNK_OVERLAP,
 )
 
-model = SentenceTransformer(
+model: SentenceTransformer = SentenceTransformer(
     EMBED_MODEL,
 )
 
@@ -27,15 +28,15 @@ def chunk_text(text: str) -> list[str]:
     if not text:
         return []
 
-    chunks = []
+    chunks: list[str] = []
 
-    start = 0
+    start: int = 0
 
     while start < len(text):
 
-        end = start + CHUNK_SIZE
+        end: int = start + CHUNK_SIZE
 
-        chunk = text[start:end].strip()
+        chunk: str = text[start:end].strip()
 
         if chunk:
             chunks.append(chunk)
@@ -49,7 +50,7 @@ def get_collection_paths(
     collection: str,
 ) -> dict[str, Path]:
 
-    vector_path = BASE_VECTOR_PATH / collection
+    vector_path: Path = BASE_VECTOR_PATH / collection
 
     vector_path.mkdir(
         parents=True,
@@ -64,27 +65,27 @@ def get_collection_paths(
     }
 
 
-def load_collection(collection: str):
+def load_collection(collection: str) -> dict[str, Any]:
 
-    paths = get_collection_paths(collection)
+    paths: dict[str, Path] = get_collection_paths(collection)
 
-    index_file = paths["index_file"]
-    metadata_file = paths["metadata_file"]
-    vectors_file = paths["vectors_file"]
+    index_file: Path = paths["index_file"]
+    metadata_file: Path = paths["metadata_file"]
+    vectors_file: Path = paths["vectors_file"]
 
     if index_file.exists():
 
         logger.info(f"Cargando colección: {collection}")
 
-        index = faiss.read_index(str(index_file))
+        index: faiss.Index = faiss.read_index(str(index_file))
 
         with open(
             metadata_file,
             "rb",
         ) as f:
-            metadata = pickle.load(f)
+            metadata: list[dict[str, Any]] = pickle.load(f)
 
-        vectors = None
+        vectors: np.ndarray | None = None
 
         if vectors_file.exists():
 
@@ -118,7 +119,7 @@ def encode_chunks(
 
     logger.info(f"Generando embeddings para {len(chunks)} chunks")
 
-    embeddings = model.encode(
+    embeddings: Any = model.encode(
         chunks,
         normalize_embeddings=True,
         show_progress_bar=True,
@@ -132,7 +133,7 @@ def encode_chunks(
 
 def create_faiss_index(
     dimension: int,
-):
+) -> faiss.Index:
 
     logger.info(f"Creando índice FAISS (dim={dimension})")
 
@@ -140,21 +141,21 @@ def create_faiss_index(
 
 
 def save_collection(
-    collection_data: dict,
+    collection_data: dict[str, Any],
     new_embeddings: np.ndarray,
-    new_metadata: list[dict],
-):
+    new_metadata: list[dict[str, Any]],
+) -> None:
 
     logger.info("Guardando colección...")
 
-    index = collection_data["index"]
-    metadata = collection_data["metadata"]
-    existing_vectors = collection_data["vectors"]
-    paths = collection_data["paths"]
+    index: faiss.Index | None = collection_data["index"]
+    metadata: list[dict[str, Any]] = collection_data["metadata"]
+    existing_vectors: np.ndarray | None = collection_data["vectors"]
+    paths: dict[str, Path] = collection_data["paths"]
 
     if existing_vectors is not None:
 
-        all_vectors = np.vstack(
+        all_vectors: np.ndarray = np.vstack(
             [
                 existing_vectors,
                 new_embeddings,
@@ -167,7 +168,7 @@ def save_collection(
 
     if index is None:
 
-        dimension = new_embeddings.shape[1]
+        dimension: int = new_embeddings.shape[1]
 
         index = create_faiss_index(dimension)
 
@@ -205,7 +206,7 @@ def build_metadata(
     chunk: str,
     chunk_index: int,
     collection: str,
-):
+) -> dict[str, Any]:
 
     return {
         "source": source,

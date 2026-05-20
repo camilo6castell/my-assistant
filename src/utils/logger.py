@@ -9,14 +9,14 @@ LOG_PATH.mkdir(
     exist_ok=True,
 )
 
-FORMAT = "%(asctime)s " "[%(levelname)s] " "%(name)s: " "%(message)s"
+FORMAT: str = "%(asctime)s " "[%(levelname)s] " "%(name)s: " "%(message)s"
 
 logging.basicConfig(
     level=logging.INFO,
     format=FORMAT,
 )
 
-logger = logging.getLogger("rag")
+logger: logging.Logger = logging.getLogger("rag")
 
 # ======================================================
 # NOISE REDUCTION

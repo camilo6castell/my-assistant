@@ -8,7 +8,7 @@ from src.config.settings import (
 from src.utils.logger import logger
 
 
-def create_client():
+def create_client() -> OpenAI:
 
     logger.info(f"Inicializando cliente LLM " f"| base_url={LLM_BASE_URL}")
 
@@ -18,4 +18,4 @@ def create_client():
     )
 
 
-client = create_client()
+client: OpenAI = create_client()

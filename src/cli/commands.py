@@ -6,6 +6,8 @@ El menú es deliberadamente simple: Chat es donde ocurre todo.
 Las opciones 2-4 son solo consulta, sin modificar estado.
 """
 
+from typing import Any
+from src.chat.session import ChatSession
 from src.config.settings import BASE_VECTOR_PATH
 
 # ======================================================
@@ -13,10 +15,10 @@ from src.config.settings import BASE_VECTOR_PATH
 # ======================================================
 
 
-def show_contexts(session):
+def show_contexts(session: ChatSession) -> None:
     """Lista todas las colecciones disponibles en vector_stores."""
 
-    contexts = session.context_manager.list_all()
+    contexts: list[str] = session.context_manager.list_all()
 
     print()
 
@@ -27,9 +29,11 @@ def show_contexts(session):
 
     print("  Contextos disponibles:\n")
 
-    current_ns = None
+    current_ns: str | None = None
 
     for ctx in contexts:
+        ns: str
+        name: str
         ns, name = ctx.split("/", 1)
 
         if ns != current_ns:
@@ -46,10 +50,10 @@ def show_contexts(session):
 # ======================================================
 
 
-def show_modes(session):
+def show_modes(session: ChatSession) -> None:
     """Describe los modos de respuesta disponibles."""
 
-    current = session.mode
+    current: str = session.mode
 
     print(f"""
   Modo actual: {current}
@@ -73,7 +77,7 @@ def show_modes(session):
 # ======================================================
 
 
-def show_about(_session):
+def show_about(_session: ChatSession) -> None:
     """Información del sistema."""
 
     from src.config.settings import (

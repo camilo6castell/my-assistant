@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import pickle
 from pathlib import Path
-from typing import Sequence
+from typing import Sequence, Any
 
 import faiss
 import numpy as np
@@ -35,7 +35,7 @@ from src.utils.logger import logger
 
 def _collection_paths(collection: str) -> dict[str, Path]:
     """Devuelve las rutas canónicas de los artefactos de una colección."""
-    base = Path(BASE_VECTOR_PATH) / collection
+    base: Path = Path(BASE_VECTOR_PATH) / collection
     return {
         "base": base,
         "index": base / "index.faiss",
@@ -44,19 +44,19 @@ def _collection_paths(collection: str) -> dict[str, Path]:
     }
 
 
-def _load_raw(collection: str) -> tuple[list[dict], np.ndarray | None]:
+def _load_raw(collection: str) -> tuple[list[dict[str, Any]], np.ndarray | None]:
     """
     Carga metadata y vectores sin pasar por load_collection.
     Retorna (metadata, vectors). vectors puede ser None.
     """
-    paths = _collection_paths(collection)
+    paths: dict[str, Path] = _collection_paths(collection)
 
     if not paths["metadata"].exists():
         logger.warning(f"metadata.pkl no encontrado | collection={collection}")
         return [], None
 
     with open(paths["metadata"], "rb") as f:
-        metadata: list[dict] = pickle.load(f)
+        metadata: list[dict[str, Any]] = pickle.load(f)
 
     vectors: np.ndarray | None = None
 
@@ -70,12 +70,12 @@ def _load_raw(collection: str) -> tuple[list[dict], np.ndarray | None]:
 
 def _save_raw(
     collection: str,
-    metadata: list[dict],
+    metadata: list[dict[str, Any]],
     vectors: np.ndarray,
     index: faiss.Index,
 ) -> None:
     """Persiste los tres artefactos de una colección en disco."""
-    paths = _collection_paths(collection)
+    paths: dict[str, Path] = _collection_paths(collection)
     paths["base"].mkdir(parents=True, exist_ok=True)
 
     with open(paths["metadata"], "wb") as f:
@@ -92,10 +92,10 @@ def _save_raw(
 
 def _clear_collection_files(collection: str) -> None:
     """Elimina los artefactos de una colección que quedó vacía."""
-    paths = _collection_paths(collection)
+    paths: dict[str, Path] = _collection_paths(collection)
 
     for key in ("index", "metadata", "vectors"):
-        p = paths[key]
+        p: Path = paths[key]
         if p.exists():
             p.unlink()
             logger.info(f"Archivo eliminado: {p}")
@@ -115,7 +115,7 @@ def rebuild_index(collection: str) -> faiss.Index | None:
 
     Retorna el nuevo faiss.Index, o None si no hay vectores.
     """
-    paths = _collection_paths(collection)
+    paths: dict[str, Path] = _collection_paths(collection)
 
     if not paths["vectors"].exists():
         logger.warning(
@@ -124,7 +124,7 @@ def rebuild_index(collection: str) -> faiss.Index | None:
         )
         return None
 
-    vectors = np.load(paths["vectors"])
+    vectors: np.ndarray = np.load(paths["vectors"])
 
     if vectors.ndim != 2 or vectors.shape[0] == 0:
         logger.warning(
@@ -133,8 +133,8 @@ def rebuild_index(collection: str) -> faiss.Index | None:
         )
         return None
 
-    dimension = vectors.shape[1]
-    index = faiss.IndexFlatIP(dimension)
+    dimension: int = vectors.shape[1]
+    index: faiss.Index = faiss.IndexFlatIP(dimension)
     index.add(vectors)
 
     faiss.write_index(index, str(paths["index"]))
@@ -152,7 +152,7 @@ def rebuild_index(collection: str) -> faiss.Index | None:
 # ======================================================
 
 
-def vacuum_collection(collection: str) -> dict:
+def vacuum_collection(collection: str) -> dict[str, int]:
     """
     Compacta una colección eliminando huecos entre vectores y metadata.
 
@@ -166,28 +166,30 @@ def vacuum_collection(collection: str) -> dict:
             "removed": int,  # huecos eliminados
         }
     """
+    metadata: list[dict[str, Any]]
+    vectors: np.ndarray | None
     metadata, vectors = _load_raw(collection)
 
-    before = len(metadata)
+    before: int = len(metadata)
 
     if not metadata or vectors is None:
         logger.info(f"Vacuum: nada que compactar | collection={collection}")
         return {"before": before, "after": before, "removed": 0}
 
     # Filtra entradas cuyo vector esté fuera de rango
-    valid_indices = [i for i in range(len(metadata)) if i < len(vectors)]
-    clean_metadata = [metadata[i] for i in valid_indices]
-    clean_vectors = vectors[valid_indices].astype("float32")
+    valid_indices: list[int] = [i for i in range(len(metadata)) if i < len(vectors)]
+    clean_metadata: list[dict[str, Any]] = [metadata[i] for i in valid_indices]
+    clean_vectors: np.ndarray = vectors[valid_indices].astype("float32")
 
-    after = len(clean_metadata)
-    removed = before - after
+    after: int = len(clean_metadata)
+    removed: int = before - after
 
     if removed == 0 and np.array_equal(vectors, clean_vectors):
         logger.info(f"Vacuum: colección ya consistente | collection={collection}")
         return {"before": before, "after": after, "removed": 0}
 
-    dimension = clean_vectors.shape[1]
-    index = faiss.IndexFlatIP(dimension)
+    dimension: int = clean_vectors.shape[1]
+    index: faiss.Index = faiss.IndexFlatIP(dimension)
     index.add(clean_vectors)
 
     _save_raw(collection, clean_metadata, clean_vectors, index)
@@ -241,12 +243,14 @@ def delete_by_sources(
 
     Retorna el número total de chunks eliminados.
     """
-    source_set = set(sources)
+    source_set: set[str] = set(sources)
 
     if not source_set:
         logger.warning("delete_by_sources: lista de fuentes vacía.")
         return 0
 
+    metadata: list[dict[str, Any]]
+    vectors: np.ndarray | None
     metadata, vectors = _load_raw(collection)
 
     if not metadata:
@@ -256,11 +260,11 @@ def delete_by_sources(
         )
         return 0
 
-    keep_indices = [
+    keep_indices: list[int] = [
         i for i, m in enumerate(metadata) if m.get("source") not in source_set
     ]
 
-    removed_count = len(metadata) - len(keep_indices)
+    removed_count: int = len(metadata) - len(keep_indices)
 
     if removed_count == 0:
         logger.info(
@@ -274,17 +278,17 @@ def delete_by_sources(
         f"| count={removed_count} | collection={collection}"
     )
 
-    clean_metadata = [metadata[i] for i in keep_indices]
+    clean_metadata: list[dict[str, Any]] = [metadata[i] for i in keep_indices]
 
     if vectors is not None and len(vectors) > 0:
-        valid_keep = [i for i in keep_indices if i < len(vectors)]
-        clean_vectors = vectors[valid_keep].astype("float32")
+        valid_keep: list[int] = [i for i in keep_indices if i < len(vectors)]
+        clean_vectors: np.ndarray = vectors[valid_keep].astype("float32")
     else:
         clean_vectors = np.empty((0,), dtype="float32")
 
     if clean_metadata and clean_vectors.ndim == 2 and clean_vectors.shape[0] > 0:
-        dimension = clean_vectors.shape[1]
-        index = faiss.IndexFlatIP(dimension)
+        dimension: int = clean_vectors.shape[1]
+        index: faiss.Index = faiss.IndexFlatIP(dimension)
         index.add(clean_vectors)
         _save_raw(collection, clean_metadata, clean_vectors, index)
     else:
@@ -341,19 +345,20 @@ def delete_urls(
 # ======================================================
 
 
-def list_sources(collection: str) -> list[dict]:
+def list_sources(collection: str) -> list[dict[str, Any]]:
     """
     Devuelve un resumen de las fuentes indexadas en la colección.
 
     Retorna lista de dicts:
         [{"source": str, "source_type": str, "chunks": int}, ...]
     """
+    metadata: list[dict[str, Any]]
     metadata, _ = _load_raw(collection)
 
-    seen: dict[str, dict] = {}
+    seen: dict[str, dict[str, Any]] = {}
 
     for entry in metadata:
-        src = entry.get("source", "<desconocido>")
+        src: str = entry.get("source", "<desconocido>")
         if src not in seen:
             seen[src] = {
                 "source": src,

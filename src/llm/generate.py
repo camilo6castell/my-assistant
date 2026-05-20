@@ -6,6 +6,8 @@ Timeout y temperatura se leen de settings/env para poder
 ajustarlos sin tocar código.
 """
 
+from typing import Any
+
 from openai import OpenAIError
 
 from src.llm.client import client
@@ -18,7 +20,7 @@ from src.config.settings import (
 
 from src.utils.logger import logger
 
-SYSTEM_PROMPT = """
+SYSTEM_PROMPT: str = """
 Eres un asistente RAG especializado en responder
 usando únicamente el contexto proporcionado.
 
@@ -35,9 +37,9 @@ Reglas:
 
 def build_messages(
     prompt: str,
-    chat_memory: list[dict],
-):
-    messages = [
+    chat_memory: list[dict[str, str]],
+) -> list[dict[str, str]]:
+    messages: list[dict[str, str]] = [
         {
             "role": "system",
             "content": SYSTEM_PROMPT,
@@ -55,7 +57,7 @@ def build_messages(
 
 def ask_llm(
     prompt: str,
-    chat_memory: list[dict],
+    chat_memory: list[dict[str, str]],
 ) -> str:
 
     logger.info(
@@ -64,7 +66,7 @@ def ask_llm(
     )
 
     try:
-        response = client.chat.completions.create(
+        response: Any = client.chat.completions.create(
             model=LLM_MODEL,
             messages=build_messages(
                 prompt=prompt,
@@ -74,7 +76,7 @@ def ask_llm(
             timeout=LLM_TIMEOUT,
         )
 
-        content = response.choices[0].message.content
+        content: str | None = response.choices[0].message.content
 
         if not content:
             logger.warning("El modelo devolvió respuesta vacía.")

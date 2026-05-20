@@ -8,7 +8,7 @@ def env_bool(
     default: bool = False,
 ) -> bool:
 
-    value = os.getenv(name)
+    value: str | None = os.getenv(name)
 
     if value is None:
         return default
@@ -26,7 +26,7 @@ def env_int(
     default: int,
 ) -> int:
 
-    value = os.getenv(name)
+    value: str | None = os.getenv(name)
 
     if value is None:
         return default
@@ -39,7 +39,7 @@ def env_float(
     default: float,
 ) -> float:
 
-    value = os.getenv(name)
+    value: str | None = os.getenv(name)
 
     if value is None:
         return default

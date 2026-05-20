@@ -1,6 +1,7 @@
 # python -m src.ingest.ingest sociologia la-sociedad-del-espectaculo
 
 import sys
+from typing import Any
 
 from pathlib import Path
 
@@ -20,15 +21,15 @@ from src.ingest.core import (
 )
 
 
-def read_pdf(path: Path):
+def read_pdf(path: Path) -> list[tuple[int, str]]:
 
     logger.info(f"Leyendo PDF: {path.name}")
 
-    pages = []
+    pages: list[tuple[int, str]] = []
 
     try:
 
-        reader = PdfReader(str(path))
+        reader: PdfReader = PdfReader(str(path))
 
     except Exception as e:
 
@@ -40,7 +41,7 @@ def read_pdf(path: Path):
 
         try:
 
-            text = page.extract_text()
+            text: str = page.extract_text()
 
             if text and text.strip():
 
@@ -69,7 +70,7 @@ def read_pdf(path: Path):
     return pages
 
 
-def read_html(path: Path):
+def read_html(path: Path) -> list[tuple[int, str]]:
 
     logger.info(f"Leyendo HTML: {path.name}")
 
@@ -79,17 +80,17 @@ def read_html(path: Path):
         encoding="utf-8",
     ) as f:
 
-        soup = BeautifulSoup(
+        soup: BeautifulSoup = BeautifulSoup(
             f,
             "html.parser",
         )
 
-    text = soup.get_text(separator="\n")
+    text: str = soup.get_text(separator="\n")
 
     return [(1, text)]
 
 
-def read_txt(path: Path):
+def read_txt(path: Path) -> list[tuple[int, str]]:
 
     logger.info(f"Leyendo TXT: {path.name}")
 
@@ -99,14 +100,14 @@ def read_txt(path: Path):
         encoding="utf-8",
     ) as f:
 
-        text = f.read()
+        text: str = f.read()
 
     return [(1, text)]
 
 
-def read_file(path: Path):
+def read_file(path: Path) -> list[tuple[int, str]]:
 
-    suffix = path.suffix.lower()
+    suffix: str = path.suffix.lower()
 
     if suffix == ".pdf":
         return read_pdf(path)
@@ -122,7 +123,7 @@ def read_file(path: Path):
     return []
 
 
-def main():
+def main() -> None:
 
     if len(sys.argv) != 3:
 
@@ -130,23 +131,23 @@ def main():
 
         return
 
-    category = sys.argv[1]
-    collection_name = sys.argv[2]
+    category: str = sys.argv[1]
+    collection_name: str = sys.argv[2]
 
-    collection = f"{category}/{collection_name}"
+    collection: str = f"{category}/{collection_name}"
 
     logger.info(f"Iniciando ingest: {collection}")
 
-    collection_data = load_collection(collection)
+    collection_data: dict[str, Any] = load_collection(collection)
 
-    metadata = collection_data["metadata"]
+    metadata: list[dict[str, Any]] = collection_data["metadata"]
 
-    existing_sources = {m["source"] for m in metadata}
+    existing_sources: set[str] = {m["source"] for m in metadata}
 
-    new_chunks = []
-    new_metadata = []
+    new_chunks: list[str] = []
+    new_metadata: list[dict[str, Any]] = []
 
-    files = list(DATA_PATH.iterdir())
+    files: list[Path] = list(DATA_PATH.iterdir())
 
     if not files:
 
@@ -164,7 +165,7 @@ def main():
 
             continue
 
-        pages = read_file(file)
+        pages: list[tuple[int, str]] = read_file(file)
 
         if not pages:
 
@@ -176,7 +177,7 @@ def main():
 
         for page_number, text in pages:
 
-            chunks = chunk_text(text)
+            chunks: list[str] = chunk_text(text)
 
             logger.info(f"Chunks generados: {len(chunks)} " f"| page={page_number}")
 
@@ -203,7 +204,7 @@ def main():
 
         return
 
-    embeddings = encode_chunks(new_chunks)
+    embeddings: Any = encode_chunks(new_chunks)
 
     save_collection(
         collection_data=collection_data,

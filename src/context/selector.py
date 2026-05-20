@@ -25,7 +25,7 @@ def _match_single(pattern: str, available: List[str]) -> List[str]:
 
     # "sociologia/*"  →  namespace explícito
     if pattern.endswith("/*"):
-        namespace = pattern[:-2]
+        namespace: str = pattern[:-2]
         return [ctx for ctx in available if ctx.startswith(namespace + "/")]
 
     # "sociologia/debord"  →  match exacto
@@ -33,8 +33,8 @@ def _match_single(pattern: str, available: List[str]) -> List[str]:
         return [pattern] if pattern in available else []
 
     # "sociologia"  →  namespace implícito (azúcar sintáctico)
-    prefix = pattern + "/"
-    matches = [ctx for ctx in available if ctx.startswith(prefix)]
+    prefix: str = pattern + "/"
+    matches: List[str] = [ctx for ctx in available if ctx.startswith(prefix)]
 
     # Si no hay matches de namespace, intenta match exacto de todas formas
     # (por si alguien tiene una colección raíz sin subdirectorio)
@@ -70,13 +70,13 @@ def match_contexts(
 
     Retorna la unión ordenada sin duplicados.
     """
-    tokens = raw.strip().split()
+    tokens: List[str] = raw.strip().split()
 
     if not tokens:
         return []
 
-    seen = set()
-    result = []
+    seen: set[str] = set()
+    result: List[str] = []
 
     for token in tokens:
         for ctx in _match_single(token, available_contexts):

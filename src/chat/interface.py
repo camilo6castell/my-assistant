@@ -23,8 +23,10 @@ Sintaxis de <tokens>:
 """
 
 import warnings
+from typing import Any
 
 from src.chat.session import ChatSession
+from src.context.models import SearchResult
 from src.context.selector import match_contexts
 from src.llm.generate import ask_llm
 from src.retrieval.search import search
@@ -35,7 +37,7 @@ warnings.filterwarnings(
     message="You're using a BertTokenizerFast tokenizer.*",
 )
 
-HELP = """
+HELP: str = """
   Comandos:
 
   /context <tokens>   cargar contexto(s)
@@ -61,7 +63,7 @@ HELP = """
 # ======================================================
 
 
-def _print_contexts_tree(contexts: list[str], label: str):
+def _print_contexts_tree(contexts: list[str], label: str) -> None:
     """Imprime una lista de colecciones agrupada por namespace."""
 
     if not contexts:
@@ -69,9 +71,11 @@ def _print_contexts_tree(contexts: list[str], label: str):
 
     print(f"\n  {label}:\n")
 
-    current_ns = None
+    current_ns: str | None = None
 
     for ctx in sorted(contexts):
+        ns: str
+        name: str
         ns, name = ctx.split("/", 1)
 
         if ns != current_ns:
@@ -83,8 +87,8 @@ def _print_contexts_tree(contexts: list[str], label: str):
     print()
 
 
-def _print_available(session):
-    contexts = session.context_manager.list_all()
+def _print_available(session: ChatSession) -> None:
+    contexts: list[str] = session.context_manager.list_all()
 
     print()
 
@@ -95,8 +99,8 @@ def _print_available(session):
     _print_contexts_tree(contexts, "Disponibles")
 
 
-def _print_active(session):
-    active = session.get_active_contexts()
+def _print_active(session: ChatSession) -> None:
+    active: list[str] = session.get_active_contexts()
 
     print()
 
@@ -112,30 +116,30 @@ def _print_active(session):
 # ======================================================
 
 
-def _handle_context(session, raw_tokens: str):
+def _handle_context(session: ChatSession, raw_tokens: str) -> None:
     """Carga uno o más contextos a partir de tokens separados por espacio."""
 
     if not raw_tokens:
         print("\n  Uso: /context <tokens>  (ej: /context sociologia react)\n")
         return
 
-    available = session.context_manager.list_all()
-    targets = match_contexts(raw_tokens, available)
+    available: list[str] = session.context_manager.list_all()
+    targets: list[str] = match_contexts(raw_tokens, available)
 
     if not targets:
         print(f"\n  Sin coincidencias para: {raw_tokens!r}\n")
         return
 
-    loaded = []
+    loaded: list[str] = []
 
     for ctx in targets:
-        result = session.load_context(ctx)
+        result: list[str] = session.load_context(ctx)
         loaded.extend(result)
 
     print()
 
     if not loaded:
-        already = ", ".join(targets)
+        already: str = ", ".join(targets)
         print(f"  Ya activos: {already}")
     else:
         for ctx in loaded:
@@ -144,24 +148,24 @@ def _handle_context(session, raw_tokens: str):
     print()
 
 
-def _handle_remove(session, raw_tokens: str):
+def _handle_remove(session: ChatSession, raw_tokens: str) -> None:
     """Descarga uno o más contextos a partir de tokens separados por espacio."""
 
     if not raw_tokens:
         print("\n  Uso: /remove <tokens>  (ej: /remove sociologia)\n")
         return
 
-    available = session.context_manager.list_all()
-    targets = match_contexts(raw_tokens, available)
+    available: list[str] = session.context_manager.list_all()
+    targets: list[str] = match_contexts(raw_tokens, available)
 
     if not targets:
         print(f"\n  Sin coincidencias para: {raw_tokens!r}\n")
         return
 
-    removed = []
+    removed: list[str] = []
 
     for ctx in targets:
-        result = session.unload_context(ctx)
+        result: list[str] = session.unload_context(ctx)
         removed.extend(result)
 
     print()
@@ -180,8 +184,8 @@ def _handle_remove(session, raw_tokens: str):
 # ======================================================
 
 
-def _handle_question(session, question: str):
-    collections = session.context_manager.get_loaded_collections()
+def _handle_question(session: ChatSession, question: str) -> None:
+    collections: list[dict[str, Any]] = session.context_manager.get_loaded_collections()
 
     if not collections:
         print("\n  Carga un contexto primero.  Ej: /context sociologia\n")
@@ -189,6 +193,8 @@ def _handle_question(session, question: str):
 
     print("\n  Buscando...\n")
 
+    results: list[SearchResult]
+    confidence: float
     results, confidence = search(
         question=question,
         mode=session.mode,
@@ -200,21 +206,21 @@ def _handle_question(session, question: str):
         print("  No se encontró contexto relevante.\n")
         return
 
-    context_chunks = []
+    context_chunks: list[str] = []
 
     for r in results:
         context_chunks.append(
             f"FUENTE: {r.source}\nCOLECCION: {r.collection}\nPAGINA: {r.page}\n\n{r.text}"
         )
 
-    prompt = build_prompt(
+    prompt: str = build_prompt(
         context_chunks=context_chunks,
         question=question,
         mode=session.mode,
         chat_memory=session.chat_memory,
     )
 
-    answer = ask_llm(
+    answer: str = ask_llm(
         prompt=prompt,
         chat_memory=session.chat_memory,
     )
@@ -231,13 +237,13 @@ def _handle_question(session, question: str):
 # ======================================================
 
 
-def start_chat(session: ChatSession):
+def start_chat(session: ChatSession) -> None:
     print("\n  === CHAT ===")
     print("  Escribe /help para ver los comandos disponibles.\n")
 
     while True:
         try:
-            command = input(session.get_prompt_header()).strip()
+            command: str = input(session.get_prompt_header()).strip()
         except (EOFError, KeyboardInterrupt):
             print()
             break
@@ -285,7 +291,7 @@ def start_chat(session: ChatSession):
 
         # ── modo ──────────────────────────────────────────
         if command == "/mode":
-            mode = session.toggle_mode()
+            mode: str = session.toggle_mode()
             print(f"\n  Modo: {mode}\n")
             continue
 

@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import Any
 
 from src.config.settings import BASE_VECTOR_PATH
 
@@ -11,19 +12,19 @@ from src.utils.logger import logger
 
 class ContextManager:
 
-    def __init__(self):
+    def __init__(self) -> None:
 
-        self.base_path = Path(BASE_VECTOR_PATH)
+        self.base_path: Path = Path(BASE_VECTOR_PATH)
 
-        self.loaded_contexts = {}
+        self.loaded_contexts: dict[str, dict[str, Any]] = {}
 
     # =====================================================
     # DISCOVERY
     # =====================================================
 
-    def list_all(self):
+    def list_all(self) -> list[str]:
 
-        contexts = []
+        contexts: list[str] = []
 
         if not self.base_path.exists():
             return contexts
@@ -44,9 +45,9 @@ class ContextManager:
     # RESOLUTION
     # =====================================================
 
-    def resolve_pattern(self, pattern: str):
+    def resolve_pattern(self, pattern: str) -> list[str]:
 
-        available = self.list_all()
+        available: list[str] = self.list_all()
 
         return match_namespace(
             pattern=pattern,
@@ -57,14 +58,14 @@ class ContextManager:
     # ACTIVATION
     # =====================================================
 
-    def activate(self, pattern: str):
+    def activate(self, pattern: str) -> list[str]:
 
-        matches = self.resolve_pattern(pattern)
+        matches: list[str] = self.resolve_pattern(pattern)
 
         if not matches:
             return []
 
-        loaded = []
+        loaded: list[str] = []
 
         for context_name in matches:
 
@@ -73,7 +74,7 @@ class ContextManager:
 
             try:
 
-                collection = load_collection(context_name)
+                collection: dict[str, Any] = load_collection(context_name)
 
                 collection["collection_name"] = context_name
 
@@ -92,11 +93,11 @@ class ContextManager:
     # DEACTIVATION
     # =====================================================
 
-    def deactivate(self, pattern: str):
+    def deactivate(self, pattern: str) -> list[str]:
 
-        matches = self.resolve_pattern(pattern)
+        matches: list[str] = self.resolve_pattern(pattern)
 
-        removed = []
+        removed: list[str] = []
 
         for context_name in matches:
 
@@ -110,7 +111,7 @@ class ContextManager:
 
         return removed
 
-    def clear(self):
+    def clear(self) -> None:
 
         self.loaded_contexts.clear()
 
@@ -120,8 +121,8 @@ class ContextManager:
     # GETTERS
     # =====================================================
 
-    def get_active(self):
+    def get_active(self) -> list[str]:
         return list(self.loaded_contexts.keys())
 
-    def get_loaded_collections(self):
+    def get_loaded_collections(self) -> list[dict[str, Any]]:
         return list(self.loaded_contexts.values())

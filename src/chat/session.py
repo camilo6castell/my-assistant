@@ -4,6 +4,8 @@ src/chat/session.py
 Estado de la sesión de chat activa: contextos cargados, modo y memoria.
 """
 
+from typing import Any
+
 from src.context.manager import ContextManager
 
 from src.chat.modes import (
@@ -14,25 +16,25 @@ from src.chat.modes import (
 
 class ChatSession:
 
-    def __init__(self):
-        self.context_manager = ContextManager()
-        self.interpretative_mode = False
-        self.chat_memory = []
+    def __init__(self) -> None:
+        self.context_manager: ContextManager = ContextManager()
+        self.interpretative_mode: bool = False
+        self.chat_memory: list[dict[str, str]] = []
 
     # =====================================================
     # CONTEXTS
     # =====================================================
 
-    def load_context(self, pattern: str):
+    def load_context(self, pattern: str) -> list[str]:
         return self.context_manager.activate(pattern)
 
-    def unload_context(self, pattern: str):
+    def unload_context(self, pattern: str) -> list[str]:
         return self.context_manager.deactivate(pattern)
 
-    def clear_contexts(self):
+    def clear_contexts(self) -> None:
         self.context_manager.clear()
 
-    def get_active_contexts(self):
+    def get_active_contexts(self) -> list[str]:
         return self.context_manager.get_active()
 
     # =====================================================
@@ -40,12 +42,12 @@ class ChatSession:
     # =====================================================
 
     @property
-    def mode(self):
+    def mode(self) -> str:
         if self.interpretative_mode:
             return INTERPRETATIVE
         return RIGOROUS
 
-    def toggle_mode(self):
+    def toggle_mode(self) -> str:
         self.interpretative_mode = not self.interpretative_mode
         return self.mode
 
@@ -53,14 +55,14 @@ class ChatSession:
     # MEMORY
     # =====================================================
 
-    def reset_memory(self):
+    def reset_memory(self) -> None:
         self.chat_memory = []
 
     def add_to_memory(
         self,
         user: str,
         assistant: str,
-    ):
+    ) -> None:
         self.chat_memory.append(
             {
                 "user": user,
@@ -82,15 +84,15 @@ class ChatSession:
           [debord, freud | INTERP] >
           [SIN-CONTEXTO | RIG] >
         """
-        active = self.get_active_contexts()
+        active: list[str] = self.get_active_contexts()
 
-        mode_label = "INTERP" if self.interpretative_mode else "RIG"
+        mode_label: str = "INTERP" if self.interpretative_mode else "RIG"
 
         if not active:
-            ctx_label = "SIN-CONTEXTO"
+            ctx_label: str = "SIN-CONTEXTO"
         else:
             # Usa solo el basename de cada colección (parte tras "/")
-            names = [ctx.split("/")[-1] for ctx in sorted(active)]
+            names: list[str] = [ctx.split("/")[-1] for ctx in sorted(active)]
             ctx_label = ", ".join(names)
 
         return f"[{ctx_label} | {mode_label}] > "
