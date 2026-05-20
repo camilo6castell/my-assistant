@@ -31,11 +31,11 @@ def main():
             show_about(session)
 
         elif choice == "5":
-            print("\n  Hasta luego.\n")
+            print("\n  Bye!.\n")
             break
 
         else:
-            print("\n  Opción inválida.\n")
+            print("\n  Wrong option.\n")
 
 
 if __name__ == "__main__":
