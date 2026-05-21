@@ -10,7 +10,7 @@ def cosine_similarity(a: Any, b: Any) -> float:
 def normalize_embedding(embedding: Any) -> np.ndarray:
     embedding = np.array(embedding).astype("float32")
 
-    norm: float = np.linalg.norm(embedding)
+    norm = float(np.linalg.norm(embedding))
 
     if norm == 0:
         return embedding
