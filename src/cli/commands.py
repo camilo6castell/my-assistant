@@ -84,7 +84,7 @@ def show_about(_session: ChatSession) -> None:
         CHUNK_SIZE,
         DATA_PATH,
         EMBED_MODEL,
-        INTERPRETATIVE_TOP_K_FINAL,
+        SOFT_TOP_K_FINAL,
         LLM_MODEL,
     )
 
@@ -95,7 +95,7 @@ def show_about(_session: ChatSession) -> None:
   LLM model       : {LLM_MODEL}
   Chunk size      : {CHUNK_SIZE} chars  (overlap {CHUNK_OVERLAP})
   Top-K riguroso  : {BASE_TOP_K_FINAL} resultados finales
-  Top-K interpret : {INTERPRETATIVE_TOP_K_FINAL} resultados finales
+  Top-K interpret : {SOFT_TOP_K_FINAL} resultados finales
   Vector stores   : {BASE_VECTOR_PATH}
   Data path       : {DATA_PATH}
 

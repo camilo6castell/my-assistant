@@ -1,3 +1,11 @@
+"""
+Nota sobre # pyright: ignore[reportCallIssue] en llamadas a faiss:
+  Pylance lee stubs SWIG C++ de faiss (add(n, x, ...) / search(n, x, k, D, I, ...))
+  en lugar del wrapper Python (add(x) / search(x, k) → (D, I)).
+  mypy tiene stubs correctos y no necesita supresión.
+  La directiva pyright: es ignorada por mypy, evitando el unused-ignore.
+"""
+
 from __future__ import annotations
 
 import pickle
@@ -66,10 +74,7 @@ class RawCollection(TypedDict):
 
 
 def _to_f32(arr: np.ndarray) -> np.ndarray:
-    """
-    Convierte a float32 C-contiguo.
-    FIX #5: los stubs de faiss-cpu esperan este tipo exacto en .add().
-    """
+    """Convierte a float32 C-contiguo requerido por faiss en runtime."""
     return np.ascontiguousarray(arr, dtype=np.float32)
 
 
@@ -175,8 +180,7 @@ def save_collection(
         dimension = new_embeddings.shape[1]
         index = create_faiss_index(dimension)
 
-    # FIX #5: cast explícito antes de .add()
-    index.add(_to_f32(new_embeddings))
+    index.add(_to_f32(new_embeddings))  # pyright: ignore[reportCallIssue]
     metadata.extend(new_metadata)
 
     faiss.write_index(index, str(paths["index_file"]))

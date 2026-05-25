@@ -1,5 +1,3 @@
-# src/config/settings.py
-
 import os
 from pathlib import Path
 
@@ -97,16 +95,16 @@ BASE_TOP_K_FINAL: int = int(
     )
 )
 
-INTERPRETATIVE_TOP_K_INITIAL: int = int(
+SOFT_TOP_K_INITIAL: int = int(
     os.getenv(
-        "INTERPRETATIVE_TOP_K_INITIAL",
+        "SOFT_TOP_K_INITIAL",
         25,
     )
 )
 
-INTERPRETATIVE_TOP_K_FINAL: int = int(
+SOFT_TOP_K_FINAL: int = int(
     os.getenv(
-        "INTERPRETATIVE_TOP_K_FINAL",
+        "SOFT_TOP_K_FINAL",
         7,
     )
 )
@@ -118,8 +116,8 @@ MAX_TURNS: int = int(
     )
 )
 
-DEFAULT_INTERPRETATIVE_MODE: bool = env_bool(
-    "DEFAULT_INTERPRETATIVE_MODE",
+DEFAULT_SOFT_MODE: bool = env_bool(
+    "DEFAULT_SOFT_MODE",
     False,
 )
 

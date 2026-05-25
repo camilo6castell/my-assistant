@@ -12,6 +12,10 @@ Operaciones principales:
   - vacuum_collection   → compacta vectores y metadata, reescribe disco
   - clear_collection    → elimina todos los artefactos de la colección
   - list_sources        → introspección: fuentes y chunks por fuente
+
+Nota sobre # pyright: ignore[reportCallIssue] en llamadas a faiss:
+  Pylance lee stubs SWIG C++; mypy tiene stubs correctos para el wrapper
+  Python. La directiva pyright: es ignorada por mypy, sin unused-ignore.
 """
 
 from __future__ import annotations
@@ -102,10 +106,7 @@ def _clear_collection_files(collection: str) -> None:
 
 
 def _to_f32(arr: np.ndarray) -> np.ndarray:
-    """
-    Convierte un array a float32 C-contiguo.
-    Los stubs de faiss-cpu esperan exactamente este tipo en .add() y .search().
-    """
+    """Convierte a float32 C-contiguo requerido por faiss en runtime."""
     return np.ascontiguousarray(arr, dtype=np.float32)
 
 
@@ -139,9 +140,7 @@ def rebuild_index(collection: str) -> faiss.Index | None:
 
     dimension: int = vectors.shape[1]
     index: faiss.Index = faiss.IndexFlatIP(dimension)
-
-    # FIX #3: cast explícito a float32 C-contiguo para satisfacer los stubs de faiss
-    index.add(_to_f32(vectors))
+    index.add(_to_f32(vectors))  # pyright: ignore[reportCallIssue]
 
     faiss.write_index(index, str(paths["index"]))
 
@@ -188,7 +187,7 @@ def vacuum_collection(collection: str) -> dict[str, int]:
 
     dimension: int = clean_vectors.shape[1]
     index: faiss.Index = faiss.IndexFlatIP(dimension)
-    index.add(clean_vectors)  # ya es f32 C-contiguo
+    index.add(clean_vectors)  # pyright: ignore[reportCallIssue]
 
     _save_raw(collection, clean_metadata, clean_vectors, index)
 
@@ -271,7 +270,6 @@ def delete_by_sources(
     )
 
     clean_metadata: list[ChunkMetadata] = [metadata[i] for i in keep_indices]
-
     clean_vectors: np.ndarray
 
     if vectors is not None and len(vectors) > 0:
@@ -283,7 +281,7 @@ def delete_by_sources(
     if clean_metadata and clean_vectors.ndim == 2 and clean_vectors.shape[0] > 0:
         dimension: int = clean_vectors.shape[1]
         index: faiss.Index = faiss.IndexFlatIP(dimension)
-        index.add(clean_vectors)  # ya es f32 C-contiguo
+        index.add(clean_vectors)  # pyright: ignore[reportCallIssue]
         _save_raw(collection, clean_metadata, clean_vectors, index)
     else:
         _clear_collection_files(collection)
@@ -339,7 +337,7 @@ def delete_urls(
 # ======================================================
 
 
-class SourceSummary(dict):
+class SourceSummary(dict):  # type: ignore[type-arg]
     """Resumen de una fuente: source, source_type, chunks."""
 
 

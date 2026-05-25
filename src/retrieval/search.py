@@ -1,3 +1,9 @@
+"""
+Nota sobre # pyright: ignore[reportCallIssue] en index.search():
+  Pylance lee stubs SWIG C++ de faiss; mypy tiene stubs del wrapper Python.
+  La directiva pyright: es ignorada por mypy, sin unused-ignore.
+"""
+
 from __future__ import annotations
 
 import numpy as np
@@ -9,8 +15,8 @@ from src.config.settings import (
     BASE_TOP_K_FINAL,
     BASE_TOP_K_INITIAL,
     EMBED_MODEL,
-    INTERPRETATIVE_TOP_K_FINAL,
-    INTERPRETATIVE_TOP_K_INITIAL,
+    SOFT_TOP_K_FINAL,
+    SOFT_TOP_K_INITIAL,
     MAX_TURNS,
 )
 from src.context.manager import LoadedCollection
@@ -30,7 +36,7 @@ def build_queries(
     memory: list[TurnMemory],
 ) -> list[str]:
 
-    if mode == ChatMode.RIGOROUS:
+    if mode == ChatMode.HARD:
         return [question]
 
     history = " ".join(
@@ -78,21 +84,10 @@ def retrieve(
         collection_name = collection["collection_name"]
 
         for q_emb in query_embeddings:
-            # Different vector DBs expose different signatures for `search`.
-            # Try common variants and fall back to an output-buffer style call.
-            q_arr = np.ascontiguousarray([q_emb], dtype=np.float32)
-            try:
-                scores, indices = index.search(q_arr, top_k_initial)
-            except TypeError:
-                try:
-                    scores, indices = index.search(q_arr, k=top_k_initial)
-                except TypeError:
-                    # Some indexes expect preallocated output buffers: search(x, k, distances, labels)
-                    out_dist = np.empty((1, top_k_initial), dtype=np.float32)
-                    out_idx = np.empty((1, top_k_initial), dtype=np.int64)
-                    # call will fill out_dist and out_idx in-place
-                    index.search(q_arr, top_k_initial, out_dist, out_idx)
-                    scores, indices = out_dist, out_idx
+            query: np.ndarray = np.ascontiguousarray([q_emb], dtype=np.float32)
+            scores, indices = index.search(
+                query, top_k_initial
+            )  # pyright: ignore[reportCallIssue]
 
             for score, idx in zip(scores[0], indices[0]):
                 if idx == -1:
@@ -149,9 +144,9 @@ def search(
     collections: list[LoadedCollection],
 ) -> tuple[list[SearchResult], float]:
 
-    if mode == ChatMode.INTERPRETATIVE:
-        top_k_initial = INTERPRETATIVE_TOP_K_INITIAL
-        top_k_final = INTERPRETATIVE_TOP_K_FINAL
+    if mode == ChatMode.SOFT:
+        top_k_initial = SOFT_TOP_K_INITIAL
+        top_k_final = SOFT_TOP_K_FINAL
     else:
         top_k_initial = BASE_TOP_K_INITIAL
         top_k_final = BASE_TOP_K_FINAL

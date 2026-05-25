@@ -70,7 +70,10 @@ def ask_llm(
             logger.warning("El modelo devolvió respuesta vacía.")
             return "El modelo no devolvió respuesta."
 
-        return content.strip()
+        # FIX no-any-return: los stubs de openai pueden resolver `content`
+        # como Any en la cadena de tipos. str() garantiza el retorno str
+        # sin alterar el valor (content ya pasó el guard de None arriba).
+        return str(content).strip()
 
     except OpenAIError as e:
         logger.exception("Error consultando LLM")

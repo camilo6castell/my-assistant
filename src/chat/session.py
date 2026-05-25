@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from src.chat.modes import INTERPRETATIVE, RIGOROUS
+from src.chat.modes import SOFT, HARD
 from src.chat.types import TurnMemory
 from src.context.manager import ContextManager, LoadedCollection
 
@@ -9,7 +9,7 @@ class ChatSession:
 
     def __init__(self) -> None:
         self.context_manager: ContextManager = ContextManager()
-        self.interpretative_mode: bool = False
+        self.soft_mode: bool = True
         self.chat_memory: list[TurnMemory] = []
 
     # =====================================================
@@ -37,10 +37,10 @@ class ChatSession:
 
     @property
     def mode(self) -> str:
-        return INTERPRETATIVE if self.interpretative_mode else RIGOROUS
+        return SOFT if self.soft_mode else HARD
 
     def toggle_mode(self) -> str:
-        self.interpretative_mode = not self.interpretative_mode
+        self.soft_mode = not self.soft_mode
         return self.mode
 
     # =====================================================
@@ -63,14 +63,14 @@ class ChatSession:
         al basename (parte después de '/') para evitar desbordamiento.
 
         Ejemplos:
-          [debord, freud | INTERP] >
-          [SIN-CONTEXTO | RIG] >
+          [debord, freud | SOFT] >
+          [No-context | HARD] >
         """
         active: list[str] = self.get_active_contexts()
-        mode_label: str = "INTERP" if self.interpretative_mode else "RIG"
+        mode_label: str = "SOFT" if self.soft_mode else "HARD"
 
         if not active:
-            ctx_label = "SIN-CONTEXTO"
+            ctx_label = "No-context"
         else:
             names = [ctx.split("/")[-1] for ctx in sorted(active)]
             ctx_label = ", ".join(names)

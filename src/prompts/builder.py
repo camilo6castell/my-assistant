@@ -22,7 +22,7 @@ def build_context_block(context_chunks: list[str]) -> str:
 
 
 def build_rules_block(mode: str) -> str:
-    if mode == ChatMode.INTERPRETATIVE:
+    if mode == ChatMode.SOFT:
         return """
 REGLAS (MODO INTERPRETATIVO):
 

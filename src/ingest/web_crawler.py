@@ -56,9 +56,15 @@ def get_links(url: str, domain: str) -> set[str]:
         links: set[str] = set()
 
         for a in soup.find_all("a", href=True):
-            href: str = urljoin(url, a["href"])
-            # FIX bonus: ParseResult en lugar de Any
-            parsed: ParseResult = urlparse(href)
+            # FIX: a["href"] retorna _AttributeValue = str | list[str].
+            # urljoin requiere str. El guard isinstance descarta el caso
+            # list[str] (múltiples valores en un atributo HTML) que es
+            # inválido para una URL y que también sería un bug en runtime.
+            raw_href = a["href"]
+            if not isinstance(raw_href, str):
+                continue
+
+            parsed: ParseResult = urlparse(urljoin(url, raw_href))
 
             if parsed.netloc == domain:
                 clean: str = parsed.scheme + "://" + parsed.netloc + parsed.path
@@ -126,9 +132,7 @@ def main() -> None:
                 )
             )
 
-        links: set[str] = get_links(url, domain)
-
-        for link in links:
+        for link in get_links(url, domain):
             if link not in visited:
                 to_visit.append(link)
 
@@ -143,7 +147,6 @@ def main() -> None:
     logger.info(f"Generando embeddings para {len(new_chunks)} chunks")
 
     new_embeddings: np.ndarray = encode_chunks(new_chunks)
-
     save_collection(collection_data, new_embeddings, new_metadata)
 
     logger.info(f"Crawler finalizado | chunks={len(new_chunks)}")
