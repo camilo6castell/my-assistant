@@ -1,49 +1,28 @@
-from typing import List
-
-from src.chat.modes import (
-    ChatMode,
-)
-
-from src.config.settings import (
-    MAX_TURNS,
-)
+from src.chat.modes import ChatMode
+from src.chat.types import TurnMemory
+from src.config.settings import MAX_TURNS
 
 
-def build_history_block(
-    chat_memory: List[dict[str, str]],
-) -> str:
-
+def build_history_block(chat_memory: list[TurnMemory]) -> str:
     if not chat_memory:
         return "No hay historial previo."
 
-    history_lines: List[str] = []
+    lines: list[str] = []
 
-    recent_turns: List[dict[str, str]] = chat_memory[-MAX_TURNS:]
+    for turn in chat_memory[-MAX_TURNS:]:
+        lines.append(f"Usuario: {turn['user']}")
+        lines.append(f"Asistente: {turn['assistant']}")
+        lines.append("")
 
-    for turn in recent_turns:
-
-        history_lines.append(f"Usuario: {turn['user']}")
-
-        history_lines.append(f"Asistente: {turn['assistant']}")
-
-        history_lines.append("")
-
-    return "\n".join(history_lines)
+    return "\n".join(lines)
 
 
-def build_context_block(
-    context_chunks: List[str],
-) -> str:
-
+def build_context_block(context_chunks: list[str]) -> str:
     return "\n\n---\n\n".join(context_chunks)
 
 
-def build_rules_block(
-    mode: str,
-) -> str:
-
+def build_rules_block(mode: str) -> str:
     if mode == ChatMode.INTERPRETATIVE:
-
         return """
 REGLAS (MODO INTERPRETATIVO):
 
@@ -68,37 +47,30 @@ REGLAS (MODO RIGUROSO):
 
 
 def build_prompt(
-    context_chunks: List[str],
+    context_chunks: list[str],
     question: str,
     mode: str,
-    chat_memory: List[dict[str, str]],
+    chat_memory: list[TurnMemory],
 ) -> str:
-
-    context_block: str = build_context_block(context_chunks)
-
-    history_block: str = build_history_block(chat_memory)
-
-    rules_block: str = build_rules_block(mode)
-
     return f"""
 Eres un asistente RAG.
 
 Tu tarea es responder preguntas usando
 EXCLUSIVAMENTE el contexto proporcionado.
 
-{rules_block}
+{build_rules_block(mode)}
 
 ========================================
 HISTORIAL
 ========================================
 
-{history_block}
+{build_history_block(chat_memory)}
 
 ========================================
 CONTEXTO
 ========================================
 
-{context_block}
+{build_context_block(context_chunks)}
 
 ========================================
 PREGUNTA

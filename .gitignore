@@ -14,3 +14,6 @@ __pycache__/
 *.pyo
 *.pyd
 
+.mypy_cache/
+.pytest_cache/
+

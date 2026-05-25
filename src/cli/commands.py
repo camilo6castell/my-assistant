@@ -1,12 +1,9 @@
 """
-src/cli/commands.py
-
 Handlers informativos del menú principal.
 El menú es deliberadamente simple: Chat es donde ocurre todo.
 Las opciones 2-4 son solo consulta, sin modificar estado.
 """
 
-from typing import Any
 from src.chat.session import ChatSession
 from src.config.settings import BASE_VECTOR_PATH
 
@@ -81,14 +78,14 @@ def show_about(_session: ChatSession) -> None:
     """Información del sistema."""
 
     from src.config.settings import (
-        EMBED_MODEL,
-        LLM_MODEL,
-        CHUNK_SIZE,
-        CHUNK_OVERLAP,
         BASE_TOP_K_FINAL,
-        INTERPRETATIVE_TOP_K_FINAL,
         BASE_VECTOR_PATH,
+        CHUNK_OVERLAP,
+        CHUNK_SIZE,
         DATA_PATH,
+        EMBED_MODEL,
+        INTERPRETATIVE_TOP_K_FINAL,
+        LLM_MODEL,
     )
 
     print(f"""

@@ -1,6 +1,4 @@
 """
-src/chat/interface.py
-
 Interfaz de chat. Gestiona el loop de comandos y preguntas.
 
 Comandos disponibles:
@@ -23,14 +21,14 @@ Sintaxis de <tokens>:
 """
 
 import warnings
-from typing import Any
 
 from src.chat.session import ChatSession
+from src.context.manager import LoadedCollection
 from src.context.models import SearchResult
 from src.context.selector import match_contexts
 from src.llm.generate import ask_llm
-from src.retrieval.search import search
 from src.prompts.builder import build_prompt
+from src.retrieval.search import search
 
 warnings.filterwarnings(
     "ignore",
@@ -171,7 +169,7 @@ def _handle_remove(session: ChatSession, raw_tokens: str) -> None:
     print()
 
     if not removed:
-        print(f"  Ninguno de esos contextos estaba activo.")
+        print("  Ninguno de esos contextos estaba activo.")
     else:
         for ctx in removed:
             print(f"  - {ctx}")
@@ -185,7 +183,10 @@ def _handle_remove(session: ChatSession, raw_tokens: str) -> None:
 
 
 def _handle_question(session: ChatSession, question: str) -> None:
-    collections: list[dict[str, Any]] = session.context_manager.get_loaded_collections()
+    # FIX #1: tipo correcto — list[LoadedCollection], no list[dict[str, Any]]
+    collections: list[LoadedCollection] = (
+        session.context_manager.get_loaded_collections()
+    )
 
     if not collections:
         print("\n  Carga un contexto primero.  Ej: /context sociologia\n")
@@ -206,12 +207,10 @@ def _handle_question(session: ChatSession, question: str) -> None:
         print("  No se encontró contexto relevante.\n")
         return
 
-    context_chunks: list[str] = []
-
-    for r in results:
-        context_chunks.append(
-            f"FUENTE: {r.source}\nCOLECCION: {r.collection}\nPAGINA: {r.page}\n\n{r.text}"
-        )
+    context_chunks: list[str] = [
+        f"FUENTE: {r.source}\nCOLECCION: {r.collection}\nPAGINA: {r.page}\n\n{r.text}"
+        for r in results
+    ]
 
     prompt: str = build_prompt(
         context_chunks=context_chunks,
@@ -225,7 +224,7 @@ def _handle_question(session: ChatSession, question: str) -> None:
         chat_memory=session.chat_memory,
     )
 
-    print(f"  Respuesta:\n")
+    print("  Respuesta:\n")
     print(answer)
     print(f"\n  [confidence: {confidence:.4f}]\n")
 

@@ -1,18 +1,16 @@
-from typing import Any
-
 import numpy as np
 
 
-def cosine_similarity(a: Any, b: Any) -> float:
+def cosine_similarity(a: np.ndarray, b: np.ndarray) -> float:
     return float(np.dot(a, b))
 
 
-def normalize_embedding(embedding: Any) -> np.ndarray:
-    embedding = np.array(embedding).astype("float32")
+def normalize_embedding(embedding: np.ndarray | list[float]) -> np.ndarray:
+    arr = np.array(embedding, dtype=np.float32)
+    norm: float = float(np.linalg.norm(arr))
 
-    norm = float(np.linalg.norm(embedding))
+    if norm == 0.0:
+        return arr
 
-    if norm == 0:
-        return embedding
-
-    return embedding / norm
+    # FIX #7: cast explícito — arr / norm produce Any en los stubs de numpy
+    return np.asarray(arr / norm, dtype=np.float32)

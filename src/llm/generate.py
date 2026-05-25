@@ -1,23 +1,16 @@
 """
-src/llm/generate.py
-
 Consulta al LLM local vía cliente OpenAI-compatible.
-Timeout y temperatura se leen de settings/env para poder
-ajustarlos sin tocar código.
+Timeout y temperatura se leen de settings/env.
 """
 
-from typing import Any
+from __future__ import annotations
 
 from openai import OpenAIError
+from openai.types.chat import ChatCompletionMessageParam
 
+from src.chat.types import TurnMemory
+from src.config.settings import LLM_MODEL, LLM_TEMPERATURE, LLM_TIMEOUT
 from src.llm.client import client
-
-from src.config.settings import (
-    LLM_MODEL,
-    LLM_TEMPERATURE,
-    LLM_TIMEOUT,
-)
-
 from src.utils.logger import logger
 
 SYSTEM_PROMPT: str = """
@@ -37,13 +30,11 @@ Reglas:
 
 def build_messages(
     prompt: str,
-    chat_memory: list[dict[str, str]],
-) -> list[dict[str, str]]:
-    messages: list[dict[str, str]] = [
-        {
-            "role": "system",
-            "content": SYSTEM_PROMPT,
-        }
+    chat_memory: list[TurnMemory],
+) -> list[ChatCompletionMessageParam]:
+
+    messages: list[ChatCompletionMessageParam] = [
+        {"role": "system", "content": SYSTEM_PROMPT},
     ]
 
     for turn in chat_memory:
@@ -57,7 +48,7 @@ def build_messages(
 
 def ask_llm(
     prompt: str,
-    chat_memory: list[dict[str, str]],
+    chat_memory: list[TurnMemory],
 ) -> str:
 
     logger.info(
@@ -66,17 +57,14 @@ def ask_llm(
     )
 
     try:
-        response: Any = client.chat.completions.create(
+        response = client.chat.completions.create(
             model=LLM_MODEL,
-            messages=build_messages(
-                prompt=prompt,
-                chat_memory=chat_memory,
-            ),
+            messages=build_messages(prompt=prompt, chat_memory=chat_memory),
             temperature=LLM_TEMPERATURE,
             timeout=LLM_TIMEOUT,
         )
 
-        content: str | None = response.choices[0].message.content
+        content = response.choices[0].message.content
 
         if not content:
             logger.warning("El modelo devolvió respuesta vacía.")

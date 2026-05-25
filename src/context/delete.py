@@ -1,6 +1,4 @@
 """
-src/context/delete.py
-
 Gestión de eliminación granular de documentos, URLs y fuentes del
 vectorstore. Provee reconstrucción de índice FAISS y compactación de
 metadata tras las eliminaciones.
@@ -20,12 +18,13 @@ from __future__ import annotations
 
 import pickle
 from pathlib import Path
-from typing import Sequence, Any
+from typing import Sequence
 
 import faiss
 import numpy as np
 
 from src.config.settings import BASE_VECTOR_PATH
+from src.ingest.core import ChunkMetadata
 from src.utils.logger import logger
 
 # ======================================================
@@ -44,7 +43,9 @@ def _collection_paths(collection: str) -> dict[str, Path]:
     }
 
 
-def _load_raw(collection: str) -> tuple[list[dict[str, Any]], np.ndarray | None]:
+def _load_raw(
+    collection: str,
+) -> tuple[list[ChunkMetadata], np.ndarray | None]:
     """
     Carga metadata y vectores sin pasar por load_collection.
     Retorna (metadata, vectors). vectors puede ser None.
@@ -56,7 +57,7 @@ def _load_raw(collection: str) -> tuple[list[dict[str, Any]], np.ndarray | None]
         return [], None
 
     with open(paths["metadata"], "rb") as f:
-        metadata: list[dict[str, Any]] = pickle.load(f)
+        metadata: list[ChunkMetadata] = pickle.load(f)
 
     vectors: np.ndarray | None = None
 
@@ -70,7 +71,7 @@ def _load_raw(collection: str) -> tuple[list[dict[str, Any]], np.ndarray | None]
 
 def _save_raw(
     collection: str,
-    metadata: list[dict[str, Any]],
+    metadata: list[ChunkMetadata],
     vectors: np.ndarray,
     index: faiss.Index,
 ) -> None:
@@ -82,11 +83,10 @@ def _save_raw(
         pickle.dump(metadata, f)
 
     np.save(paths["vectors"], vectors)
-
     faiss.write_index(index, str(paths["index"]))
 
     logger.info(
-        f"Colección guardada | collection={collection} " f"| chunks={len(metadata)}"
+        f"Colección guardada | collection={collection} | chunks={len(metadata)}"
     )
 
 
@@ -101,6 +101,14 @@ def _clear_collection_files(collection: str) -> None:
             logger.info(f"Archivo eliminado: {p}")
 
 
+def _to_f32(arr: np.ndarray) -> np.ndarray:
+    """
+    Convierte un array a float32 C-contiguo.
+    Los stubs de faiss-cpu esperan exactamente este tipo en .add() y .search().
+    """
+    return np.ascontiguousarray(arr, dtype=np.float32)
+
+
 # ======================================================
 # RECONSTRUCCIÓN DE ÍNDICE
 # ======================================================
@@ -109,10 +117,6 @@ def _clear_collection_files(collection: str) -> None:
 def rebuild_index(collection: str) -> faiss.Index | None:
     """
     Reconstruye el índice FAISS desde vectors.npy.
-
-    Útil después de cualquier operación que modifique el conjunto de
-    vectores. El índice anterior es sobreescrito en disco.
-
     Retorna el nuevo faiss.Index, o None si no hay vectores.
     """
     paths: dict[str, Path] = _collection_paths(collection)
@@ -135,7 +139,9 @@ def rebuild_index(collection: str) -> faiss.Index | None:
 
     dimension: int = vectors.shape[1]
     index: faiss.Index = faiss.IndexFlatIP(dimension)
-    index.add(vectors)
+
+    # FIX #3: cast explícito a float32 C-contiguo para satisfacer los stubs de faiss
+    index.add(_to_f32(vectors))
 
     faiss.write_index(index, str(paths["index"]))
 
@@ -155,18 +161,11 @@ def rebuild_index(collection: str) -> faiss.Index | None:
 def vacuum_collection(collection: str) -> dict[str, int]:
     """
     Compacta una colección eliminando huecos entre vectores y metadata.
+    Re-serializa todo y reconstruye el índice garantizando coherencia.
 
-    Re-serializa todo desde cero y reconstruye el índice garantizando
-    coherencia total entre los tres artefactos.
-
-    Retorna:
-        {
-            "before":  int,  # chunks antes del vacuum
-            "after":   int,  # chunks después
-            "removed": int,  # huecos eliminados
-        }
+    Retorna: {"before": int, "after": int, "removed": int}
     """
-    metadata: list[dict[str, Any]]
+    metadata: list[ChunkMetadata]
     vectors: np.ndarray | None
     metadata, vectors = _load_raw(collection)
 
@@ -176,10 +175,9 @@ def vacuum_collection(collection: str) -> dict[str, int]:
         logger.info(f"Vacuum: nada que compactar | collection={collection}")
         return {"before": before, "after": before, "removed": 0}
 
-    # Filtra entradas cuyo vector esté fuera de rango
     valid_indices: list[int] = [i for i in range(len(metadata)) if i < len(vectors)]
-    clean_metadata: list[dict[str, Any]] = [metadata[i] for i in valid_indices]
-    clean_vectors: np.ndarray = vectors[valid_indices].astype("float32")
+    clean_metadata: list[ChunkMetadata] = [metadata[i] for i in valid_indices]
+    clean_vectors: np.ndarray = _to_f32(vectors[valid_indices])
 
     after: int = len(clean_metadata)
     removed: int = before - after
@@ -190,7 +188,7 @@ def vacuum_collection(collection: str) -> dict[str, int]:
 
     dimension: int = clean_vectors.shape[1]
     index: faiss.Index = faiss.IndexFlatIP(dimension)
-    index.add(clean_vectors)
+    index.add(clean_vectors)  # ya es f32 C-contiguo
 
     _save_raw(collection, clean_metadata, clean_vectors, index)
 
@@ -218,8 +216,7 @@ def delete_by_source(
 
     Args:
         collection: Ruta relativa, p. ej. "sociologia/espectaculo".
-        source:     Valor exacto del campo "source" en metadata
-                    (nombre de archivo o URL completa).
+        source:     Valor exacto del campo "source" en metadata.
         rebuild:    Si True, ejecuta vacuum tras eliminar.
 
     Retorna el número de chunks eliminados.
@@ -236,11 +233,6 @@ def delete_by_sources(
     """
     Eliminación en lote de múltiples fuentes en una sola escritura atómica.
 
-    Args:
-        collection: Ruta relativa de la colección.
-        sources:    Lista de valores "source" a eliminar.
-        rebuild:    Si True, ejecuta vacuum tras eliminar.
-
     Retorna el número total de chunks eliminados.
     """
     source_set: set[str] = set(sources)
@@ -249,7 +241,7 @@ def delete_by_sources(
         logger.warning("delete_by_sources: lista de fuentes vacía.")
         return 0
 
-    metadata: list[dict[str, Any]]
+    metadata: list[ChunkMetadata]
     vectors: np.ndarray | None
     metadata, vectors = _load_raw(collection)
 
@@ -278,18 +270,20 @@ def delete_by_sources(
         f"| count={removed_count} | collection={collection}"
     )
 
-    clean_metadata: list[dict[str, Any]] = [metadata[i] for i in keep_indices]
+    clean_metadata: list[ChunkMetadata] = [metadata[i] for i in keep_indices]
+
+    clean_vectors: np.ndarray
 
     if vectors is not None and len(vectors) > 0:
         valid_keep: list[int] = [i for i in keep_indices if i < len(vectors)]
-        clean_vectors: np.ndarray = vectors[valid_keep].astype("float32")
+        clean_vectors = _to_f32(vectors[valid_keep])
     else:
-        clean_vectors = np.empty((0,), dtype="float32")
+        clean_vectors = np.empty((0,), dtype=np.float32)
 
     if clean_metadata and clean_vectors.ndim == 2 and clean_vectors.shape[0] > 0:
         dimension: int = clean_vectors.shape[1]
         index: faiss.Index = faiss.IndexFlatIP(dimension)
-        index.add(clean_vectors)
+        index.add(clean_vectors)  # ya es f32 C-contiguo
         _save_raw(collection, clean_metadata, clean_vectors, index)
     else:
         _clear_collection_files(collection)
@@ -308,8 +302,8 @@ def delete_by_sources(
 
 def clear_collection(collection: str) -> None:
     """
-    Elimina todos los artefactos de una colección (índice, metadata,
-    vectores). El directorio base se conserva para re-ingestión futura.
+    Elimina todos los artefactos de una colección.
+    El directorio base se conserva para re-ingestión futura.
     """
     _clear_collection_files(collection)
     logger.info(f"Colección limpiada | collection={collection}")
@@ -345,26 +339,30 @@ def delete_urls(
 # ======================================================
 
 
-def list_sources(collection: str) -> list[dict[str, Any]]:
+class SourceSummary(dict):
+    """Resumen de una fuente: source, source_type, chunks."""
+
+
+def list_sources(collection: str) -> list[SourceSummary]:
     """
     Devuelve un resumen de las fuentes indexadas en la colección.
 
     Retorna lista de dicts:
         [{"source": str, "source_type": str, "chunks": int}, ...]
     """
-    metadata: list[dict[str, Any]]
+    metadata: list[ChunkMetadata]
     metadata, _ = _load_raw(collection)
 
-    seen: dict[str, dict[str, Any]] = {}
+    seen: dict[str, SourceSummary] = {}
 
     for entry in metadata:
         src: str = entry.get("source", "<desconocido>")
         if src not in seen:
-            seen[src] = {
-                "source": src,
-                "source_type": entry.get("source_type", "file"),
-                "chunks": 0,
-            }
+            seen[src] = SourceSummary(
+                source=src,
+                source_type=entry.get("source_type", "file"),
+                chunks=0,
+            )
         seen[src]["chunks"] += 1
 
     return sorted(seen.values(), key=lambda x: x["source"])

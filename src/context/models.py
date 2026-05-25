@@ -1,15 +1,14 @@
 from dataclasses import dataclass
-from typing import Optional
 
 
-@dataclass
+@dataclass(slots=True)
 class ContextSource:
     source_id: str
     source_type: str
     source_name: str
 
 
-@dataclass
+@dataclass(slots=True)
 class SearchResult:
     score: float
     text: str

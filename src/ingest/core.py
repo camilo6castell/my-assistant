@@ -1,12 +1,10 @@
-# src/ingest/core.py
-
 from __future__ import annotations
 
 import pickle
 from pathlib import Path
-from typing import TYPE_CHECKING, TypedDict, Any, Callable, cast
+from typing import TYPE_CHECKING, TypedDict
 
-import faiss  # type: ignore[import-not-found]
+import faiss
 import numpy as np
 from sentence_transformers import SentenceTransformer
 
@@ -18,17 +16,8 @@ from src.config.settings import (
 )
 from src.utils.logger import logger
 
-# faiss solo se importa para anotaciones en tiempo de análisis estático.
-# En runtime faiss ya está importado arriba para su uso real;
-# TYPE_CHECKING aquí documenta que usamos sus tipos en las firmas.
 if TYPE_CHECKING:
-    # faiss no proporciona stubs para el chequeo de tipos, así que
-    # usamos Any como reemplazo para evitar errores de mypy/pyright.
-    from typing import Any as FaissIndex
-else:
-    # En tiempo de ejecución, proporcionamos un alias compatible
-    # para que las anotaciones que usan FaissIndex no fallen.
-    FaissIndex = Any
+    from faiss import Index as FaissIndex
 
 
 model = SentenceTransformer(EMBED_MODEL)
@@ -69,6 +58,19 @@ class RawCollection(TypedDict):
     metadata: list[ChunkMetadata]
     vectors: np.ndarray | None
     paths: CollectionPaths
+
+
+# ======================================================
+# HELPERS
+# ======================================================
+
+
+def _to_f32(arr: np.ndarray) -> np.ndarray:
+    """
+    Convierte a float32 C-contiguo.
+    FIX #5: los stubs de faiss-cpu esperan este tipo exacto en .add().
+    """
+    return np.ascontiguousarray(arr, dtype=np.float32)
 
 
 # ======================================================
@@ -125,8 +127,7 @@ def load_collection(collection: str) -> RawCollection:
     if paths["index_file"].exists():
         logger.info(f"Cargando colección: {collection}")
 
-        read_index = cast(Callable[[str], Any], getattr(faiss, "read_index"))
-        index = read_index(str(paths["index_file"]))
+        index: FaissIndex | None = faiss.read_index(str(paths["index_file"]))
 
         with open(paths["metadata_file"], "rb") as f:
             metadata: list[ChunkMetadata] = pickle.load(f)
@@ -174,8 +175,17 @@ def save_collection(
         dimension = new_embeddings.shape[1]
         index = create_faiss_index(dimension)
 
-    index.add(new_embeddings)
+    # FIX #5: cast explícito antes de .add()
+    index.add(_to_f32(new_embeddings))
     metadata.extend(new_metadata)
+
+    faiss.write_index(index, str(paths["index_file"]))
+    np.save(paths["vectors_file"], all_vectors)
+
+    with open(paths["metadata_file"], "wb") as f:
+        pickle.dump(metadata, f)
+
+    logger.info("Colección guardada correctamente.")
 
 
 # ======================================================
@@ -185,18 +195,14 @@ def save_collection(
 
 def encode_chunks(chunks: list[str]) -> np.ndarray:
     logger.info(f"Generando embeddings para {len(chunks)} chunks")
-    # Request numpy output explicitly so the return type is ndarray
+
     embeddings = model.encode(
         chunks,
         normalize_embeddings=True,
         show_progress_bar=True,
-        convert_to_numpy=True,
     )
 
-    # The type stubs for SentenceTransformer.encode are imprecise; cast to
-    # ndarray to satisfy static checkers, then ensure float32 for FAISS.
-    embeddings_array = cast(np.ndarray, embeddings)
-    return np.array(embeddings_array, dtype="float32")
+    return _to_f32(np.array(embeddings))
 
 
 def create_faiss_index(dimension: int) -> FaissIndex:

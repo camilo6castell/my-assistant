@@ -1,190 +1,128 @@
-# python -m src.ingest.ingest sociologia la-sociedad-del-espectaculo
-
 import sys
-from typing import Any
-
 from pathlib import Path
 
+import numpy as np
 from pypdf import PdfReader
 from bs4 import BeautifulSoup
 
-from src.utils.logger import logger
-
 from src.config.settings import DATA_PATH
-
 from src.ingest.core import (
-    chunk_text,
-    load_collection,
-    encode_chunks,
-    save_collection,
+    ChunkMetadata,
+    RawCollection,
     build_metadata,
+    chunk_text,
+    encode_chunks,
+    load_collection,
+    save_collection,
 )
+from src.utils.logger import logger
 
 
 def read_pdf(path: Path) -> list[tuple[int, str]]:
-
     logger.info(f"Leyendo PDF: {path.name}")
 
     pages: list[tuple[int, str]] = []
 
     try:
-
         reader: PdfReader = PdfReader(str(path))
-
     except Exception as e:
-
         logger.error(f"No se pudo abrir PDF: {path.name} | {e}")
-
         return pages
 
     for i, page in enumerate(reader.pages):
-
         try:
-
             text: str = page.extract_text()
 
             if text and text.strip():
-
-                pages.append(
-                    (
-                        i + 1,
-                        text,
-                    )
-                )
-
+                pages.append((i + 1, text))
             else:
-
-                logger.warning(f"Página vacía | " f"{path.name} | " f"page={i + 1}")
+                logger.warning(f"Página vacía | {path.name} | page={i + 1}")
 
         except Exception as e:
-
             logger.warning(
-                f"No se pudo leer página | "
-                f"{path.name} | "
-                f"page={i + 1} | "
-                f"error={e}"
+                f"No se pudo leer página | {path.name} | page={i + 1} | error={e}"
             )
-
             continue
 
     return pages
 
 
 def read_html(path: Path) -> list[tuple[int, str]]:
-
     logger.info(f"Leyendo HTML: {path.name}")
 
-    with open(
-        path,
-        "r",
-        encoding="utf-8",
-    ) as f:
+    with open(path, "r", encoding="utf-8") as f:
+        soup: BeautifulSoup = BeautifulSoup(f, "html.parser")
 
-        soup: BeautifulSoup = BeautifulSoup(
-            f,
-            "html.parser",
-        )
-
-    text: str = soup.get_text(separator="\n")
-
-    return [(1, text)]
+    return [(1, soup.get_text(separator="\n"))]
 
 
 def read_txt(path: Path) -> list[tuple[int, str]]:
-
     logger.info(f"Leyendo TXT: {path.name}")
 
-    with open(
-        path,
-        "r",
-        encoding="utf-8",
-    ) as f:
-
+    with open(path, "r", encoding="utf-8") as f:
         text: str = f.read()
 
     return [(1, text)]
 
 
 def read_file(path: Path) -> list[tuple[int, str]]:
-
     suffix: str = path.suffix.lower()
 
     if suffix == ".pdf":
         return read_pdf(path)
-
     if suffix == ".html":
         return read_html(path)
-
     if suffix == ".txt":
         return read_txt(path)
 
     logger.warning(f"Formato no soportado: {path.name}")
-
     return []
 
 
 def main() -> None:
-
     if len(sys.argv) != 3:
-
-        print("Uso: python -m src.ingest.ingest " "<categoria> <coleccion>")
-
+        print("Uso: python -m src.ingest.ingest <categoria> <coleccion>")
         return
 
     category: str = sys.argv[1]
     collection_name: str = sys.argv[2]
-
     collection: str = f"{category}/{collection_name}"
 
     logger.info(f"Iniciando ingest: {collection}")
 
-    collection_data: dict[str, Any] = load_collection(collection)
-
-    metadata: list[dict[str, Any]] = collection_data["metadata"]
-
-    existing_sources: set[str] = {m["source"] for m in metadata}
+    # FIX #6: tipo correcto — RawCollection, no dict[str, Any]
+    collection_data: RawCollection = load_collection(collection)
+    existing_sources: set[str] = {m["source"] for m in collection_data["metadata"]}
 
     new_chunks: list[str] = []
-    new_metadata: list[dict[str, Any]] = []
+    new_metadata: list[ChunkMetadata] = []
 
     files: list[Path] = list(DATA_PATH.iterdir())
 
     if not files:
-
         logger.warning("No hay archivos en data/")
-
         print("No hay archivos en data/")
-
         return
 
     for file in files:
-
         if file.name in existing_sources:
-
             logger.info(f"Omitiendo ya indexado: {file.name}")
-
             continue
 
         pages: list[tuple[int, str]] = read_file(file)
 
         if not pages:
-
             logger.warning(f"No se pudo extraer contenido: {file.name}")
-
             continue
 
         logger.info(f"Procesando: {file.name}")
 
         for page_number, text in pages:
-
             chunks: list[str] = chunk_text(text)
-
-            logger.info(f"Chunks generados: {len(chunks)} " f"| page={page_number}")
+            logger.info(f"Chunks generados: {len(chunks)} | page={page_number}")
 
             for i, chunk in enumerate(chunks):
-
                 new_chunks.append(chunk)
-
                 new_metadata.append(
                     build_metadata(
                         source=file.name,
@@ -197,14 +135,11 @@ def main() -> None:
                 )
 
     if not new_chunks:
-
         logger.warning("No hay contenido nuevo.")
-
         print("No hay contenido nuevo.")
-
         return
 
-    embeddings: Any = encode_chunks(new_chunks)
+    embeddings: np.ndarray = encode_chunks(new_chunks)
 
     save_collection(
         collection_data=collection_data,
@@ -212,13 +147,8 @@ def main() -> None:
         new_metadata=new_metadata,
     )
 
-    logger.info(f"Ingest finalizado " f"| chunks={len(new_chunks)}")
-
-    print()
-
-    print(f"Se añadieron " f"{len(new_chunks)} chunks " f"a '{collection}'.")
-
-    print()
+    logger.info(f"Ingest finalizado | chunks={len(new_chunks)}")
+    print(f"\nSe añadieron {len(new_chunks)} chunks a '{collection}'.\n")
 
 
 if __name__ == "__main__":

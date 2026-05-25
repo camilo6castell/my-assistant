@@ -1,17 +1,8 @@
-"""
-src/chat/session.py
+from __future__ import annotations
 
-Estado de la sesión de chat activa: contextos cargados, modo y memoria.
-"""
-
-from typing import Any
-
-from src.context.manager import ContextManager
-
-from src.chat.modes import (
-    RIGOROUS,
-    INTERPRETATIVE,
-)
+from src.chat.modes import INTERPRETATIVE, RIGOROUS
+from src.chat.types import TurnMemory
+from src.context.manager import ContextManager, LoadedCollection
 
 
 class ChatSession:
@@ -19,7 +10,7 @@ class ChatSession:
     def __init__(self) -> None:
         self.context_manager: ContextManager = ContextManager()
         self.interpretative_mode: bool = False
-        self.chat_memory: list[dict[str, str]] = []
+        self.chat_memory: list[TurnMemory] = []
 
     # =====================================================
     # CONTEXTS
@@ -37,15 +28,16 @@ class ChatSession:
     def get_active_contexts(self) -> list[str]:
         return self.context_manager.get_active()
 
+    def get_loaded_collections(self) -> list[LoadedCollection]:
+        return self.context_manager.get_loaded_collections()
+
     # =====================================================
     # MODE
     # =====================================================
 
     @property
     def mode(self) -> str:
-        if self.interpretative_mode:
-            return INTERPRETATIVE
-        return RIGOROUS
+        return INTERPRETATIVE if self.interpretative_mode else RIGOROUS
 
     def toggle_mode(self) -> str:
         self.interpretative_mode = not self.interpretative_mode
@@ -58,17 +50,8 @@ class ChatSession:
     def reset_memory(self) -> None:
         self.chat_memory = []
 
-    def add_to_memory(
-        self,
-        user: str,
-        assistant: str,
-    ) -> None:
-        self.chat_memory.append(
-            {
-                "user": user,
-                "assistant": assistant,
-            }
-        )
+    def add_to_memory(self, user: str, assistant: str) -> None:
+        self.chat_memory.append(TurnMemory(user=user, assistant=assistant))
 
     # =====================================================
     # UI
@@ -77,22 +60,19 @@ class ChatSession:
     def get_prompt_header(self) -> str:
         """
         Genera el prompt del input acortando los nombres de colección
-        al basename (la parte después de /) para que el header no se
-        desborde en pantallas estrechas.
+        al basename (parte después de '/') para evitar desbordamiento.
 
         Ejemplos:
           [debord, freud | INTERP] >
           [SIN-CONTEXTO | RIG] >
         """
         active: list[str] = self.get_active_contexts()
-
         mode_label: str = "INTERP" if self.interpretative_mode else "RIG"
 
         if not active:
-            ctx_label: str = "SIN-CONTEXTO"
+            ctx_label = "SIN-CONTEXTO"
         else:
-            # Usa solo el basename de cada colección (parte tras "/")
-            names: list[str] = [ctx.split("/")[-1] for ctx in sorted(active)]
+            names = [ctx.split("/")[-1] for ctx in sorted(active)]
             ctx_label = ", ".join(names)
 
         return f"[{ctx_label} | {mode_label}] > "
