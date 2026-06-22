@@ -1,5 +1,5 @@
 """
-src/main.py
+python -m src.main
 
 Punto de entrada del sistema RAG.
 """

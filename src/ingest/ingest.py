@@ -90,7 +90,6 @@ def main() -> None:
 
     logger.info(f"Iniciando ingest: {collection}")
 
-    # FIX #6: tipo correcto — RawCollection, no dict[str, Any]
     collection_data: RawCollection = load_collection(collection)
     existing_sources: set[str] = {m["source"] for m in collection_data["metadata"]}
 
