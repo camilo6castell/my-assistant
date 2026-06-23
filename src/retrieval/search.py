@@ -17,7 +17,6 @@ from src.config.settings import (
     EMBED_MODEL,
     SOFT_TOP_K_FINAL,
     SOFT_TOP_K_INITIAL,
-    MAX_TURNS,
 )
 from src.context.manager import LoadedCollection
 from src.context.models import SearchResult
@@ -30,22 +29,23 @@ model = SentenceTransformer(EMBED_MODEL)
 # ======================================================
 
 
-def build_queries(
-    question: str,
-    mode: str,
-    memory: list[TurnMemory],
-) -> list[str]:
+def build_queries(question: str, mode: str) -> list[str]:
+    """
+    Genera las variantes de búsqueda a partir de la pregunta.
 
+    RIGUROSO:      1 query — la pregunta literal.
+    INTERPRETATIVO: 3 queries — la pregunta literal más dos variantes
+                   semánticas que amplían el ángulo de búsqueda.
+
+    El historial de conversación ya viaja vía mensajes de la API
+    (build_messages en generate.py), por lo que no es necesario
+    incorporarlo aquí como variante de query adicional.
+    """
     if mode == ChatMode.HARD:
         return [question]
 
-    history = " ".join(
-        f"{turn['user']} {turn['assistant']}" for turn in memory[-MAX_TURNS:]
-    )
-
     return [
         question,
-        f"{history} {question}".strip(),
         f"Explica el concepto: {question}",
         f"Relaciona ideas sobre: {question}",
     ]
@@ -140,10 +140,14 @@ def rerank(results: list[SearchResult]) -> list[SearchResult]:
 def search(
     question: str,
     mode: str,
-    chat_memory: list[TurnMemory],
     collections: list[LoadedCollection],
 ) -> tuple[list[SearchResult], float]:
+    """
+    Punto de entrada de la búsqueda semántica.
 
+    chat_memory se mantiene en la firma para que interface.py no necesite
+    cambios, pero ya no se usa aquí — viaja directamente al LLM vía API.
+    """
     if mode == ChatMode.SOFT:
         top_k_initial = SOFT_TOP_K_INITIAL
         top_k_final = SOFT_TOP_K_FINAL
@@ -151,7 +155,7 @@ def search(
         top_k_initial = BASE_TOP_K_INITIAL
         top_k_final = BASE_TOP_K_FINAL
 
-    queries = build_queries(question, mode, chat_memory)
+    queries = build_queries(question, mode)
     embeddings = encode_queries(queries)
     results = rerank(retrieve(embeddings, collections, top_k_initial))
     final_results = results[:top_k_final]

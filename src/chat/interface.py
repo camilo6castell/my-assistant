@@ -62,8 +62,6 @@ HELP: str = """
 
 
 def _print_contexts_tree(contexts: list[str], label: str) -> None:
-    """Imprime una lista de colecciones agrupada por namespace."""
-
     if not contexts:
         return
 
@@ -87,25 +85,19 @@ def _print_contexts_tree(contexts: list[str], label: str) -> None:
 
 def _print_available(session: ChatSession) -> None:
     contexts: list[str] = session.context_manager.list_all()
-
     print()
-
     if not contexts:
         print("  No hay contextos disponibles.\n")
         return
-
     _print_contexts_tree(contexts, "Disponibles")
 
 
 def _print_active(session: ChatSession) -> None:
     active: list[str] = session.get_active_contexts()
-
     print()
-
     if not active:
         print("  No hay contextos activos.\n")
         return
-
     _print_contexts_tree(active, "Activos")
 
 
@@ -115,8 +107,6 @@ def _print_active(session: ChatSession) -> None:
 
 
 def _handle_context(session: ChatSession, raw_tokens: str) -> None:
-    """Carga uno o más contextos a partir de tokens separados por espacio."""
-
     if not raw_tokens:
         print("\n  Uso: /context <tokens>  (ej: /context sociologia react)\n")
         return
@@ -129,26 +119,20 @@ def _handle_context(session: ChatSession, raw_tokens: str) -> None:
         return
 
     loaded: list[str] = []
-
     for ctx in targets:
         result: list[str] = session.load_context(ctx)
         loaded.extend(result)
 
     print()
-
     if not loaded:
-        already: str = ", ".join(targets)
-        print(f"  Ya activos: {already}")
+        print(f"  Ya activos: {', '.join(targets)}")
     else:
         for ctx in loaded:
             print(f"  + {ctx}")
-
     print()
 
 
 def _handle_remove(session: ChatSession, raw_tokens: str) -> None:
-    """Descarga uno o más contextos a partir de tokens separados por espacio."""
-
     if not raw_tokens:
         print("\n  Uso: /remove <tokens>  (ej: /remove sociologia)\n")
         return
@@ -161,19 +145,16 @@ def _handle_remove(session: ChatSession, raw_tokens: str) -> None:
         return
 
     removed: list[str] = []
-
     for ctx in targets:
         result: list[str] = session.unload_context(ctx)
         removed.extend(result)
 
     print()
-
     if not removed:
         print("  Ninguno de esos contextos estaba activo.")
     else:
         for ctx in removed:
             print(f"  - {ctx}")
-
     print()
 
 
@@ -183,7 +164,6 @@ def _handle_remove(session: ChatSession, raw_tokens: str) -> None:
 
 
 def _handle_question(session: ChatSession, question: str) -> None:
-    # FIX #1: tipo correcto — list[LoadedCollection], no list[dict[str, Any]]
     collections: list[LoadedCollection] = (
         session.context_manager.get_loaded_collections()
     )
@@ -199,7 +179,6 @@ def _handle_question(session: ChatSession, question: str) -> None:
     results, confidence = search(
         question=question,
         mode=session.mode,
-        chat_memory=session.chat_memory,
         collections=collections,
     )
 
@@ -212,11 +191,12 @@ def _handle_question(session: ChatSession, question: str) -> None:
         for r in results
     ]
 
+    # chat_memory ya no se pasa a build_prompt — el historial viaja
+    # como mensajes de API en ask_llm → build_messages
     prompt: str = build_prompt(
         context_chunks=context_chunks,
         question=question,
         mode=session.mode,
-        chat_memory=session.chat_memory,
     )
 
     answer: str = ask_llm(
@@ -238,7 +218,7 @@ def _handle_question(session: ChatSession, question: str) -> None:
 
 def start_chat(session: ChatSession) -> None:
     print("\n  === CHAT ===")
-    print("  Escribe /help para ver los comandos disponibles.\n")
+    print("  Type '/help' to see the available commands.\n")
 
     while True:
         try:
@@ -250,17 +230,14 @@ def start_chat(session: ChatSession) -> None:
         if not command:
             continue
 
-        # ── salida ────────────────────────────────────────
         if command == "/exit":
             print()
             break
 
-        # ── ayuda ─────────────────────────────────────────
         if command in ("/help", "/?"):
             print(HELP)
             continue
 
-        # ── contextos ─────────────────────────────────────
         if command.startswith("/context"):
             _handle_context(session, command[len("/context") :].strip())
             continue
@@ -279,25 +256,21 @@ def start_chat(session: ChatSession) -> None:
 
         if command == "/clear":
             session.clear_contexts()
-            print("\n  Contextos descargados.\n")
+            print("\n  Contexts cleared.\n")
             continue
 
-        # ── memoria ───────────────────────────────────────
         if command == "/reset":
             session.reset_memory()
-            print("\n  Memoria de conversación limpiada.\n")
+            print("\n  Conversation memory cleared.\n")
             continue
 
-        # ── modo ──────────────────────────────────────────
         if command == "/mode":
             mode: str = session.toggle_mode()
-            print(f"\n  Modo: {mode}\n")
+            print(f"\n  Mode: {mode}\n")
             continue
 
-        # ── comando desconocido ───────────────────────────
         if command.startswith("/"):
-            print(f"\n  Comando desconocido: {command!r}  (escribe /help)\n")
+            print(f"\n  Unknown command: {command!r}  (type '/help')\n")
             continue
 
-        # ── pregunta ──────────────────────────────────────
         _handle_question(session, command)

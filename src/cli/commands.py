@@ -8,6 +8,25 @@ from src.chat.session import ChatSession
 from src.config.settings import BASE_VECTOR_PATH
 
 # ======================================================
+# MAIN MENU
+# ======================================================
+
+
+def show_main_menu() -> None:
+    print("""
+╔══════════════════════════╗
+║    My assistant (RAG)    ║
+╠══════════════════════════╣
+║  1. Start chat           ║
+║  2. Show contexts        ║
+║  3. Show modes           ║
+║  4. About                ║
+║  5. Exit                 ║
+╚══════════════════════════╝
+""")
+
+
+# ======================================================
 # 2. SHOW CONTEXTS
 # ======================================================
 
@@ -20,11 +39,11 @@ def show_contexts(session: ChatSession) -> None:
     print()
 
     if not contexts:
-        print("  No hay contextos disponibles.")
-        print(f"  Directorio: {BASE_VECTOR_PATH}\n")
+        print("  No contexts available.")
+        print(f"  Directory: {BASE_VECTOR_PATH}\n")
         return
 
-    print("  Contextos disponibles:\n")
+    print("  Contexts available:\n")
 
     current_ns: str | None = None
 
@@ -47,25 +66,23 @@ def show_contexts(session: ChatSession) -> None:
 # ======================================================
 
 
-def show_modes(session: ChatSession) -> None:
+def show_modes() -> None:
     """Describe los modos de respuesta disponibles."""
 
-    current: str = session.mode
-
     print(f"""
-  Modo actual: {current}
+  ─────────────────────────────────────────────────────────────────
+  SOFT (default)
+    - Can synthesize and connect concepts from different sources.
+    - Generates more semantic search variations.
+    - Ideal for analysis, comparisons, and conceptual synthesis.
 
-  RIGUROSO (por defecto)
-    Responde usando únicamente el contenido del contexto cargado.
-    No infiere ni conecta ideas externas al texto.
-    Ideal para consultas precisas y verificables.
+  HARD
+    - Responds using only the content of the loaded context.
+    - Does not infer or connect ideas external to the text.
+    - Ideal for precise and verifiable queries.
 
-  INTERPRETATIVO
-    Puede sintetizar y conectar conceptos entre fuentes.
-    Genera más variantes de búsqueda semántica.
-    Ideal para análisis, comparaciones y síntesis conceptual.
-
-  Cambia el modo dentro del chat con: /mode
+  **Change the mode within the chat with: '/mode'""  
+  ─────────────────────────────────────────────────────────────────
 """)
 
 
@@ -74,8 +91,8 @@ def show_modes(session: ChatSession) -> None:
 # ======================================================
 
 
-def show_about(_session: ChatSession) -> None:
-    """Información del sistema."""
+def show_about() -> None:
+    """Información de la aplicación."""
 
     from src.config.settings import (
         BASE_TOP_K_FINAL,
@@ -89,8 +106,9 @@ def show_about(_session: ChatSession) -> None:
     )
 
     print(f"""
-  RAG SYSTEM v2
-  ─────────────────────────────────────
+  ─────────────────────────────────────────────────────────────────
+  My-Asisstant is a RAG SYSTEM made by Camilo6Castell
+  ─────────────────────────────────────────────────────────────────
   Embedding model : {EMBED_MODEL}
   LLM model       : {LLM_MODEL}
   Chunk size      : {CHUNK_SIZE} chars  (overlap {CHUNK_OVERLAP})
@@ -98,6 +116,7 @@ def show_about(_session: ChatSession) -> None:
   Top-K interpret : {SOFT_TOP_K_FINAL} resultados finales
   Vector stores   : {BASE_VECTOR_PATH}
   Data path       : {DATA_PATH}
+  ─────────────────────────────────────────────────────────────────
 
   Ingest de archivos:
     python -m src.ingest.ingest <namespace> <coleccion>
@@ -107,4 +126,6 @@ def show_about(_session: ChatSession) -> None:
 
   Ingest crawler:
     python -m src.ingest.web_crawler <coleccion> <url_base>
+
+  ─────────────────────────────────────────────────────────────────
 """)

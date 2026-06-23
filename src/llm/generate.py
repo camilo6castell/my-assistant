@@ -1,6 +1,13 @@
 """
 Consulta al LLM local vía cliente OpenAI-compatible.
-Timeout y temperatura se leen de settings/env.
+
+El historial de conversación viaja aquí como mensajes estructurados
+user/assistant — es el único lugar donde se incluye. El prompt no
+contiene un bloque HISTORIAL para evitar redundancia.
+
+MAX_TURNS limita cuántos turnos se envían para proteger la ventana
+de contexto del modelo: si se envían demasiados turnos, el modelo
+empieza a ignorar el principio del contexto o rechaza la llamada.
 """
 
 from __future__ import annotations
@@ -9,7 +16,7 @@ from openai import OpenAIError
 from openai.types.chat import ChatCompletionMessageParam
 
 from src.chat.types import TurnMemory
-from src.config.settings import LLM_MODEL, LLM_TEMPERATURE, LLM_TIMEOUT
+from src.config.settings import LLM_MODEL, LLM_TEMPERATURE, LLM_TIMEOUT, MAX_TURNS
 from src.llm.client import client
 from src.utils.logger import logger
 
@@ -32,12 +39,23 @@ def build_messages(
     prompt: str,
     chat_memory: list[TurnMemory],
 ) -> list[ChatCompletionMessageParam]:
+    """
+    Construye el array de mensajes para la API.
 
+    Estructura:
+      [system] → instrucciones base del asistente
+      [user / assistant] × MAX_TURNS → historial reciente (ventana deslizante)
+      [user] → prompt actual (contexto recuperado + pregunta)
+
+    El slice [-MAX_TURNS:] es la única protección contra el crecimiento
+    ilimitado del historial. Sin este límite, sesiones largas superarían
+    la ventana de contexto del modelo.
+    """
     messages: list[ChatCompletionMessageParam] = [
         {"role": "system", "content": SYSTEM_PROMPT},
     ]
 
-    for turn in chat_memory:
+    for turn in chat_memory[-MAX_TURNS:]:
         messages.append({"role": "user", "content": turn["user"]})
         messages.append({"role": "assistant", "content": turn["assistant"]})
 
@@ -70,9 +88,6 @@ def ask_llm(
             logger.warning("El modelo devolvió respuesta vacía.")
             return "El modelo no devolvió respuesta."
 
-        # FIX no-any-return: los stubs de openai pueden resolver `content`
-        # como Any en la cadena de tipos. str() garantiza el retorno str
-        # sin alterar el valor (content ya pasó el guard de None arriba).
         return str(content).strip()
 
     except OpenAIError as e:

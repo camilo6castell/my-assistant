@@ -1,20 +1,14 @@
+# src/prompts/builder.py
+
+"""
+Constructor del prompt que se envía al LLM.
+
+El historial de conversación NO se incluye aquí — viaja como mensajes
+estructurados user/assistant a través de la API (build_messages en
+generate.py). Incluirlo en el prompt también sería redundante.
+"""
+
 from src.chat.modes import ChatMode
-from src.chat.types import TurnMemory
-from src.config.settings import MAX_TURNS
-
-
-def build_history_block(chat_memory: list[TurnMemory]) -> str:
-    if not chat_memory:
-        return "No hay historial previo."
-
-    lines: list[str] = []
-
-    for turn in chat_memory[-MAX_TURNS:]:
-        lines.append(f"Usuario: {turn['user']}")
-        lines.append(f"Asistente: {turn['assistant']}")
-        lines.append("")
-
-    return "\n".join(lines)
 
 
 def build_context_block(context_chunks: list[str]) -> str:
@@ -24,7 +18,7 @@ def build_context_block(context_chunks: list[str]) -> str:
 def build_rules_block(mode: str) -> str:
     if mode == ChatMode.SOFT:
         return """
-REGLAS (MODO INTERPRETATIVO):
+REGLAS (MODO SOFT):
 
 - Puedes conectar ideas entre múltiples fuentes.
 - Puedes sintetizar conceptos.
@@ -36,7 +30,7 @@ REGLAS (MODO INTERPRETATIVO):
 """
 
     return """
-REGLAS (MODO RIGUROSO):
+REGLAS (MODO HARD):
 
 - Usa únicamente el contenido presente en el contexto.
 - No inventes información.
@@ -50,8 +44,13 @@ def build_prompt(
     context_chunks: list[str],
     question: str,
     mode: str,
-    chat_memory: list[TurnMemory],
 ) -> str:
+    """
+    Construye el prompt con el contexto recuperado y la pregunta.
+
+    El parámetro chat_memory fue eliminado: el historial viaja como
+    mensajes de API en build_messages(), no como texto en el prompt.
+    """
     return f"""
 Eres un asistente RAG.
 
@@ -59,12 +58,6 @@ Tu tarea es responder preguntas usando
 EXCLUSIVAMENTE el contexto proporcionado.
 
 {build_rules_block(mode)}
-
-========================================
-HISTORIAL
-========================================
-
-{build_history_block(chat_memory)}
 
 ========================================
 CONTEXTO

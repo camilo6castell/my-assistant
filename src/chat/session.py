@@ -59,10 +59,10 @@ class ChatSession:
 
     def get_prompt_header(self) -> str:
         """
-        Genera el prompt del input acortando los nombres de colección
-        al basename (parte después de '/') para evitar desbordamiento.
+        Generates the prompt for the input by shortening the collection names
+        to their basename (the part after '/') to avoid overflow.
 
-        Ejemplos:
+        Examples:
           [debord, freud | SOFT] >
           [No-context | HARD] >
         """
