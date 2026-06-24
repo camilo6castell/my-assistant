@@ -1,5 +1,3 @@
-# src/prompts/builder.py
-
 """
 Constructor del prompt que se envía al LLM.
 

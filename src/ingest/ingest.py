@@ -1,3 +1,5 @@
+# python -m src.ingest.ingest <categoria> <coleccion>
+
 import sys
 from pathlib import Path
 
@@ -5,7 +7,7 @@ import numpy as np
 from pypdf import PdfReader
 from bs4 import BeautifulSoup
 
-from src.config.settings import DATA_PATH
+from src.config.settings import settings
 from src.ingest.core import (
     ChunkMetadata,
     RawCollection,
@@ -20,7 +22,6 @@ from src.utils.logger import logger
 
 def read_pdf(path: Path) -> list[tuple[int, str]]:
     logger.info(f"Leyendo PDF: {path.name}")
-
     pages: list[tuple[int, str]] = []
 
     try:
@@ -32,15 +33,13 @@ def read_pdf(path: Path) -> list[tuple[int, str]]:
     for i, page in enumerate(reader.pages):
         try:
             text: str = page.extract_text()
-
             if text and text.strip():
                 pages.append((i + 1, text))
             else:
-                logger.warning(f"Página vacía | {path.name} | page={i + 1}")
-
+                logger.warning(f"Pagina vacia | {path.name} | page={i + 1}")
         except Exception as e:
             logger.warning(
-                f"No se pudo leer página | {path.name} | page={i + 1} | error={e}"
+                f"No se pudo leer pagina | {path.name} | page={i + 1} | error={e}"
             )
             continue
 
@@ -49,32 +48,26 @@ def read_pdf(path: Path) -> list[tuple[int, str]]:
 
 def read_html(path: Path) -> list[tuple[int, str]]:
     logger.info(f"Leyendo HTML: {path.name}")
-
     with open(path, "r", encoding="utf-8") as f:
         soup: BeautifulSoup = BeautifulSoup(f, "html.parser")
-
     return [(1, soup.get_text(separator="\n"))]
 
 
 def read_txt(path: Path) -> list[tuple[int, str]]:
     logger.info(f"Leyendo TXT: {path.name}")
-
     with open(path, "r", encoding="utf-8") as f:
         text: str = f.read()
-
     return [(1, text)]
 
 
 def read_file(path: Path) -> list[tuple[int, str]]:
     suffix: str = path.suffix.lower()
-
     if suffix == ".pdf":
         return read_pdf(path)
     if suffix == ".html":
         return read_html(path)
     if suffix == ".txt":
         return read_txt(path)
-
     logger.warning(f"Formato no soportado: {path.name}")
     return []
 
@@ -91,12 +84,14 @@ def main() -> None:
     logger.info(f"Iniciando ingest: {collection}")
 
     collection_data: RawCollection = load_collection(collection)
-    existing_sources: set[str] = {m["source"] for m in collection_data["metadata"]}
+
+    # Acceso por atributo — ChunkMetadata es BaseModel
+    existing_sources: set[str] = {m.source for m in collection_data["metadata"]}
 
     new_chunks: list[str] = []
     new_metadata: list[ChunkMetadata] = []
 
-    files: list[Path] = list(DATA_PATH.iterdir())
+    files: list[Path] = list(settings.data_path.iterdir())
 
     if not files:
         logger.warning("No hay archivos en data/")
@@ -147,7 +142,7 @@ def main() -> None:
     )
 
     logger.info(f"Ingest finalizado | chunks={len(new_chunks)}")
-    print(f"\nSe añadieron {len(new_chunks)} chunks a '{collection}'.\n")
+    print(f"\nSe anadieron {len(new_chunks)} chunks a '{collection}'.\n")
 
 
 if __name__ == "__main__":

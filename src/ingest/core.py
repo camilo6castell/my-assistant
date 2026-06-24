@@ -1,9 +1,15 @@
 """
 Nota sobre # pyright: ignore[reportCallIssue] en llamadas a faiss:
   Pylance lee stubs SWIG C++ de faiss (add(n, x, ...) / search(n, x, k, D, I, ...))
-  en lugar del wrapper Python (add(x) / search(x, k) → (D, I)).
-  mypy tiene stubs correctos y no necesita supresión.
+  en lugar del wrapper Python (add(x) / search(x, k) -> (D, I)).
+  mypy tiene stubs correctos y no necesita supresion.
   La directiva pyright: es ignorada por mypy, evitando el unused-ignore.
+
+Nota sobre ChunkMetadata como BaseModel:
+  Al ser BaseModel, los metadatos se validan al crearse (build_metadata).
+  La serialización a pickle usa model_dump() para guardar dicts planos,
+  y model_validate() al cargar para reconstruir los modelos — esto
+  garantiza backward compatibility con pickles creados antes de esta migración.
 """
 
 from __future__ import annotations
@@ -14,21 +20,18 @@ from typing import TYPE_CHECKING, TypedDict
 
 import faiss
 import numpy as np
+from pydantic import BaseModel, ConfigDict
 from sentence_transformers import SentenceTransformer
 
-from src.config.settings import (
-    BASE_VECTOR_PATH,
-    CHUNK_OVERLAP,
-    CHUNK_SIZE,
-    EMBED_MODEL,
-)
+from src.config.settings import settings
+
 from src.utils.logger import logger
 
 if TYPE_CHECKING:
     from faiss import Index as FaissIndex
 
 
-model = SentenceTransformer(EMBED_MODEL)
+model = SentenceTransformer(settings.embed_model)
 
 
 # ======================================================
@@ -45,8 +48,17 @@ class CollectionPaths(TypedDict):
     vectors_file: Path
 
 
-class ChunkMetadata(TypedDict):
-    """Metadata de un chunk tal como la persiste build_metadata."""
+class ChunkMetadata(BaseModel):
+    """
+    Metadata de un chunk indexado.
+
+    BaseModel en lugar de TypedDict porque:
+      - Valida tipos al construirse (build_metadata).
+      - frozen=True garantiza que los chunks no se muten post-ingest.
+      - model_validate / model_dump manejan la serialización con pickle.
+    """
+
+    model_config = ConfigDict(frozen=True)
 
     source: str
     source_type: str
@@ -60,6 +72,9 @@ class RawCollection(TypedDict):
     """
     Estructura que devuelve load_collection antes de que
     ContextManager agregue collection_name.
+
+    TypedDict (no BaseModel) porque contiene faiss.Index y np.ndarray,
+    que Pydantic no puede validar.
     """
 
     index: FaissIndex | None
@@ -93,13 +108,13 @@ def chunk_text(text: str) -> list[str]:
     start = 0
 
     while start < len(text):
-        end = start + CHUNK_SIZE
+        end = start + settings.chunk_size
         chunk = text[start:end].strip()
 
         if chunk:
             chunks.append(chunk)
 
-        start += CHUNK_SIZE - CHUNK_OVERLAP
+        start += settings.chunk_size - settings.chunk_overlap
 
     return chunks
 
@@ -110,7 +125,7 @@ def chunk_text(text: str) -> list[str]:
 
 
 def get_collection_paths(collection: str) -> CollectionPaths:
-    vector_path = BASE_VECTOR_PATH / collection
+    vector_path = settings.vector_store_path / collection
     vector_path.mkdir(parents=True, exist_ok=True)
 
     return CollectionPaths(
@@ -135,7 +150,12 @@ def load_collection(collection: str) -> RawCollection:
         index: FaissIndex | None = faiss.read_index(str(paths["index_file"]))
 
         with open(paths["metadata_file"], "rb") as f:
-            metadata: list[ChunkMetadata] = pickle.load(f)
+            raw: list[object] = pickle.load(f)
+            # model_validate maneja tanto dicts (pickles anteriores a esta
+            # migración) como instancias ChunkMetadata ya serializadas.
+            metadata: list[ChunkMetadata] = [
+                ChunkMetadata.model_validate(m) for m in raw
+            ]
 
         vectors: np.ndarray | None = None
 
@@ -186,8 +206,9 @@ def save_collection(
     faiss.write_index(index, str(paths["index_file"]))
     np.save(paths["vectors_file"], all_vectors)
 
+    # Serializa como dicts planos para máxima portabilidad y compatibilidad.
     with open(paths["metadata_file"], "wb") as f:
-        pickle.dump(metadata, f)
+        pickle.dump([m.model_dump() for m in metadata], f)
 
     logger.info("Colección guardada correctamente.")
 

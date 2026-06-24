@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, TypedDict
 import faiss
 import numpy as np
 
-from src.config.settings import BASE_VECTOR_PATH
+from src.config.settings import settings
 
 if TYPE_CHECKING:
     from faiss import Index as FaissIndex
@@ -27,7 +27,7 @@ class CollectionStorage:
 
     def __init__(self, collection_name: str) -> None:
         self.collection_name: str = collection_name
-        self.base_path: Path = BASE_VECTOR_PATH / collection_name
+        self.base_path: Path = settings.vector_store_path / collection_name
 
         self.base_path.mkdir(parents=True, exist_ok=True)
 
@@ -45,7 +45,10 @@ class CollectionStorage:
         index: FaissIndex = faiss.read_index(str(self.index_path))
 
         with open(self.metadata_path, "rb") as f:
-            metadata: list[ChunkMetadata] = pickle.load(f)
+            raw: list[object] = pickle.load(f)
+            metadata: list[ChunkMetadata] = [
+                ChunkMetadata.model_validate(m) for m in raw
+            ]
 
         vectors: np.ndarray = np.load(self.vectors_path)
 
@@ -61,4 +64,4 @@ class CollectionStorage:
         np.save(self.vectors_path, vectors)
 
         with open(self.metadata_path, "wb") as f:
-            pickle.dump(metadata, f)
+            pickle.dump([m.model_dump() for m in metadata], f)

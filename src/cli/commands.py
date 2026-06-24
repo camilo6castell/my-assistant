@@ -5,7 +5,7 @@ Las opciones 2-4 son solo consulta, sin modificar estado.
 """
 
 from src.chat.session import ChatSession
-from src.config.settings import BASE_VECTOR_PATH
+from src.config.settings import settings
 
 # ======================================================
 # MAIN MENU
@@ -40,7 +40,7 @@ def show_contexts(session: ChatSession) -> None:
 
     if not contexts:
         print("  No contexts available.")
-        print(f"  Directory: {BASE_VECTOR_PATH}\n")
+        print(f"  Directory: {settings.vector_store_path}\n")
         return
 
     print("  Contexts available:\n")
@@ -94,28 +94,17 @@ def show_modes() -> None:
 def show_about() -> None:
     """Información de la aplicación."""
 
-    from src.config.settings import (
-        BASE_TOP_K_FINAL,
-        BASE_VECTOR_PATH,
-        CHUNK_OVERLAP,
-        CHUNK_SIZE,
-        DATA_PATH,
-        EMBED_MODEL,
-        SOFT_TOP_K_FINAL,
-        LLM_MODEL,
-    )
-
     print(f"""
   ─────────────────────────────────────────────────────────────────
   My-Asisstant is a RAG SYSTEM made by Camilo6Castell
   ─────────────────────────────────────────────────────────────────
-  Embedding model : {EMBED_MODEL}
-  LLM model       : {LLM_MODEL}
-  Chunk size      : {CHUNK_SIZE} chars  (overlap {CHUNK_OVERLAP})
-  Top-K riguroso  : {BASE_TOP_K_FINAL} resultados finales
-  Top-K interpret : {SOFT_TOP_K_FINAL} resultados finales
-  Vector stores   : {BASE_VECTOR_PATH}
-  Data path       : {DATA_PATH}
+  Embedding model : {settings.embed_model}
+  LLM model       : {settings.llm_model}
+  Chunk size      : {settings.chunk_size} chars  (overlap {settings.chunk_overlap})
+  Top-K riguroso  : {settings.hard_top_k_final} resultados finales
+  Top-K interpret : {settings.soft_top_k_final} resultados finales
+  Vector stores   : {settings.vector_store_path}
+  Data path       : {settings.data_path}
   ─────────────────────────────────────────────────────────────────
 
   Ingest de archivos:

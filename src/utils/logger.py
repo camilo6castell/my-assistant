@@ -1,10 +1,8 @@
-# src/utils/logger.py
-
 import logging
 
-from src.config.settings import LOG_PATH
+from src.config.settings import settings
 
-LOG_PATH.mkdir(
+settings.log_path.mkdir(
     parents=True,
     exist_ok=True,
 )

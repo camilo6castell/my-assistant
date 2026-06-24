@@ -1,17 +1,7 @@
 """
-Gestión de eliminación granular de documentos, URLs y fuentes del
-vectorstore. Provee reconstrucción de índice FAISS y compactación de
+Gestion de eliminacion granular de documentos, URLs y fuentes del
+vectorstore. Provee reconstruccion de indice FAISS y compactacion de
 metadata tras las eliminaciones.
-
-Operaciones principales:
-  - delete_by_source    → elimina todos los chunks de un archivo/URL
-  - delete_by_sources   → elimina múltiples fuentes en un solo paso
-  - delete_url          → alias semántico para fuentes web
-  - delete_urls         → alias para lotes de URLs
-  - rebuild_index       → reconstruye el índice FAISS desde vectors.npy
-  - vacuum_collection   → compacta vectores y metadata, reescribe disco
-  - clear_collection    → elimina todos los artefactos de la colección
-  - list_sources        → introspección: fuentes y chunks por fuente
 
 Nota sobre # pyright: ignore[reportCallIssue] en llamadas a faiss:
   Pylance lee stubs SWIG C++; mypy tiene stubs correctos para el wrapper
@@ -26,8 +16,9 @@ from typing import Sequence
 
 import faiss
 import numpy as np
+from pydantic import BaseModel, ConfigDict
 
-from src.config.settings import BASE_VECTOR_PATH
+from src.config.settings import settings
 from src.ingest.core import ChunkMetadata
 from src.utils.logger import logger
 
@@ -37,8 +28,7 @@ from src.utils.logger import logger
 
 
 def _collection_paths(collection: str) -> dict[str, Path]:
-    """Devuelve las rutas canónicas de los artefactos de una colección."""
-    base: Path = Path(BASE_VECTOR_PATH) / collection
+    base: Path = Path(settings.vector_store_path) / collection
     return {
         "base": base,
         "index": base / "index.faiss",
@@ -50,10 +40,6 @@ def _collection_paths(collection: str) -> dict[str, Path]:
 def _load_raw(
     collection: str,
 ) -> tuple[list[ChunkMetadata], np.ndarray | None]:
-    """
-    Carga metadata y vectores sin pasar por load_collection.
-    Retorna (metadata, vectors). vectors puede ser None.
-    """
     paths: dict[str, Path] = _collection_paths(collection)
 
     if not paths["metadata"].exists():
@@ -61,7 +47,8 @@ def _load_raw(
         return [], None
 
     with open(paths["metadata"], "rb") as f:
-        metadata: list[ChunkMetadata] = pickle.load(f)
+        raw: list[object] = pickle.load(f)
+        metadata: list[ChunkMetadata] = [ChunkMetadata.model_validate(m) for m in raw]
 
     vectors: np.ndarray | None = None
 
@@ -79,12 +66,11 @@ def _save_raw(
     vectors: np.ndarray,
     index: faiss.Index,
 ) -> None:
-    """Persiste los tres artefactos de una colección en disco."""
     paths: dict[str, Path] = _collection_paths(collection)
     paths["base"].mkdir(parents=True, exist_ok=True)
 
     with open(paths["metadata"], "wb") as f:
-        pickle.dump(metadata, f)
+        pickle.dump([m.model_dump() for m in metadata], f)
 
     np.save(paths["vectors"], vectors)
     faiss.write_index(index, str(paths["index"]))
@@ -95,7 +81,6 @@ def _save_raw(
 
 
 def _clear_collection_files(collection: str) -> None:
-    """Elimina los artefactos de una colección que quedó vacía."""
     paths: dict[str, Path] = _collection_paths(collection)
 
     for key in ("index", "metadata", "vectors"):
@@ -106,20 +91,15 @@ def _clear_collection_files(collection: str) -> None:
 
 
 def _to_f32(arr: np.ndarray) -> np.ndarray:
-    """Convierte a float32 C-contiguo requerido por faiss en runtime."""
     return np.ascontiguousarray(arr, dtype=np.float32)
 
 
 # ======================================================
-# RECONSTRUCCIÓN DE ÍNDICE
+# RECONSTRUCCION DE INDICE
 # ======================================================
 
 
 def rebuild_index(collection: str) -> faiss.Index | None:
-    """
-    Reconstruye el índice FAISS desde vectors.npy.
-    Retorna el nuevo faiss.Index, o None si no hay vectores.
-    """
     paths: dict[str, Path] = _collection_paths(collection)
 
     if not paths["vectors"].exists():
@@ -153,17 +133,11 @@ def rebuild_index(collection: str) -> faiss.Index | None:
 
 
 # ======================================================
-# VACUUM / COMPACTACIÓN
+# VACUUM / COMPACTACION
 # ======================================================
 
 
 def vacuum_collection(collection: str) -> dict[str, int]:
-    """
-    Compacta una colección eliminando huecos entre vectores y metadata.
-    Re-serializa todo y reconstruye el índice garantizando coherencia.
-
-    Retorna: {"before": int, "after": int, "removed": int}
-    """
     metadata: list[ChunkMetadata]
     vectors: np.ndarray | None
     metadata, vectors = _load_raw(collection)
@@ -200,7 +174,7 @@ def vacuum_collection(collection: str) -> dict[str, int]:
 
 
 # ======================================================
-# ELIMINACIÓN POR FUENTE
+# ELIMINACION POR FUENTE
 # ======================================================
 
 
@@ -210,16 +184,6 @@ def delete_by_source(
     *,
     rebuild: bool = True,
 ) -> int:
-    """
-    Elimina todos los chunks asociados a una fuente concreta.
-
-    Args:
-        collection: Ruta relativa, p. ej. "sociologia/espectaculo".
-        source:     Valor exacto del campo "source" en metadata.
-        rebuild:    Si True, ejecuta vacuum tras eliminar.
-
-    Retorna el número de chunks eliminados.
-    """
     return delete_by_sources(collection, [source], rebuild=rebuild)
 
 
@@ -229,11 +193,6 @@ def delete_by_sources(
     *,
     rebuild: bool = True,
 ) -> int:
-    """
-    Eliminación en lote de múltiples fuentes en una sola escritura atómica.
-
-    Retorna el número total de chunks eliminados.
-    """
     source_set: set[str] = set(sources)
 
     if not source_set:
@@ -251,8 +210,9 @@ def delete_by_sources(
         )
         return 0
 
+    # Acceso por atributo — ChunkMetadata es BaseModel, no TypedDict
     keep_indices: list[int] = [
-        i for i, m in enumerate(metadata) if m.get("source") not in source_set
+        i for i, m in enumerate(metadata) if m.source not in source_set
     ]
 
     removed_count: int = len(metadata) - len(keep_indices)
@@ -299,68 +259,65 @@ def delete_by_sources(
 
 
 def clear_collection(collection: str) -> None:
-    """
-    Elimina todos los artefactos de una colección.
-    El directorio base se conserva para re-ingestión futura.
-    """
     _clear_collection_files(collection)
     logger.info(f"Colección limpiada | collection={collection}")
 
 
 # ======================================================
-# ALIAS SEMÁNTICOS PARA URLs
+# ALIAS SEMANTICOS PARA URLs
 # ======================================================
 
 
-def delete_url(
-    collection: str,
-    url: str,
-    *,
-    rebuild: bool = True,
-) -> int:
-    """Alias de delete_by_source orientado a fuentes de tipo URL."""
+def delete_url(collection: str, url: str, *, rebuild: bool = True) -> int:
     return delete_by_source(collection, url, rebuild=rebuild)
 
 
-def delete_urls(
-    collection: str,
-    urls: Sequence[str],
-    *,
-    rebuild: bool = True,
-) -> int:
-    """Alias de delete_by_sources orientado a lotes de URLs."""
+def delete_urls(collection: str, urls: Sequence[str], *, rebuild: bool = True) -> int:
     return delete_by_sources(collection, urls, rebuild=rebuild)
 
 
 # ======================================================
-# INTROSPECCIÓN
+# INSPECCION
 # ======================================================
 
 
-class SourceSummary(dict):  # type: ignore[type-arg]
-    """Resumen de una fuente: source, source_type, chunks."""
+class SourceSummary(BaseModel):
+    """Resumen de una fuente indexada en una colección."""
+
+    model_config = ConfigDict(frozen=True)
+
+    source: str
+    source_type: str
+    chunks: int
 
 
 def list_sources(collection: str) -> list[SourceSummary]:
     """
-    Devuelve un resumen de las fuentes indexadas en la colección.
-
-    Retorna lista de dicts:
-        [{"source": str, "source_type": str, "chunks": int}, ...]
+    Devuelve un resumen de las fuentes indexadas en la colección,
+    ordenadas por nombre de fuente.
     """
     metadata: list[ChunkMetadata]
     metadata, _ = _load_raw(collection)
 
-    seen: dict[str, SourceSummary] = {}
+    # Dos dicts bien tipados en lugar de dict[str, object],
+    # que causaba errores de tipo al acceder al contador.
+    chunk_counts: dict[str, int] = {}
+    source_types: dict[str, str] = {}
 
     for entry in metadata:
-        src: str = entry.get("source", "<desconocido>")
-        if src not in seen:
-            seen[src] = SourceSummary(
-                source=src,
-                source_type=entry.get("source_type", "file"),
-                chunks=0,
-            )
-        seen[src]["chunks"] += 1
+        src: str = entry.source
+        chunk_counts[src] = chunk_counts.get(src, 0) + 1
+        if src not in source_types:
+            source_types[src] = entry.source_type
 
-    return sorted(seen.values(), key=lambda x: x["source"])
+    return sorted(
+        [
+            SourceSummary(
+                source=src,
+                source_type=source_types[src],
+                chunks=count,
+            )
+            for src, count in chunk_counts.items()
+        ],
+        key=lambda x: x.source,
+    )

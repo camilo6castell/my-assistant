@@ -1,14 +1,24 @@
+# src/chat/types.py
+
 """
 Tipos compartidos del módulo chat.
-Definidos aquí para que session.py, search.py, generate.py y builder.py
-los importen sin crear dependencias circulares.
+
+Definidos en un módulo propio para que session.py, generate.py y
+builder.py los importen sin crear dependencias circulares.
 """
 
-from typing import TypedDict
+from pydantic import BaseModel, ConfigDict
 
 
-class TurnMemory(TypedDict):
-    """Un turno del historial de conversación."""
+class TurnMemory(BaseModel):
+    """
+    Un turno del historial de conversación.
+
+    frozen=True porque los turnos son inmutables una vez registrados:
+    el historial es una lista append-only en ChatSession.
+    """
+
+    model_config = ConfigDict(frozen=True)
 
     user: str
     assistant: str

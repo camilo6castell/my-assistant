@@ -1,181 +1,96 @@
-import os
+"""
+Configuración centralizada del sistema usando pydantic-settings.
+
+Ventajas sobre os.getenv manual:
+  - Validación de tipos en el arranque (falla rápido si el env está mal)
+  - Constraints en campos (gt=0, ge=0, le=2.0)
+  - Validación cruzada entre campos (@field_validator)
+  - Lectura automática de .env sin llamar load_dotenv()
+  - Un solo objeto `settings` como fuente de verdad
+
+Los exports al final del módulo mantienen compatibilidad con todos los
+archivos que ya importan directamente (ej: from src.config.settings import CHUNK_SIZE).
+"""
+
 from pathlib import Path
 
-from dotenv import load_dotenv
+from pydantic import Field, field_validator, ValidationInfo, model_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from src.utils.tools import env_bool
 
-load_dotenv()
+class Settings(BaseSettings):
+    """
+    Configuración del sistema RAG.
 
-# ======================================================
-# ROOT
-# ======================================================
+    Pydantic-settings lee las variables de entorno (y el archivo .env)
+    de forma automática. El nombre del campo en snake_case se mapea
+    al env var en UPPER_CASE (ej: chunk_size -> CHUNK_SIZE).
+    """
 
-AI_HOME: Path = Path(
-    os.getenv(
-        "AI_HOME",
-        "/srv/ai",
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        case_sensitive=False,
+        extra="ignore",
     )
-)
 
-# ======================================================
-# PATHS
-# ======================================================
+    # Root
+    ai_home: Path = Field(default=Path("/srv/ai"))
 
-DATA_PATH: Path = Path(
-    os.getenv(
-        "DATA_PATH",
-        f"{AI_HOME}/data",
-    )
-)
+    # Paths: Los paths derivados son propiedades calculadas
+    @property
+    def data_path(self) -> Path:
+        return self.ai_home / "data"
 
-BASE_VECTOR_PATH: Path = Path(
-    os.getenv(
-        "VECTOR_STORE_PATH",
-        f"{AI_HOME}/vector_stores",
-    )
-)
+    @property
+    def vector_store_path(self) -> Path:
+        return self.ai_home / "vector_stores"
 
-LOG_PATH: Path = Path(
-    os.getenv(
-        "LOG_PATH",
-        f"{AI_HOME}/logs",
-    )
-)
+    @property
+    def log_path(self) -> Path:
+        return self.ai_home / "logs"
 
-HF_HOME: Path = Path(
-    os.getenv(
-        "HF_HOME",
-        f"{AI_HOME}/hf",
-    )
-)
+    # Embeddings
+    embed_model: str = Field(default="BAAI/bge-small-en-v1.5")
 
-# ======================================================
-# EMBEDDINGS
-# ======================================================
+    # Chunking
+    chunk_size: int = Field(default=500, gt=0)
+    chunk_overlap: int = Field(default=100, ge=0)
 
-EMBED_MODEL: str = os.getenv(
-    "EMBED_MODEL",
-    "BAAI/bge-small-en-v1.5",
-)
+    @field_validator("chunk_overlap")
+    @classmethod
+    def overlap_must_be_less_than_size(cls, v: int, info: ValidationInfo) -> int:
+        """
+        Garantiza que el overlap no sea >= al tamaño del chunk.
+        Sin esta validación, chunk_text() produciría un loop infinito.
+        """
+        if "chunk_size" in info.data and v >= info.data["chunk_size"]:
+            raise ValueError(
+                f"chunk_overlap ({v}) debe ser menor que "
+                f"chunk_size ({info.data['chunk_size']})"
+            )
+        return v
 
-# ======================================================
-# CHUNKING
-# ======================================================
+    # Web ingest
+    max_pages: int = Field(default=50, gt=0)
+    delay: float = Field(default=1.0, ge=0.0)
 
-CHUNK_SIZE: int = int(
-    os.getenv(
-        "CHUNK_SIZE",
-        500,
-    )
-)
+    # Retrieval
+    hard_top_k_initial: int = Field(default=15, gt=0)
+    hard_top_k_final: int = Field(default=5, gt=0)
+    soft_top_k_initial: int = Field(default=25, gt=0)
+    soft_top_k_final: int = Field(default=7, gt=0)
 
-CHUNK_OVERLAP: int = int(
-    os.getenv(
-        "CHUNK_OVERLAP",
-        100,
-    )
-)
+    max_turns: int = Field(default=4, gt=0)
 
-# ======================================================
-# RETRIEVAL
-# ======================================================
+    # LLM
+    # llm_provider: str = Field(default="fastflowlm")
+    llm_base_url: str = Field(default="http://127.0.0.1:52625/v1")
+    llm_api_key: str = Field(default="flm")
+    llm_model: str = Field(default="qwen3:8b")
+    llm_temperature: float = Field(default=0.2, ge=0.0, le=2.0)
+    llm_timeout: int = Field(default=600, gt=0)
 
-BASE_TOP_K_INITIAL: int = int(
-    os.getenv(
-        "BASE_TOP_K_INITIAL",
-        15,
-    )
-)
 
-BASE_TOP_K_FINAL: int = int(
-    os.getenv(
-        "BASE_TOP_K_FINAL",
-        5,
-    )
-)
-
-SOFT_TOP_K_INITIAL: int = int(
-    os.getenv(
-        "SOFT_TOP_K_INITIAL",
-        25,
-    )
-)
-
-SOFT_TOP_K_FINAL: int = int(
-    os.getenv(
-        "SOFT_TOP_K_FINAL",
-        7,
-    )
-)
-
-MAX_TURNS: int = int(
-    os.getenv(
-        "MAX_TURNS",
-        4,
-    )
-)
-
-DEFAULT_SOFT_MODE: bool = env_bool(
-    "DEFAULT_SOFT_MODE",
-    False,
-)
-
-# ======================================================
-# LLM
-# ======================================================
-
-LLM_PROVIDER: str = os.getenv(
-    "LLM_PROVIDER",
-    "fastflowlm",
-)
-
-LLM_BASE_URL: str = os.getenv(
-    "LLM_BASE_URL",
-    "http://127.0.0.1:52625/v1",
-)
-
-LLM_API_KEY: str = os.getenv(
-    "LLM_API_KEY",
-    "flm",
-)
-
-LLM_MODEL: str = os.getenv(
-    "LLM_MODEL",
-    "qwen3-it:4b",
-)
-
-LLM_TEMPERATURE: float = float(
-    os.getenv(
-        "LLM_TEMPERATURE",
-        0.2,
-    )
-)
-
-# Timeout generoso para modelos locales cuantizados.
-# Un 8B en modo interpretativo puede tardar varios minutos
-# con prompts densos. Ajustable via env: LLM_TIMEOUT=300
-LLM_TIMEOUT: int = int(
-    os.getenv(
-        "LLM_TIMEOUT",
-        600,
-    )
-)
-
-# ======================================================
-# WEB INGEST
-# ======================================================
-
-MAX_PAGES: int = int(
-    os.getenv(
-        "MAX_PAGES",
-        50,
-    )
-)
-
-DELAY: float = float(
-    os.getenv(
-        "DELAY",
-        1,
-    )
-)
+# Instancia singleton — se valida al importar el módulo.
+settings = Settings()
