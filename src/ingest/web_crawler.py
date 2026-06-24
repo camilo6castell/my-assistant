@@ -9,7 +9,7 @@ import requests
 from bs4 import BeautifulSoup
 from readability import Document
 
-from src.config.settings import DELAY, MAX_PAGES
+from src.config.settings import settings
 from src.ingest.core import (
     ChunkMetadata,
     RawCollection,
@@ -101,7 +101,7 @@ def main() -> None:
     new_chunks: list[str] = []
     new_metadata: list[ChunkMetadata] = []
 
-    while to_visit and len(visited) < MAX_PAGES:
+    while to_visit and len(visited) < settings.max_pages:
         url: str = to_visit.pop(0)
 
         if url in visited:
@@ -137,7 +137,7 @@ def main() -> None:
                 to_visit.append(link)
 
         logger.info(f"URLs pendientes: {len(to_visit)}")
-        time.sleep(DELAY)
+        time.sleep(settings.delay)
 
     if not new_chunks:
         logger.warning("No se encontraron nuevas páginas.")

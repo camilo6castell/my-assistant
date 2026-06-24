@@ -1,5 +1,3 @@
-# src/llm/generate.py
-
 """
 Consulta al LLM local via cliente OpenAI-compatible.
 
@@ -17,7 +15,7 @@ from openai import OpenAIError
 from openai.types.chat import ChatCompletionMessageParam
 
 from src.chat.types import TurnMemory
-from src.config.settings import LLM_MODEL, LLM_TEMPERATURE, LLM_TIMEOUT, MAX_TURNS
+from src.config.settings import settings
 from src.llm.client import client
 from src.utils.logger import logger
 
@@ -53,7 +51,7 @@ def build_messages(
     ]
 
     # TurnMemory es BaseModel: acceso por atributo (.user, .assistant)
-    for turn in chat_memory[-MAX_TURNS:]:
+    for turn in chat_memory[-settings.max_turns :]:
         messages.append({"role": "user", "content": turn.user})
         messages.append({"role": "assistant", "content": turn.assistant})
 
@@ -68,16 +66,16 @@ def ask_llm(
 ) -> str:
 
     logger.info(
-        f"Consultando LLM | model={LLM_MODEL} "
-        f"| timeout={LLM_TIMEOUT}s | temp={LLM_TEMPERATURE}"
+        f"Consultando LLM | model={settings.llm_model} "
+        f"| timeout={settings.llm_timeout}s | temp={settings.llm_temperature}"
     )
 
     try:
         response = client.chat.completions.create(
-            model=LLM_MODEL,
+            model=settings.llm_model,
             messages=build_messages(prompt=prompt, chat_memory=chat_memory),
-            temperature=LLM_TEMPERATURE,
-            timeout=LLM_TIMEOUT,
+            temperature=settings.llm_temperature,
+            timeout=settings.llm_timeout,
         )
 
         content = response.choices[0].message.content

@@ -1,5 +1,3 @@
-# src/context/delete.py
-
 """
 Gestion de eliminacion granular de documentos, URLs y fuentes del
 vectorstore. Provee reconstruccion de indice FAISS y compactacion de
@@ -20,10 +18,9 @@ import faiss
 import numpy as np
 from pydantic import BaseModel, ConfigDict
 
-from src.config.settings import BASE_VECTOR_PATH
+from src.config.settings import settings
 from src.ingest.core import ChunkMetadata
 from src.utils.logger import logger
-
 
 # ======================================================
 # HELPERS INTERNOS
@@ -31,7 +28,7 @@ from src.utils.logger import logger
 
 
 def _collection_paths(collection: str) -> dict[str, Path]:
-    base: Path = Path(BASE_VECTOR_PATH) / collection
+    base: Path = Path(settings.vector_store_path) / collection
     return {
         "base": base,
         "index": base / "index.faiss",
@@ -51,9 +48,7 @@ def _load_raw(
 
     with open(paths["metadata"], "rb") as f:
         raw: list[object] = pickle.load(f)
-        metadata: list[ChunkMetadata] = [
-            ChunkMetadata.model_validate(m) for m in raw
-        ]
+        metadata: list[ChunkMetadata] = [ChunkMetadata.model_validate(m) for m in raw]
 
     vectors: np.ndarray | None = None
 
@@ -277,9 +272,7 @@ def delete_url(collection: str, url: str, *, rebuild: bool = True) -> int:
     return delete_by_source(collection, url, rebuild=rebuild)
 
 
-def delete_urls(
-    collection: str, urls: Sequence[str], *, rebuild: bool = True
-) -> int:
+def delete_urls(collection: str, urls: Sequence[str], *, rebuild: bool = True) -> int:
     return delete_by_sources(collection, urls, rebuild=rebuild)
 
 

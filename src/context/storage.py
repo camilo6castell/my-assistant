@@ -1,5 +1,3 @@
-# src/context/storage.py
-
 from __future__ import annotations
 
 import pickle
@@ -9,7 +7,7 @@ from typing import TYPE_CHECKING, TypedDict
 import faiss
 import numpy as np
 
-from src.config.settings import BASE_VECTOR_PATH
+from src.config.settings import settings
 
 if TYPE_CHECKING:
     from faiss import Index as FaissIndex
@@ -29,7 +27,7 @@ class CollectionStorage:
 
     def __init__(self, collection_name: str) -> None:
         self.collection_name: str = collection_name
-        self.base_path: Path = BASE_VECTOR_PATH / collection_name
+        self.base_path: Path = settings.vector_store_path / collection_name
 
         self.base_path.mkdir(parents=True, exist_ok=True)
 

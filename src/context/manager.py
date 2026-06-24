@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING, TypedDict
 
-from src.config.settings import BASE_VECTOR_PATH
+from src.config.settings import settings
 from src.context.selector import match_namespace
 from src.ingest.core import (
     ChunkMetadata,
@@ -48,7 +48,7 @@ class LoadedCollection(TypedDict):
 class ContextManager:
 
     def __init__(self) -> None:
-        self.base_path: Path = Path(BASE_VECTOR_PATH)
+        self.base_path: Path = Path(settings.vector_store_path)
         self.loaded_contexts: dict[str, LoadedCollection] = {}
 
     # =====================================================

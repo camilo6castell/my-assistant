@@ -7,7 +7,7 @@ import numpy as np
 from pypdf import PdfReader
 from bs4 import BeautifulSoup
 
-from src.config.settings import DATA_PATH
+from src.config.settings import settings
 from src.ingest.core import (
     ChunkMetadata,
     RawCollection,
@@ -91,7 +91,7 @@ def main() -> None:
     new_chunks: list[str] = []
     new_metadata: list[ChunkMetadata] = []
 
-    files: list[Path] = list(DATA_PATH.iterdir())
+    files: list[Path] = list(settings.data_path.iterdir())
 
     if not files:
         logger.warning("No hay archivos en data/")

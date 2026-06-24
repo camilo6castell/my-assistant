@@ -1,5 +1,3 @@
-# src/context/models.py
-
 """
 Modelos de dominio del sistema RAG.
 

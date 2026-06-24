@@ -65,8 +65,8 @@ class Settings(BaseSettings):
         return v
 
     # Retrieval
-    base_top_k_initial: int = Field(default=15, gt=0)
-    base_top_k_final: int = Field(default=5, gt=0)
+    hard_top_k_initial: int = Field(default=15, gt=0)
+    hard_top_k_final: int = Field(default=5, gt=0)
     soft_top_k_initial: int = Field(default=25, gt=0)
     soft_top_k_final: int = Field(default=7, gt=0)
     max_turns: int = Field(default=4, gt=0)
@@ -94,30 +94,9 @@ settings = Settings()
 #   from src.config.settings import CHUNK_SIZE
 # ======================================================
 
-AI_HOME: Path = settings.ai_home
-DATA_PATH: Path = settings.data_path
-BASE_VECTOR_PATH: Path = settings.vector_store_path
-LOG_PATH: Path = settings.log_path
-HF_HOME: Path = settings.hf_home
+# AI_HOME: Path = settings.ai_home
+# HF_HOME: Path = settings.hf_home
 
-EMBED_MODEL: str = settings.embed_model
+# DEFAULT_SOFT_MODE: bool = settings.default_soft_mode
 
-CHUNK_SIZE: int = settings.chunk_size
-CHUNK_OVERLAP: int = settings.chunk_overlap
-
-BASE_TOP_K_INITIAL: int = settings.base_top_k_initial
-BASE_TOP_K_FINAL: int = settings.base_top_k_final
-SOFT_TOP_K_INITIAL: int = settings.soft_top_k_initial
-SOFT_TOP_K_FINAL: int = settings.soft_top_k_final
-MAX_TURNS: int = settings.max_turns
-DEFAULT_SOFT_MODE: bool = settings.default_soft_mode
-
-LLM_PROVIDER: str = settings.llm_provider
-LLM_BASE_URL: str = settings.llm_base_url
-LLM_API_KEY: str = settings.llm_api_key
-LLM_MODEL: str = settings.llm_model
-LLM_TEMPERATURE: float = settings.llm_temperature
-LLM_TIMEOUT: int = settings.llm_timeout
-
-MAX_PAGES: int = settings.max_pages
-DELAY: float = settings.delay
+# LLM_PROVIDER: str = settings.llm_provider

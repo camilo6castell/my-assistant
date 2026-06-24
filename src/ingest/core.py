@@ -1,5 +1,3 @@
-# src/ingest/core.py
-
 """
 Nota sobre # pyright: ignore[reportCallIssue] en llamadas a faiss:
   Pylance lee stubs SWIG C++ de faiss (add(n, x, ...) / search(n, x, k, D, I, ...))
@@ -25,19 +23,15 @@ import numpy as np
 from pydantic import BaseModel, ConfigDict
 from sentence_transformers import SentenceTransformer
 
-from src.config.settings import (
-    BASE_VECTOR_PATH,
-    CHUNK_OVERLAP,
-    CHUNK_SIZE,
-    EMBED_MODEL,
-)
+from src.config.settings import settings
+
 from src.utils.logger import logger
 
 if TYPE_CHECKING:
     from faiss import Index as FaissIndex
 
 
-model = SentenceTransformer(EMBED_MODEL)
+model = SentenceTransformer(settings.embed_model)
 
 
 # ======================================================
@@ -114,13 +108,13 @@ def chunk_text(text: str) -> list[str]:
     start = 0
 
     while start < len(text):
-        end = start + CHUNK_SIZE
+        end = start + settings.chunk_size
         chunk = text[start:end].strip()
 
         if chunk:
             chunks.append(chunk)
 
-        start += CHUNK_SIZE - CHUNK_OVERLAP
+        start += settings.chunk_size - settings.chunk_overlap
 
     return chunks
 
@@ -131,7 +125,7 @@ def chunk_text(text: str) -> list[str]:
 
 
 def get_collection_paths(collection: str) -> CollectionPaths:
-    vector_path = BASE_VECTOR_PATH / collection
+    vector_path = settings.vector_store_path / collection
     vector_path.mkdir(parents=True, exist_ok=True)
 
     return CollectionPaths(

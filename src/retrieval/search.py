@@ -1,5 +1,3 @@
-# src/retrieval/search.py
-
 """
 Nota sobre # pyright: ignore[reportCallIssue] en index.search():
   Pylance lee stubs SWIG C++ de faiss; mypy tiene stubs del wrapper Python.
@@ -12,17 +10,11 @@ import numpy as np
 from sentence_transformers import SentenceTransformer
 
 from src.chat.modes import ChatMode
-from src.config.settings import (
-    BASE_TOP_K_FINAL,
-    BASE_TOP_K_INITIAL,
-    EMBED_MODEL,
-    SOFT_TOP_K_FINAL,
-    SOFT_TOP_K_INITIAL,
-)
+from src.config.settings import settings
 from src.context.manager import LoadedCollection
 from src.context.models import SearchResult
 
-model = SentenceTransformer(EMBED_MODEL)
+model = SentenceTransformer(settings.embed_model)
 
 
 # ======================================================
@@ -142,11 +134,11 @@ def search(
 ) -> tuple[list[SearchResult], float]:
 
     if mode == ChatMode.SOFT:
-        top_k_initial = SOFT_TOP_K_INITIAL
-        top_k_final = SOFT_TOP_K_FINAL
+        top_k_initial = settings.soft_top_k_initial
+        top_k_final = settings.soft_top_k_final
     else:
-        top_k_initial = BASE_TOP_K_INITIAL
-        top_k_final = BASE_TOP_K_FINAL
+        top_k_initial = settings.hard_top_k_initial
+        top_k_final = settings.hard_top_k_final
 
     queries = build_queries(question, mode)
     embeddings = encode_queries(queries)
