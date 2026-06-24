@@ -14,7 +14,7 @@ archivos que ya importan directamente (ej: from src.config.settings import CHUNK
 
 from pathlib import Path
 
-from pydantic import Field, field_validator, ValidationInfo
+from pydantic import Field, field_validator, ValidationInfo, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -37,11 +37,18 @@ class Settings(BaseSettings):
     # Root
     ai_home: Path = Field(default=Path("/srv/ai"))
 
-    # Paths
-    data_path: Path = Field(default=Path("/srv/ai/data"))
-    vector_store_path: Path = Field(default=Path("/srv/ai/vector_stores"))
-    log_path: Path = Field(default=Path("/srv/ai/logs"))
-    hf_home: Path = Field(default=Path("/srv/ai/hf"))
+    # Paths: Los paths derivados son propiedades calculadas
+    @property
+    def data_path(self) -> Path:
+        return self.ai_home / "data"
+
+    @property
+    def vector_store_path(self) -> Path:
+        return self.ai_home / "vector_stores"
+
+    @property
+    def log_path(self) -> Path:
+        return self.ai_home / "logs"
 
     # Embeddings
     embed_model: str = Field(default="BAAI/bge-small-en-v1.5")
@@ -64,39 +71,26 @@ class Settings(BaseSettings):
             )
         return v
 
+    # Web ingest
+    max_pages: int = Field(default=50, gt=0)
+    delay: float = Field(default=1.0, ge=0.0)
+
     # Retrieval
     hard_top_k_initial: int = Field(default=15, gt=0)
     hard_top_k_final: int = Field(default=5, gt=0)
     soft_top_k_initial: int = Field(default=25, gt=0)
     soft_top_k_final: int = Field(default=7, gt=0)
+
     max_turns: int = Field(default=4, gt=0)
-    default_soft_mode: bool = Field(default=False)
 
     # LLM
-    llm_provider: str = Field(default="fastflowlm")
+    # llm_provider: str = Field(default="fastflowlm")
     llm_base_url: str = Field(default="http://127.0.0.1:52625/v1")
     llm_api_key: str = Field(default="flm")
-    llm_model: str = Field(default="qwen3-it:4b")
+    llm_model: str = Field(default="qwen3:8b")
     llm_temperature: float = Field(default=0.2, ge=0.0, le=2.0)
     llm_timeout: int = Field(default=600, gt=0)
-
-    # Web ingest
-    max_pages: int = Field(default=50, gt=0)
-    delay: float = Field(default=1.0, ge=0.0)
 
 
 # Instancia singleton — se valida al importar el módulo.
 settings = Settings()
-
-# ======================================================
-# EXPORTS DE COMPATIBILIDAD
-# Permiten que los archivos existentes sigan importando sin cambios:
-#   from src.config.settings import CHUNK_SIZE
-# ======================================================
-
-# AI_HOME: Path = settings.ai_home
-# HF_HOME: Path = settings.hf_home
-
-# DEFAULT_SOFT_MODE: bool = settings.default_soft_mode
-
-# LLM_PROVIDER: str = settings.llm_provider
