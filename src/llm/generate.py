@@ -1,13 +1,14 @@
-"""
-Consulta al LLM local vía cliente OpenAI-compatible.
+# src/llm/generate.py
 
-El historial de conversación viaja aquí como mensajes estructurados
-user/assistant — es el único lugar donde se incluye. El prompt no
+"""
+Consulta al LLM local via cliente OpenAI-compatible.
+
+El historial de conversacion viaja aqui como mensajes estructurados
+user/assistant — es el unico lugar donde se incluye. El prompt no
 contiene un bloque HISTORIAL para evitar redundancia.
 
-MAX_TURNS limita cuántos turnos se envían para proteger la ventana
-de contexto del modelo: si se envían demasiados turnos, el modelo
-empieza a ignorar el principio del contexto o rechaza la llamada.
+MAX_TURNS limita cuantos turnos se envian para proteger la ventana
+de contexto del modelo.
 """
 
 from __future__ import annotations
@@ -22,14 +23,14 @@ from src.utils.logger import logger
 
 SYSTEM_PROMPT: str = """
 Eres un asistente RAG especializado en responder
-usando únicamente el contexto proporcionado.
+usando unicamente el contexto proporcionado.
 
 Reglas:
 
 - Prioriza el contenido recuperado.
-- No inventes información.
-- Si el contexto no contiene suficiente información,
-  dilo explícitamente.
+- No inventes informacion.
+- Si el contexto no contiene suficiente informacion,
+  dilo explicitamente.
 - Responde de forma clara y estructurada.
 - Cuando sea posible, conecta conceptos relacionados.
 """
@@ -43,21 +44,18 @@ def build_messages(
     Construye el array de mensajes para la API.
 
     Estructura:
-      [system] → instrucciones base del asistente
-      [user / assistant] × MAX_TURNS → historial reciente (ventana deslizante)
-      [user] → prompt actual (contexto recuperado + pregunta)
-
-    El slice [-MAX_TURNS:] es la única protección contra el crecimiento
-    ilimitado del historial. Sin este límite, sesiones largas superarían
-    la ventana de contexto del modelo.
+      [system] -> instrucciones base
+      [user / assistant] x MAX_TURNS -> historial reciente (ventana deslizante)
+      [user] -> prompt actual (contexto recuperado + pregunta)
     """
     messages: list[ChatCompletionMessageParam] = [
         {"role": "system", "content": SYSTEM_PROMPT},
     ]
 
+    # TurnMemory es BaseModel: acceso por atributo (.user, .assistant)
     for turn in chat_memory[-MAX_TURNS:]:
-        messages.append({"role": "user", "content": turn["user"]})
-        messages.append({"role": "assistant", "content": turn["assistant"]})
+        messages.append({"role": "user", "content": turn.user})
+        messages.append({"role": "assistant", "content": turn.assistant})
 
     messages.append({"role": "user", "content": prompt})
 
@@ -85,8 +83,8 @@ def ask_llm(
         content = response.choices[0].message.content
 
         if not content:
-            logger.warning("El modelo devolvió respuesta vacía.")
-            return "El modelo no devolvió respuesta."
+            logger.warning("El modelo devolvio respuesta vacia.")
+            return "El modelo no devolvio respuesta."
 
         return str(content).strip()
 

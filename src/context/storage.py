@@ -1,3 +1,5 @@
+# src/context/storage.py
+
 from __future__ import annotations
 
 import pickle
@@ -45,7 +47,10 @@ class CollectionStorage:
         index: FaissIndex = faiss.read_index(str(self.index_path))
 
         with open(self.metadata_path, "rb") as f:
-            metadata: list[ChunkMetadata] = pickle.load(f)
+            raw: list[object] = pickle.load(f)
+            metadata: list[ChunkMetadata] = [
+                ChunkMetadata.model_validate(m) for m in raw
+            ]
 
         vectors: np.ndarray = np.load(self.vectors_path)
 
@@ -61,4 +66,4 @@ class CollectionStorage:
         np.save(self.vectors_path, vectors)
 
         with open(self.metadata_path, "wb") as f:
-            pickle.dump(metadata, f)
+            pickle.dump([m.model_dump() for m in metadata], f)

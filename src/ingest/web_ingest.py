@@ -1,3 +1,5 @@
+# python -m src.ingest.web_ingest <categoria> <coleccion> <url>
+
 import sys
 
 import numpy as np
@@ -20,15 +22,11 @@ from src.utils.logger import logger
 def extract_main_content(url: str) -> str | None:
     try:
         logger.info(f"Descargando URL: {url}")
-
         response: requests.Response = requests.get(url, timeout=10)
         response.raise_for_status()
-
         doc: Document = Document(response.text)
         soup: BeautifulSoup = BeautifulSoup(doc.summary(), "html.parser")
-
         return soup.get_text(separator="\n")
-
     except Exception as e:
         logger.error(f"Error extrayendo contenido de {url}: {e}")
         return None
@@ -47,7 +45,9 @@ def main() -> None:
     logger.info(f"Iniciando web ingest: {collection}")
 
     collection_data: RawCollection = load_collection(collection)
-    existing_sources: set[str] = {m["source"] for m in collection_data["metadata"]}
+
+    # Acceso por atributo — ChunkMetadata es BaseModel
+    existing_sources: set[str] = {m.source for m in collection_data["metadata"]}
 
     if url in existing_sources:
         logger.warning("URL ya indexada.")

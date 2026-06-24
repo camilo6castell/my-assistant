@@ -1,3 +1,5 @@
+# src/retrieval/search.py
+
 """
 Nota sobre # pyright: ignore[reportCallIssue] en index.search():
   Pylance lee stubs SWIG C++ de faiss; mypy tiene stubs del wrapper Python.
@@ -10,7 +12,6 @@ import numpy as np
 from sentence_transformers import SentenceTransformer
 
 from src.chat.modes import ChatMode
-from src.chat.types import TurnMemory
 from src.config.settings import (
     BASE_TOP_K_FINAL,
     BASE_TOP_K_INITIAL,
@@ -31,15 +32,11 @@ model = SentenceTransformer(EMBED_MODEL)
 
 def build_queries(question: str, mode: str) -> list[str]:
     """
-    Genera las variantes de búsqueda a partir de la pregunta.
+    HARD: 1 query literal.
+    SOFT: 3 queries — literal + 2 variantes semánticas.
 
-    RIGUROSO:      1 query — la pregunta literal.
-    INTERPRETATIVO: 3 queries — la pregunta literal más dos variantes
-                   semánticas que amplían el ángulo de búsqueda.
-
-    El historial de conversación ya viaja vía mensajes de la API
-    (build_messages en generate.py), por lo que no es necesario
-    incorporarlo aquí como variante de query adicional.
+    El historial viaja como mensajes de API en generate.py,
+    no como variante de query adicional.
     """
     if mode == ChatMode.HARD:
         return [question]
@@ -85,9 +82,9 @@ def retrieve(
 
         for q_emb in query_embeddings:
             query: np.ndarray = np.ascontiguousarray([q_emb], dtype=np.float32)
-            scores, indices = index.search(
+            scores, indices = index.search(  # pyright: ignore[reportCallIssue]
                 query, top_k_initial
-            )  # pyright: ignore[reportCallIssue]
+            )
 
             for score, idx in zip(scores[0], indices[0]):
                 if idx == -1:
@@ -95,14 +92,15 @@ def retrieve(
 
                 item = metadata[idx]
 
+                # Acceso por atributo — ChunkMetadata es BaseModel
                 results.append(
                     SearchResult(
                         score=float(score),
-                        text=item["text"],
-                        source=item["source"],
-                        page=item["page"],
+                        text=item.text,
+                        source=item.source,
+                        page=item.page,
                         collection=collection_name,
-                        chunk_index=item["chunk_index"],
+                        chunk_index=item.chunk_index,
                     )
                 )
 
@@ -142,12 +140,7 @@ def search(
     mode: str,
     collections: list[LoadedCollection],
 ) -> tuple[list[SearchResult], float]:
-    """
-    Punto de entrada de la búsqueda semántica.
 
-    chat_memory se mantiene en la firma para que interface.py no necesite
-    cambios, pero ya no se usa aquí — viaja directamente al LLM vía API.
-    """
     if mode == ChatMode.SOFT:
         top_k_initial = SOFT_TOP_K_INITIAL
         top_k_final = SOFT_TOP_K_FINAL
