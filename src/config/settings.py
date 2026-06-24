@@ -91,6 +91,9 @@ class Settings(BaseSettings):
     llm_temperature: float = Field(default=0.2, ge=0.0, le=2.0)
     llm_timeout: int = Field(default=600, gt=0)
 
+    # Agent
+    confidence_threshold: float = Field(default=0.55, ge=0.0, le=1.0)
+
 
 # Instancia singleton — se valida al importar el módulo.
 settings = Settings()

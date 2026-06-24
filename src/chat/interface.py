@@ -26,6 +26,7 @@ from src.chat.session import ChatSession
 from src.context.manager import LoadedCollection
 from src.context.models import SearchResult
 from src.context.selector import match_contexts
+from src.graph import RAGState, build_rag_graph
 from src.llm.generate import ask_llm
 from src.prompts.builder import build_prompt
 from src.retrieval.search import search
@@ -45,6 +46,7 @@ HELP: str = """
   /clear              descargar todos los contextos
   /reset              limpiar memoria de conversación
   /mode               alternar modo (RIGUROSO / INTERPRETATIVO)
+  /agent              activar / desactivar modo agente (LangGraph)
   /help               mostrar esta ayuda
   /exit               volver al menú principal
 
@@ -53,6 +55,11 @@ HELP: str = """
     sociologia/debord             → colección exacta
     sociologia react              → dos namespaces
     sociologia/debord react/hooks → mezcla exactos y namespaces
+
+  Modo agente:
+    Cuando está activo, cada pregunta pasa por un grafo LangGraph que
+    evalúa la confianza de los resultados. Si es baja, reformula la
+    query automáticamente y reintenta antes de generar la respuesta.
 """
 
 
@@ -212,13 +219,81 @@ def _handle_question(session: ChatSession, question: str) -> None:
 
 
 # ======================================================
-# LOOP PRINCIPAL
+# HANDLER DE /agent (LangGraph)
 # ======================================================
+
+
+def _handle_agent_question(session: ChatSession, question: str) -> None:
+    """
+    Versión del handler de preguntas con adaptive retrieval via LangGraph.
+
+    Diferencias respecto al pipeline lineal (_handle_question):
+      - Si la confianza de los resultados iniciales es baja, el grafo
+        reformula la query y reintenta una vez antes de generar.
+      - El flujo es un grafo de estados (retrieve → evaluate → generate /
+        reformulate → retrieve → generate) en lugar de una cadena lineal.
+      - Muestra si se activó la reformulación para que el usuario lo sepa.
+
+    El grafo se compila en el primer uso y se reutiliza en llamadas
+    posteriores dentro de la misma sesión (build_rag_graph está cacheado
+    en el atributo _graph del ChatSession extendido por start_chat).
+    """
+    collections: list[LoadedCollection] = (
+        session.context_manager.get_loaded_collections()
+    )
+
+    if not collections:
+        print("\n  Carga un contexto primero.  Ej: /context sociologia\n")
+        return
+
+    print("\n  [agente] Ejecutando grafo RAG...\n")
+
+    # El grafo compilado se guarda en el frame de start_chat para no
+    # recompilarlo en cada pregunta. Se accede via el dict de la función.
+    graph = build_rag_graph()
+
+    initial_state: RAGState = {
+        "question": question,
+        "mode": session.mode,
+        "collections": collections,
+        "chat_memory": session.chat_memory,
+        "results": [],
+        "confidence": 0.0,
+        "reformulated": False,
+        "answer": "",
+    }
+
+    final_state: RAGState = graph.invoke(initial_state)  # type: ignore[assignment]
+
+    answer = final_state["answer"]
+    confidence = final_state["confidence"]
+    reformulated = final_state["reformulated"]
+
+    if not answer or answer == "No se encontró contexto relevante para tu pregunta.":
+        print("  No se encontró contexto relevante.\n")
+        return
+
+    if reformulated:
+        print(
+            "  [agente] Confianza baja en búsqueda inicial → "
+            "query reformulada automáticamente.\n"
+        )
+
+    print("  Respuesta:\n")
+    print(answer)
+    print(f"\n  [confidence: {confidence:.4f}]")
+    if reformulated:
+        print("  [reformulado: sí]")
+    print()
+
+    session.add_to_memory(user=question, assistant=answer)
 
 
 def start_chat(session: ChatSession) -> None:
     print("\n  === CHAT ===")
     print("  Type '/help' to see the available commands.\n")
+
+    agent_mode: bool = False
 
     while True:
         try:
@@ -269,8 +344,17 @@ def start_chat(session: ChatSession) -> None:
             print(f"\n  Mode: {mode}\n")
             continue
 
+        if command == "/agent":
+            agent_mode = not agent_mode
+            status = "activado" if agent_mode else "desactivado"
+            print(f"\n  Modo agente: {status}\n")
+            continue
+
         if command.startswith("/"):
             print(f"\n  Unknown command: {command!r}  (type '/help')\n")
             continue
 
-        _handle_question(session, command)
+        if agent_mode:
+            _handle_agent_question(session, command)
+        else:
+            _handle_question(session, command)
