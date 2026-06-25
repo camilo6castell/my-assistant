@@ -263,7 +263,7 @@ def _handle_agent_question(session: ChatSession, question: str) -> None:
         "answer": "",
     }
 
-    final_state: RAGState = graph.invoke(initial_state)  # type: ignore[assignment]
+    final_state: RAGState = graph.invoke(initial_state)  # type: ignore[attr-defined]
 
     answer = final_state["answer"]
     confidence = final_state["confidence"]

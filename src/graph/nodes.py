@@ -7,59 +7,33 @@ de qué nodo viene ni a cuál va: esa lógica vive en graph.py.
 
 Nodos:
   retrieve_node    ejecuta search() con la question actual
-  evaluate_node    calcula relevance_gap y decide la ruta
-  reformulate_node reescribe la question para mejorar el recall
+  evaluate_node    compara confidence con settings.confidence_limit
+  reformulate_node llama al LLM para reescribir la query
   generate_node    construye el prompt y llama al LLM
 
---- Por qué se usa relevance_gap en lugar de un umbral absoluto ---
+--- Métrica: confidence promedio con umbral calibrado ---
 
-bge-small-en-v1.5 con IndexFlatIP sobre vectores L2-normalizados produce
-similitud coseno. En la práctica, el piso del modelo para cualquier par
-de textos en español es ~0.62-0.65, incluso para queries completamente
-off-topic. Un umbral absoluto (ej. 0.55) nunca se activa porque todos
-los scores caen por encima de ese piso.
+La confidence es el promedio de scores coseno del top-K devuelto por
+search(). bge-small-en-v1.5 produce scores en un rango empíricamente
+observado con estos documentos:
 
-La solución es medir dispersión relativa:
+  on-topic:  >= 0.80   (query semánticamente alineada con el doc)
+  off-topic: ~0.75     (query sin match real, e.g. gatos vs Freud)
 
-    relevance_gap = score_max - score_min
-
-Cuando el retriever encuentra algo realmente relevante, el top-1 tiene
-un score notablemente más alto que el top-K → gap grande → relevante.
-Cuando devuelve resultados genéricos sin match real, todos los scores
-son similares entre sí → gap pequeño → baja relevancia real.
-
-Ejemplos observados con los logs del usuario:
-  on-topic real (fascismo vs Freud):   0.7700 avg, gap estimado ~0.06+
-  off-topic (gato vs Freud):           0.7172 avg, gap estimado ~0.02-0.03
-
-GAP_THRESHOLD = 0.05 detecta la diferencia entre "el modelo encontró
-algo específico" y "el modelo devolvió lo menos malo disponible".
+Por eso confidence_limit=0.80 en settings. Si tu modelo o corpus
+produce rangos distintos, ajusta CONFIDENCE_LIMIT en .env.
 """
 
 from __future__ import annotations
 
+from src.config.settings import settings
+from src.context.models import SearchResult
 from src.graph.state import RAGState
-from src.llm.generate import ask_llm
+from src.llm.generate import ask_llm, ask_llm_internal
 from src.prompts.builder import build_prompt
 from src.retrieval.search import search
 from src.utils.logger import logger
-from src.config.settings import settings
-
-
-def _relevance_gap(state: RAGState) -> float:
-    """
-    Diferencia entre el mejor y el peor score de los resultados actuales.
-
-    Un gap grande indica que el top-1 destaca sobre el resto → match real.
-    Un gap pequeño indica que todos los resultados son igualmente genéricos.
-    Retorna 0.0 si no hay resultados.
-    """
-    results = state["results"]
-    if not results:
-        return 0.0
-    scores = [r.score for r in results]
-    return max(scores) - min(scores)
-
+from src.context.manager import LoadedCollection
 
 # ======================================================
 # RETRIEVE
@@ -67,12 +41,7 @@ def _relevance_gap(state: RAGState) -> float:
 
 
 def retrieve_node(state: RAGState) -> dict[str, object]:
-    """
-    Recupera chunks relevantes desde las colecciones FAISS activas.
-
-    Delega completamente en search() del módulo retrieval — sin lógica
-    duplicada. Actualiza results y confidence en el estado.
-    """
+    """Recupera chunks relevantes desde las colecciones FAISS activas."""
     logger.info(
         f"[graph] retrieve_node | question={state['question']!r} "
         f"| mode={state['mode']}"
@@ -93,36 +62,33 @@ def retrieve_node(state: RAGState) -> dict[str, object]:
 
 
 # ======================================================
-# EVALUATE  (solo logging — el routing lo hace graph.py)
+# EVALUATE
 # ======================================================
 
 
 def evaluate_node(state: RAGState) -> dict[str, object]:
     """
     Nodo de evaluación. No modifica el estado: solo registra la decisión
-    que tomará route_after_evaluate para que quede visible en logs.
-
-    Separar evaluación de routing es el patrón LangGraph recomendado:
-    los nodos transforman datos, las funciones de routing deciden caminos.
+    que tomará route_after_evaluate.
     """
-    gap = _relevance_gap(state)
+    confidence = state["confidence"]
     reformulated = state["reformulated"]
+    limit = settings.confidence_limit
 
     if reformulated:
         logger.info(
-            f"[graph] evaluate_node | gap={gap:.4f} "
-            "| ya reformulado → generando de todos modos"
+            f"[graph] evaluate_node | confidence={confidence:.4f} "
+            "| ya reformulado → generando"
         )
-    elif gap < settings.gap_threshold:
+    elif confidence < limit:
         logger.info(
-            f"[graph] evaluate_node | gap={gap:.4f} "
-            f"< umbral={settings.gap_threshold} → reformulando "
-            "(resultados genéricos, sin match específico)"
+            f"[graph] evaluate_node | confidence={confidence:.4f} "
+            f"< limit={limit} → reformulando"
         )
     else:
         logger.info(
-            f"[graph] evaluate_node | gap={gap:.4f} "
-            "| match específico detectado → generando"
+            f"[graph] evaluate_node | confidence={confidence:.4f} "
+            f">= limit={limit} → generando"
         )
 
     return {}
@@ -133,19 +99,51 @@ def evaluate_node(state: RAGState) -> dict[str, object]:
 # ======================================================
 
 
+def _format_collection_names(collections: list[LoadedCollection]) -> str:
+    """
+    Convierte paths internos en nombres legibles para el LLM.
+
+    'sociologia/George-Orwell_1984' → 'George Orwell - 1984 (sociologia)'
+    """
+    result = []
+    for c in collections:
+        raw: str = c["collection_name"]  # ej: sociologia/George-Orwell_1984
+        parts = raw.split("/", 1)
+        if len(parts) == 2:
+            namespace, name = parts
+            readable = name.replace("-", " ").replace("_", " - ", 1)
+            result.append(f"{readable} ({namespace})")
+        else:
+            result.append(raw.replace("-", " ").replace("_", " - ", 1))
+    return ", ".join(result)
+
+
 def reformulate_node(state: RAGState) -> dict[str, object]:
     """
-    Reescribe la pregunta para mejorar el recall en el siguiente retrieve.
+    Reescribe la query usando el LLM para mejorar el recall.
 
-    La reformulación es deliberadamente simple y local (sin llamada al LLM)
-    para no añadir latencia. Agrega prefijos semánticos que amplían el
-    espacio de búsqueda, igual que build_queries() en SOFT, pero enfocados
-    en el caso de baja relevancia detectada por el gap.
-
-    reformulated=True es el flag de guarda que impide un segundo ciclo.
+    Usa ask_llm_internal() en lugar de ask_llm():
+      - System prompt orientado a reformulación, no a respuesta RAG.
+      - Sin chat_memory: operación interna del grafo, no turno del usuario.
+      - Fallback a la pregunta original si el LLM falla.
     """
     original = state["question"]
-    reformulated_question = f"Explica detalladamente y con contexto: {original}"
+    collection_names = _format_collection_names(state["collections"])
+
+    reformulation_prompt = (
+        f"Una búsqueda semántica sobre [{collection_names}] devolvió resultados "
+        f"con baja relevancia para esta pregunta:\n\n"
+        f'"{original}"\n\n'
+        f"Reescribe la pregunta para maximizar la similitud semántica "
+        f"con el vocabulario y los conceptos que probablemente usan esos documentos.\n\n"
+        f"Estrategias:\n"
+        f"- Sustituye términos abstractos o coloquiales por conceptos teóricos del dominio.\n"
+        f"- Descompón la pregunta en sus conceptos nucleares y exprésalos explícitamente.\n"
+        f"- Si la pregunta es general, hazla más específica al contenido probable del documento.\n"
+        f"- Usa el vocabulario que usaría el autor, no el del usuario."
+    )
+
+    reformulated_question = ask_llm_internal(prompt=reformulation_prompt)
 
     logger.info(
         f"[graph] reformulate_node | original={original!r} "
@@ -164,13 +162,7 @@ def reformulate_node(state: RAGState) -> dict[str, object]:
 
 
 def generate_node(state: RAGState) -> dict[str, object]:
-    """
-    Construye el prompt con los chunks recuperados y llama al LLM.
-
-    Usa build_prompt() y ask_llm() del pipeline existente — sin código
-    duplicado. El historial de conversación viaja en chat_memory y llega
-    a build_messages() dentro de ask_llm(), igual que en el pipeline lineal.
-    """
+    """Construye el prompt con los chunks recuperados y llama al LLM."""
     results = state["results"]
 
     if not results:
@@ -188,10 +180,9 @@ def generate_node(state: RAGState) -> dict[str, object]:
         mode=state["mode"],
     )
 
-    gap = _relevance_gap(state)
     logger.info(
         f"[graph] generate_node | chunks={len(results)} "
-        f"| confidence={state['confidence']:.4f} | gap={gap:.4f}"
+        f"| confidence={state['confidence']:.4f}"
     )
 
     answer = ask_llm(

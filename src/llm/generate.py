@@ -89,3 +89,50 @@ def ask_llm(
     except OpenAIError as e:
         logger.exception("Error consultando LLM")
         return f"Error consultando modelo: {e}"
+
+
+REFORMULATION_SYSTEM_PROMPT: str = """
+Eres un experto en recuperación de información semántica (RAG).
+Tu única tarea es reformular preguntas para mejorar el recall en búsquedas vectoriales.
+No respondas la pregunta. No añadas explicaciones. Devuelve solo la pregunta reformulada.
+"""
+
+
+def ask_llm_internal(prompt: str) -> str:
+    """
+    Llamada al LLM para operaciones internas del grafo (ej: reformulación de queries).
+
+    Diferencias respecto a ask_llm():
+      - Usa REFORMULATION_SYSTEM_PROMPT en lugar del system prompt RAG.
+      - No acepta chat_memory: las operaciones internas no son turnos del usuario.
+      - El log distingue la llamada como "[internal]" para facilitar el debug.
+    """
+    logger.info(
+        f"[internal] Consultando LLM | model={settings.llm_model} "
+        f"| timeout={settings.llm_timeout}s | temp={settings.llm_temperature}"
+    )
+
+    messages: list[ChatCompletionMessageParam] = [
+        {"role": "system", "content": REFORMULATION_SYSTEM_PROMPT},
+        {"role": "user", "content": prompt},
+    ]
+
+    try:
+        response = client.chat.completions.create(
+            model=settings.llm_model,
+            messages=messages,
+            temperature=settings.llm_temperature,
+            timeout=settings.llm_timeout,
+        )
+
+        content = response.choices[0].message.content
+
+        if not content:
+            logger.warning("[internal] El modelo devolvio respuesta vacia.")
+            return prompt  # fallback: devuelve la pregunta original sin cambios
+
+        return str(content).strip()
+
+    except OpenAIError as e:
+        logger.exception("[internal] Error consultando LLM")
+        return prompt  # fallback: devuelve la pregunta original sin cambios
