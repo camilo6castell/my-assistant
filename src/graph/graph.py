@@ -3,31 +3,31 @@ Grafo RAG con adaptive retrieval usando LangGraph.
 
 Flujo:
                          ┌─────────────┐
-                         │   retrieve  │◄──────────────┐
-                         └──────┬──────┘               │
-                                │                      │
-                         ┌──────▼──────┐               │
-                         │  evaluate   │               │
-                         └──────┬──────┘               │
-                                │                      │
-               ┌────────────────┼────────────────┐     │
-               │ confianza ok   │ ya reformulado  │ baja confianza
-               │ o reformulado  │                 │     │
-               ▼                ▼                 ▼     │
-         ┌──────────┐     ┌──────────┐    ┌─────────────┤
-         │ generate │     │ generate │    │ reformulate │
-         └────┬─────┘     └────┬─────┘    └─────────────┘
-              │                │
-              └──────┬─────────┘
-                     ▼
-                   [END]
+                         │   retrieve  │◄───────────────┐
+                         └──────┬──────┘                │
+                                │                       │
+                         ┌──────▼──────┐                │
+                         │  evaluate   │                │
+                         └──────┬──────┘                │
+                                │                       │
+               ┌────────────────┼───────────────────┐   │
+               │ gap ok o       │ ya reformulado    │ gap bajo
+               │ reformulado    │                   │   │
+               ▼                ▼                   ▼   │
+         ┌──────────┐      ┌──────────┐    ┌────────────┤
+         │ generate │      │ generate │    │ reformulate│
+         └────┬─────┘      └────┬─────┘    └────────────┘
+              │                 │
+              └───────┬─────────┘
+                      ▼
+                    [END]
 
 El nodo evaluate no modifica el estado — solo registra la decisión.
-El routing lo toma route_after_evaluate basándose en confidence y
-el flag reformulated, que evita loops infinitos.
+El routing lo toma route_after_evaluate basándose en relevance_gap
+(diferencia max-min de scores) y el flag reformulated.
 
-build_rag_graph() devuelve el grafo compilado listo para .invoke().
-Se llama una vez y el resultado puede reutilizarse en múltiples turnos.
+Ver nodes.py para la explicación de por qué se usa gap en vez de
+un umbral absoluto sobre confidence.
 """
 
 from __future__ import annotations
@@ -37,6 +37,7 @@ from typing import Hashable
 from langgraph.graph import END, StateGraph
 
 from src.graph.nodes import (
+    _relevance_gap,
     evaluate_node,
     generate_node,
     reformulate_node,
@@ -62,21 +63,22 @@ def route_after_evaluate(state: RAGState) -> Hashable:
     """
     Decide el siguiente nodo tras evaluate:
 
-    - Si confidence >= umbral           → generate (resultados suficientes)
     - Si ya se reformuló antes          → generate (evita loop infinito)
-    - Si confidence < umbral y es nuevo → reformulate (segundo intento)
+    - Si relevance_gap >= GAP_THRESHOLD → generate (match específico)
+    - Si relevance_gap <  GAP_THRESHOLD → reformulate (resultados genéricos)
     """
-    if state["confidence"] >= settings.confidence_threshold or state["reformulated"]:
+    gap = _relevance_gap(state)
+
+    if state["reformulated"] or gap >= settings.gap_threshold:
         logger.info(
             f"[graph] route → {_GENERATE} "
-            f"(confidence={state['confidence']:.4f}, "
-            f"reformulated={state['reformulated']})"
+            f"(gap={gap:.4f}, reformulated={state['reformulated']})"
         )
         return _GENERATE
 
     logger.info(
         f"[graph] route → {_REFORMULATE} "
-        f"(confidence={state['confidence']:.4f} < {settings.confidence_threshold})"
+        f"(gap={gap:.4f} < umbral={settings.gap_threshold} → resultados genéricos)"
     )
     return _REFORMULATE
 

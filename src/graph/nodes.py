@@ -7,12 +7,33 @@ de qué nodo viene ni a cuál va: esa lógica vive en graph.py.
 
 Nodos:
   retrieve_node    ejecuta search() con la question actual
-  evaluate_node    decide si los resultados son suficientes
+  evaluate_node    calcula relevance_gap y decide la ruta
   reformulate_node reescribe la question para mejorar el recall
   generate_node    construye el prompt y llama al LLM
 
-La decisión de routing (suficiente / insuficiente / ya reformulado)
-la toma la función route_after_evaluate en graph.py, no aquí.
+--- Por qué se usa relevance_gap en lugar de un umbral absoluto ---
+
+bge-small-en-v1.5 con IndexFlatIP sobre vectores L2-normalizados produce
+similitud coseno. En la práctica, el piso del modelo para cualquier par
+de textos en español es ~0.62-0.65, incluso para queries completamente
+off-topic. Un umbral absoluto (ej. 0.55) nunca se activa porque todos
+los scores caen por encima de ese piso.
+
+La solución es medir dispersión relativa:
+
+    relevance_gap = score_max - score_min
+
+Cuando el retriever encuentra algo realmente relevante, el top-1 tiene
+un score notablemente más alto que el top-K → gap grande → relevante.
+Cuando devuelve resultados genéricos sin match real, todos los scores
+son similares entre sí → gap pequeño → baja relevancia real.
+
+Ejemplos observados con los logs del usuario:
+  on-topic real (fascismo vs Freud):   0.7700 avg, gap estimado ~0.06+
+  off-topic (gato vs Freud):           0.7172 avg, gap estimado ~0.02-0.03
+
+GAP_THRESHOLD = 0.05 detecta la diferencia entre "el modelo encontró
+algo específico" y "el modelo devolvió lo menos malo disponible".
 """
 
 from __future__ import annotations
@@ -24,9 +45,20 @@ from src.retrieval.search import search
 from src.utils.logger import logger
 from src.config.settings import settings
 
-# Umbral mínimo de confianza para aceptar los resultados sin reformular.
-# El score es similitud coseno (IndexFlatIP sobre vectores normalizados),
-# por lo que el rango útil es [0.0, 1.0].
+
+def _relevance_gap(state: RAGState) -> float:
+    """
+    Diferencia entre el mejor y el peor score de los resultados actuales.
+
+    Un gap grande indica que el top-1 destaca sobre el resto → match real.
+    Un gap pequeño indica que todos los resultados son igualmente genéricos.
+    Retorna 0.0 si no hay resultados.
+    """
+    results = state["results"]
+    if not results:
+        return 0.0
+    scores = [r.score for r in results]
+    return max(scores) - min(scores)
 
 
 # ======================================================
@@ -73,23 +105,24 @@ def evaluate_node(state: RAGState) -> dict[str, object]:
     Separar evaluación de routing es el patrón LangGraph recomendado:
     los nodos transforman datos, las funciones de routing deciden caminos.
     """
-    confidence = state["confidence"]
+    gap = _relevance_gap(state)
     reformulated = state["reformulated"]
 
     if reformulated:
         logger.info(
-            f"[graph] evaluate_node | confidence={confidence:.4f} "
+            f"[graph] evaluate_node | gap={gap:.4f} "
             "| ya reformulado → generando de todos modos"
         )
-    elif confidence < settings.confidence_threshold:
+    elif gap < settings.gap_threshold:
         logger.info(
-            f"[graph] evaluate_node | confidence={confidence:.4f} "
-            f"< umbral={settings.confidence_threshold} → reformulando"
+            f"[graph] evaluate_node | gap={gap:.4f} "
+            f"< umbral={settings.gap_threshold} → reformulando "
+            "(resultados genéricos, sin match específico)"
         )
     else:
         logger.info(
-            f"[graph] evaluate_node | confidence={confidence:.4f} "
-            "| suficiente → generando"
+            f"[graph] evaluate_node | gap={gap:.4f} "
+            "| match específico detectado → generando"
         )
 
     return {}
@@ -107,12 +140,11 @@ def reformulate_node(state: RAGState) -> dict[str, object]:
     La reformulación es deliberadamente simple y local (sin llamada al LLM)
     para no añadir latencia. Agrega prefijos semánticos que amplían el
     espacio de búsqueda, igual que build_queries() en SOFT, pero enfocados
-    en el caso de baja confianza.
+    en el caso de baja relevancia detectada por el gap.
 
     reformulated=True es el flag de guarda que impide un segundo ciclo.
     """
     original = state["question"]
-
     reformulated_question = f"Explica detalladamente y con contexto: {original}"
 
     logger.info(
@@ -156,9 +188,10 @@ def generate_node(state: RAGState) -> dict[str, object]:
         mode=state["mode"],
     )
 
+    gap = _relevance_gap(state)
     logger.info(
         f"[graph] generate_node | chunks={len(results)} "
-        f"| confidence={state['confidence']:.4f}"
+        f"| confidence={state['confidence']:.4f} | gap={gap:.4f}"
     )
 
     answer = ask_llm(
