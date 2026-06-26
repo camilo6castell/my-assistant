@@ -10,6 +10,7 @@ class ChatSession:
     def __init__(self) -> None:
         self.context_manager: ContextManager = ContextManager()
         self.soft_mode: bool = True
+        self.agent_active: bool = True
         self.chat_memory: list[TurnMemory] = []
 
     # =====================================================
@@ -44,6 +45,17 @@ class ChatSession:
         return self.mode
 
     # =====================================================
+    # AGENT
+    # =====================================================
+
+    # @property
+    # def agent(self) -> str:
+    #     return SOFT if self.soft_mode else HARD
+
+    def toggle_agent(self) -> None:
+        self.agent_active = not self.agent_active
+
+    # =====================================================
     # MEMORY
     # =====================================================
 
@@ -75,4 +87,4 @@ class ChatSession:
             names = [ctx.split("/")[-1] for ctx in sorted(active)]
             ctx_label = ", ".join(names)
 
-        return f"[{ctx_label} | {mode_label}] > "
+        return f"[ CONTEXT: {ctx_label} | MODE: {mode_label} | AGENT: {'ON' if self.agent_active else 'OFF'} ]\n> "
