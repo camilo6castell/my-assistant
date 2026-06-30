@@ -33,10 +33,6 @@ def extract_main_content(url: str) -> str | None:
 
 
 def main() -> None:
-    if len(sys.argv) != 4:
-        print("Uso: python -m src.ingest.web_ingest <categoria> <coleccion> <url>")
-        return
-
     category: str = sys.argv[1]
     collection_name: str = sys.argv[2]
     url: str = sys.argv[3]

@@ -28,7 +28,8 @@ class Settings(BaseSettings):
     """
 
     model_config = SettingsConfigDict(
-        env_file=".env",
+        # env_file=".env",
+        env_file=(".env", ".env.gemini"),
         env_file_encoding="utf-8",
         case_sensitive=False,
         extra="ignore",
@@ -96,7 +97,6 @@ class Settings(BaseSettings):
     # Con N colecciones mide source dominance (mayor = match).
     # Sobreescribible en .env: CONFIDENCE_LIMIT=0.20
     confidence_limit: float = Field(default=0.79, ge=0.0, le=1.0)
-
 
     # API
     api_host: str = Field(default="127.0.0.1")

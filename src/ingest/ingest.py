@@ -73,9 +73,6 @@ def read_file(path: Path) -> list[tuple[int, str]]:
 
 
 def main() -> None:
-    if len(sys.argv) != 3:
-        print("Uso: python -m src.ingest.ingest <categoria> <coleccion>")
-        return
 
     category: str = sys.argv[1]
     collection_name: str = sys.argv[2]

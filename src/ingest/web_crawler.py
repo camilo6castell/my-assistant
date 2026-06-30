@@ -83,15 +83,16 @@ def get_links(url: str, domain: str) -> set[str]:
 
 
 def main() -> None:
-    if len(sys.argv) < 3:
-        logger.error("Argumentos insuficientes.")
-        print("Uso: python -m src.ingest.web_crawler <collection> <URL_BASE>")
-        return
 
-    collection: str = sys.argv[1]
-    start_url: str = sys.argv[2]
+    print(sys.argv)
 
-    logger.info(f"Iniciando crawler | collection={collection}")
+    category: str = sys.argv[1]
+    collection_name: str = sys.argv[2]
+    start_url: str = sys.argv[3]
+
+    collection: str = f"{category}/{collection_name}"
+
+    logger.info(f"Iniciando crawler:{collection}")
 
     collection_data: RawCollection = load_collection(collection)
     domain: str = urlparse(start_url).netloc
