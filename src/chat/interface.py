@@ -265,6 +265,9 @@ def _handle_agent_question(session: ChatSession, question: str) -> None:
         "confidence": 0.0,
         "reformulated": False,
         "answer": "",
+        "review_passed": False,
+        "review_feedback": "",
+        "review_attempts": 0,
     }
 
     final_state: RAGState = graph.invoke(initial_state)  # type: ignore[attr-defined]

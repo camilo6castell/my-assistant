@@ -29,7 +29,7 @@ class Settings(BaseSettings):
 
     model_config = SettingsConfigDict(
         # env_file=".env",
-        env_file=(".env", ".env.gemini"),
+        env_file=(".env", ".env.providers"),
         env_file_encoding="utf-8",
         case_sensitive=False,
         extra="ignore",
@@ -84,13 +84,51 @@ class Settings(BaseSettings):
 
     max_turns: int = Field(default=4, gt=0)
 
-    # LLM
-    # llm_provider: str = Field(default="fastflowlm")
+    # LLM (legacy / default provider — se mantiene por compatibilidad con
+    # .env.local y .env.gemini, que siguen sobreescribiendo estas claves
+    # cuando se usa un único modelo)
     llm_base_url: str = Field(default="http://127.0.0.1:52625/v1")
     llm_api_key: str = Field(default="flm")
     llm_model: str = Field(default="qwen3:8b")
     llm_temperature: float = Field(default=0.2, ge=0.0, le=2.0)
     llm_timeout: int = Field(default=600, gt=0)
+
+    # ======================================================
+    # MULTI-PROVIDER LLM
+    # ======================================================
+    # Arquitectura "provider-per-node": cada nodo del grafo puede usar un
+    # proveedor distinto (local, gemini, y los que se agreguen después)
+    # sin tocar graph.py ni nodes.py. Ver src/llm/providers.py.
+    #
+    # local  -> modelo en runtime local (FastFlowLM/Ollama, OpenAI-compatible)
+    # gemini -> Gemini vía endpoint OpenAI-compatible de Google
+    #
+    # Si LOCAL_* / GEMINI_* no están seteados, caen por defecto a llm_*
+    # (compatibilidad con el setup mono-modelo actual).
+
+    local_base_url: str = Field(default="")
+    local_api_key: str = Field(default="")
+    local_model: str = Field(default="")
+
+    gemini_base_url: str = Field(default="")
+    gemini_api_key: str = Field(default="")
+    gemini_model: str = Field(default="")
+
+    # Qué proveedor usa cada nodo del grafo. Configurable en .env,
+    # sin tocar código — esto es lo que hace la arquitectura extensible.
+    reformulate_provider: str = Field(default="gemini")
+    generate_provider: str = Field(default="local")
+
+    @model_validator(mode="after")
+    def _fallback_provider_configs(self) -> "Settings":
+        """Si LOCAL_*/GEMINI_* no se definieron, usar llm_* como 'local'."""
+        if not self.local_base_url:
+            self.local_base_url = self.llm_base_url
+        if not self.local_api_key:
+            self.local_api_key = self.llm_api_key
+        if not self.local_model:
+            self.local_model = self.llm_model
+        return self
 
     # Agent — umbral de foco temático para el grafo LangGraph.
     # Con 1 colección mide spread de chunk_index (menor = match).

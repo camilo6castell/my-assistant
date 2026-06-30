@@ -1,7 +1,13 @@
-beautifulsoup4==4.14.3
-numpy==2.4.2
-openai==2.36.0
-pypdf==6.7.2
-python-dotenv==1.2.2
-readability-lxml==0.8.4.1
-requests==2.34.0
+# Generado a partir de los imports reales del proyecto (no existía
+# requirements.txt en el zip original — agregado para que el proyecto
+# sea instalable de forma reproducible).
+openai>=1.40.0
+langgraph>=0.2.0
+fastapi>=0.111.0
+uvicorn>=0.30.0
+pydantic>=2.7.0
+pydantic-settings>=2.3.0
+faiss-cpu>=1.8.0
+sentence-transformers>=3.0.0
+beautifulsoup4>=4.12.0
+requests>=2.32.0

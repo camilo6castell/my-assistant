@@ -16,7 +16,7 @@ from openai.types.chat import ChatCompletionMessageParam
 
 from src.chat.types import TurnMemory
 from src.config.settings import settings
-from src.llm.client import client
+from src.llm.providers import get_client
 from src.utils.logger import logger
 
 SYSTEM_PROMPT: str = """
@@ -63,16 +63,20 @@ def build_messages(
 def ask_llm(
     prompt: str,
     chat_memory: list[TurnMemory],
+    provider: str | None = None,
 ) -> str:
 
+    provider_name = provider or settings.generate_provider
+    client, config = get_client(provider_name)
+
     logger.info(
-        f"Consultando LLM | model={settings.llm_model} "
+        f"Consultando LLM | provider={provider_name} | model={config.model} "
         f"| timeout={settings.llm_timeout}s | temp={settings.llm_temperature}"
     )
 
     try:
         response = client.chat.completions.create(
-            model=settings.llm_model,
+            model=config.model,
             messages=build_messages(prompt=prompt, chat_memory=chat_memory),
             temperature=settings.llm_temperature,
             timeout=settings.llm_timeout,
@@ -98,7 +102,7 @@ No respondas la pregunta. No añadas explicaciones. Devuelve solo la pregunta re
 """
 
 
-def ask_llm_internal(prompt: str) -> str:
+def ask_llm_internal(prompt: str, provider: str | None = None) -> str:
     """
     Llamada al LLM para operaciones internas del grafo (ej: reformulación de queries).
 
@@ -106,9 +110,14 @@ def ask_llm_internal(prompt: str) -> str:
       - Usa REFORMULATION_SYSTEM_PROMPT en lugar del system prompt RAG.
       - No acepta chat_memory: las operaciones internas no son turnos del usuario.
       - El log distingue la llamada como "[internal]" para facilitar el debug.
+      - provider por defecto = settings.reformulate_provider (gemini),
+        independiente del proveedor que use generate_node.
     """
+    provider_name = provider or settings.reformulate_provider
+    client, config = get_client(provider_name)
+
     logger.info(
-        f"[internal] Consultando LLM | model={settings.llm_model} "
+        f"[internal] Consultando LLM | provider={provider_name} | model={config.model} "
         f"| timeout={settings.llm_timeout}s | temp={settings.llm_temperature}"
     )
 
@@ -119,7 +128,7 @@ def ask_llm_internal(prompt: str) -> str:
 
     try:
         response = client.chat.completions.create(
-            model=settings.llm_model,
+            model=config.model,
             messages=messages,
             temperature=settings.llm_temperature,
             timeout=settings.llm_timeout,

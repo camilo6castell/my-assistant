@@ -15,6 +15,10 @@ Campos:
   reformulated   True si ya se reformuló la query en esta ejecución
                  (evita loops infinitos en el grafo)
   answer         respuesta final del LLM
+  review_passed    True si review_node aprobó la respuesta (o no se revisó)
+  review_feedback  motivo del rechazo, usado para regenerar con corrección
+  review_attempts  cuántas veces se regeneró tras un rechazo del reviewer
+                   (evita loops infinitos: ver MAX_REVIEW_ATTEMPTS)
 
 NOTA: este módulo NO usa `from __future__ import annotations`.
 LangGraph llama get_type_hints(RAGState) en runtime para inspeccionar
@@ -42,3 +46,6 @@ class RAGState(TypedDict):
     confidence: float
     reformulated: bool
     answer: str
+    review_passed: bool
+    review_feedback: str
+    review_attempts: int

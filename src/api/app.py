@@ -227,6 +227,9 @@ async def query_agent(request: QueryRequest) -> QueryResponse:
         "confidence": 0.0,
         "reformulated": False,
         "answer": "",
+        "review_passed": False,
+        "review_feedback": "",
+        "review_attempts": 0,
     }
 
     final_state: RAGState = _rag_graph.invoke(initial_state)  # type: ignore[union-attr]

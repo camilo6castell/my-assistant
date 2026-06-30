@@ -26,14 +26,21 @@ produce rangos distintos, ajusta CONFIDENCE_LIMIT en .env.
 
 from __future__ import annotations
 
+import json
+
 from src.config.settings import settings
 from src.context.models import SearchResult
 from src.graph.state import RAGState
 from src.llm.generate import ask_llm, ask_llm_internal
-from src.prompts.builder import build_prompt
+from src.prompts.builder import build_correction_prompt, build_prompt, build_review_prompt
 from src.retrieval.search import search
 from src.utils.logger import logger
 from src.context.manager import LoadedCollection
+
+# Máximo de ciclos generate → review → generate antes de dar la respuesta
+# tal como está. Valor de 1 = un solo reintento (2 llamadas a generate total).
+# Subir esto consume más tokens/tiempo: en un local runner es un tradeoff real.
+MAX_REVIEW_ATTEMPTS = 1
 
 # ======================================================
 # RETRIEVE
@@ -143,7 +150,10 @@ def reformulate_node(state: RAGState) -> dict[str, object]:
         f"- Usa el vocabulario que usaría el autor, no el del usuario."
     )
 
-    reformulated_question = ask_llm_internal(prompt=reformulation_prompt)
+    reformulated_question = ask_llm_internal(
+        prompt=reformulation_prompt,
+        provider=settings.reformulate_provider,
+    )
 
     logger.info(
         f"[graph] reformulate_node | original={original!r} "
@@ -188,6 +198,133 @@ def generate_node(state: RAGState) -> dict[str, object]:
     answer = ask_llm(
         prompt=prompt,
         chat_memory=state["chat_memory"],
+        provider=settings.generate_provider,
     )
 
     return {"answer": answer}
+
+
+# ======================================================
+# REVIEW
+# ======================================================
+
+
+def review_node(state: RAGState) -> dict[str, object]:
+    """
+    Evalúa la respuesta de generate_node usando Gemini como reviewer.
+
+    Qué verifica:
+      - Anclaje: ¿las afirmaciones están en el contexto o son alucinaciones?
+      - Citas: ¿la respuesta menciona las fuentes cuando hace afirmaciones concretas?
+
+    Protocolo de respuesta esperado de Gemini: JSON puro.
+      {"passed": true}
+      {"passed": false, "feedback": "..."}
+
+    Si Gemini devuelve algo que no es JSON válido (timeout, respuesta libre,
+    error de red), se asume passed=True para no bloquear al usuario.
+    Falla silenciosa explícita: mejor entregar la respuesta sin revisar que
+    no entregar nada.
+
+    Si review_attempts ya alcanzó MAX_REVIEW_ATTEMPTS, también se aprueba
+    sin importar el feedback — evita loops infinitos.
+    """
+    results = state["results"]
+    attempts = state.get("review_attempts", 0)
+
+    if attempts >= MAX_REVIEW_ATTEMPTS:
+        logger.warning(
+            f"[graph] review_node | MAX_REVIEW_ATTEMPTS={MAX_REVIEW_ATTEMPTS} alcanzado "
+            "→ aprobando respuesta sin revisar"
+        )
+        return {"review_passed": True, "review_feedback": ""}
+
+    context_chunks = [
+        f"FUENTE: {r.source}\nCOLECCION: {r.collection}\nPAGINA: {r.page}\n\n{r.text}"
+        for r in results
+    ]
+
+    review_prompt = build_review_prompt(
+        context_chunks=context_chunks,
+        question=state["question"],
+        answer=state["answer"],
+    )
+
+    raw = ask_llm_internal(
+        prompt=review_prompt,
+        provider=settings.reformulate_provider,  # Gemini — el reviewer externo
+    )
+
+    logger.info(f"[graph] review_node | respuesta raw del reviewer: {raw!r}")
+
+    try:
+        # Gemini a veces envuelve el JSON en ```json ... ``` aunque se le pide
+        # que no lo haga. Limpieza defensiva antes de parsear.
+        clean = raw.strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
+        result = json.loads(clean)
+        passed: bool = bool(result.get("passed", True))
+        feedback: str = str(result.get("feedback", ""))
+    except (json.JSONDecodeError, AttributeError):
+        logger.warning("[graph] review_node | no se pudo parsear JSON → aprobando por defecto")
+        passed = True
+        feedback = ""
+
+    if passed:
+        logger.info("[graph] review_node | ✓ respuesta aprobada")
+    else:
+        logger.info(f"[graph] review_node | ✗ respuesta rechazada | feedback={feedback!r}")
+
+    return {
+        "review_passed": passed,
+        "review_feedback": feedback,
+        "review_attempts": attempts + 1,
+    }
+
+
+def correct_node(state: RAGState) -> dict[str, object]:
+    """
+    Regenera la respuesta incorporando el feedback del reviewer.
+
+    Es intencionalmente un nodo separado de generate_node (en vez de
+    reutilizarlo con un flag) para que el grafo sea legible: generate
+    produce, correct corrige. Cada nodo tiene una sola responsabilidad.
+    """
+    results = state["results"]
+
+    context_chunks = [
+        f"FUENTE: {r.source}\nCOLECCION: {r.collection}\nPAGINA: {r.page}\n\n{r.text}"
+        for r in results
+    ]
+
+    correction_prompt = build_correction_prompt(
+        context_chunks=context_chunks,
+        question=state["question"],
+        previous_answer=state["answer"],
+        feedback=state["review_feedback"],
+        mode=state["mode"],
+    )
+
+    logger.info(
+        f"[graph] correct_node | reintento={state['review_attempts']} "
+        f"| feedback={state['review_feedback']!r}"
+    )
+
+    corrected = ask_llm(
+        prompt=correction_prompt,
+        chat_memory=state["chat_memory"],
+        provider=settings.generate_provider,
+    )
+
+    return {"answer": corrected, "review_passed": False}
+
+
+def route_after_review(state: RAGState) -> str:
+    """
+    - review_passed=True  → END
+    - review_passed=False → correct (regenerar con feedback)
+    """
+    if state.get("review_passed", True):
+        logger.info("[graph] route_after_review → END")
+        return "end"
+    logger.info("[graph] route_after_review → correct")
+    return "correct"
