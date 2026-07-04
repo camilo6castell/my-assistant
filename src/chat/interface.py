@@ -21,6 +21,7 @@ Sintaxis de <tokens>:
 """
 
 import warnings
+from typing import cast
 
 from src.chat.session import ChatSession
 from src.context.manager import LoadedCollection
@@ -270,7 +271,12 @@ def _handle_agent_question(session: ChatSession, question: str) -> None:
         "review_attempts": 0,
     }
 
-    final_state: RAGState = graph.invoke(initial_state)  # type: ignore[attr-defined]
+    # CompiledStateGraph.invoke() está tipado en la librería como
+    # `dict[str, Any] | Any` (no como el StateT genérico), así que un
+    # cast explícito es más honesto aquí que ignorar el error a ciegas:
+    # documenta justo el punto donde termina la precisión de LangGraph
+    # y empieza la nuestra (mismo patrón que src/api/app.py).
+    final_state = cast(RAGState, graph.invoke(initial_state))
 
     answer = final_state["answer"]
     confidence = final_state["confidence"]

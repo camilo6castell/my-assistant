@@ -23,10 +23,11 @@ Diseño stateless:
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
-from typing import AsyncGenerator
+from typing import AsyncGenerator, cast
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from langgraph.graph.state import CompiledStateGraph
 
 from src.api.schemas import (
     CollectionsResponse,
@@ -48,7 +49,7 @@ from src.utils.logger import logger
 
 # El grafo LangGraph se compila una vez al arrancar y se reutiliza
 # en todos los requests — compilarlo en cada request añadiría ~100ms.
-_rag_graph: object = None
+_rag_graph: CompiledStateGraph[RAGState] | None = None
 _context_manager: ContextManager = ContextManager()
 
 
@@ -232,7 +233,18 @@ async def query_agent(request: QueryRequest) -> QueryResponse:
         "review_attempts": 0,
     }
 
-    final_state: RAGState = _rag_graph.invoke(initial_state)  # type: ignore[union-attr]
+    # _rag_graph se puebla en lifespan() al arrancar la app; en un request
+    # real nunca es None. El assert lo hace explícito para mypy y actúa
+    # como red de seguridad en runtime si algo invoca el endpoint antes
+    # de que termine el startup.
+    assert _rag_graph is not None, "_rag_graph no inicializado: falta lifespan()"
+
+    # CompiledStateGraph.invoke() está tipado en la librería como
+    # `dict[str, Any] | Any` (no como el StateT genérico), así que un
+    # cast explícito es más honesto aquí que un dict[str, object] o que
+    # ignorar el error a ciegas: documenta justo el punto donde termina
+    # la precisión de LangGraph y empieza la nuestra.
+    final_state = cast(RAGState, _rag_graph.invoke(initial_state))
 
     answer = final_state["answer"]
 

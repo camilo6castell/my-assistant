@@ -46,6 +46,7 @@ from __future__ import annotations
 from typing import Hashable
 
 from langgraph.graph import END, StateGraph
+from langgraph.graph.state import CompiledStateGraph
 
 from src.config.settings import settings
 from src.graph.nodes import (
@@ -91,7 +92,7 @@ def route_after_evaluate(state: RAGState) -> Hashable:
     return _REFORMULATE
 
 
-def build_rag_graph() -> object:
+def build_rag_graph() -> CompiledStateGraph[RAGState]:
     """Construye y compila el grafo RAG."""
     graph: StateGraph[RAGState] = StateGraph(RAGState)
 

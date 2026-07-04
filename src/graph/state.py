@@ -49,3 +49,28 @@ class RAGState(TypedDict):
     review_passed: bool
     review_feedback: str
     review_attempts: int
+
+
+class RAGStateUpdate(TypedDict, total=False):
+    """
+    Actualización parcial de RAGState.
+
+    Cada nodo del grafo (src/graph/nodes.py) devuelve solo el subconjunto
+    de campos que modifica -- LangGraph aplica el resto como merge parcial
+    sobre el estado existente (ver docstring del módulo). `total=False`
+    modela justamente eso: todos los campos son opcionales en el dict de
+    retorno, pero cada uno que sí esté presente queda tipado igual que en
+    RAGState, en vez de perder precisión con `dict[str, object]`.
+    """
+
+    question: str
+    mode: str
+    collections: list[LoadedCollection]
+    chat_memory: list[TurnMemory]
+    results: list[SearchResult]
+    confidence: float
+    reformulated: bool
+    answer: str
+    review_passed: bool
+    review_feedback: str
+    review_attempts: int

@@ -19,6 +19,7 @@ Ejemplos:
 from __future__ import annotations
 
 import sys
+from typing import Callable
 
 
 def _cmd_chat() -> None:
@@ -129,7 +130,9 @@ def _print_help() -> None:
     print(__doc__)
 
 
-COMMANDS: dict[str, tuple] = {
+CommandFn = Callable[..., None]
+
+COMMANDS: dict[str, tuple[CommandFn, int]] = {
     "chat": (_cmd_chat, 0),
     "api": (_cmd_api, 0),
     "ingest": (_cmd_ingest, 2),

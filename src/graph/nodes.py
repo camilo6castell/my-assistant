@@ -30,7 +30,7 @@ import json
 
 from src.config.settings import settings
 from src.context.models import SearchResult
-from src.graph.state import RAGState
+from src.graph.state import RAGState, RAGStateUpdate
 from src.llm.generate import ask_llm, ask_llm_internal
 from src.prompts.builder import build_correction_prompt, build_prompt, build_review_prompt
 from src.retrieval.search import search
@@ -47,7 +47,7 @@ MAX_REVIEW_ATTEMPTS = 1
 # ======================================================
 
 
-def retrieve_node(state: RAGState) -> dict[str, object]:
+def retrieve_node(state: RAGState) -> RAGStateUpdate:
     """Recupera chunks relevantes desde las colecciones FAISS activas."""
     logger.info(
         f"[graph] retrieve_node | question={state['question']!r} "
@@ -73,7 +73,7 @@ def retrieve_node(state: RAGState) -> dict[str, object]:
 # ======================================================
 
 
-def evaluate_node(state: RAGState) -> dict[str, object]:
+def evaluate_node(state: RAGState) -> RAGStateUpdate:
     """
     Nodo de evaluación. No modifica el estado: solo registra la decisión
     que tomará route_after_evaluate.
@@ -125,7 +125,7 @@ def _format_collection_names(collections: list[LoadedCollection]) -> str:
     return ", ".join(result)
 
 
-def reformulate_node(state: RAGState) -> dict[str, object]:
+def reformulate_node(state: RAGState) -> RAGStateUpdate:
     """
     Reescribe la query usando el LLM para mejorar el recall.
 
@@ -171,7 +171,7 @@ def reformulate_node(state: RAGState) -> dict[str, object]:
 # ======================================================
 
 
-def generate_node(state: RAGState) -> dict[str, object]:
+def generate_node(state: RAGState) -> RAGStateUpdate:
     """Construye el prompt con los chunks recuperados y llama al LLM."""
     results = state["results"]
 
@@ -209,7 +209,7 @@ def generate_node(state: RAGState) -> dict[str, object]:
 # ======================================================
 
 
-def review_node(state: RAGState) -> dict[str, object]:
+def review_node(state: RAGState) -> RAGStateUpdate:
     """
     Evalúa la respuesta de generate_node usando Gemini como reviewer.
 
@@ -281,7 +281,7 @@ def review_node(state: RAGState) -> dict[str, object]:
     }
 
 
-def correct_node(state: RAGState) -> dict[str, object]:
+def correct_node(state: RAGState) -> RAGStateUpdate:
     """
     Regenera la respuesta incorporando el feedback del reviewer.
 
