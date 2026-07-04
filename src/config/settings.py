@@ -54,6 +54,79 @@ class Settings(BaseSettings):
     # Embeddings
     embed_model: str = Field(default="BAAI/bge-small-en-v1.5")
 
+    # ======================================================
+    # EMBEDDING BACKEND
+    # ======================================================
+    # EMBEDDING_BACKEND controla qué runtime genera los embeddings:
+    #
+    #   sentence_transformers  → carga el modelo localmente en Python
+    #                            (CPU o GPU según disponibilidad de torch).
+    #                            Sin servidor externo. Default.
+    #
+    #   ollama                 → petición HTTP a Ollama (GPU Vulkan).
+    #                            Requiere: EMBEDDING_BASE_URL, EMBEDDING_MODEL.
+    #
+    #   fastflowlm             → petición HTTP a FastFlowLM (NPU).
+    #                            Requiere: EMBEDDING_BASE_URL, EMBEDDING_MODEL.
+    #                            Usa el endpoint OpenAI-compatible /v1/embeddings.
+    #
+    # EMBEDDING_MODEL sobreescribe embed_model cuando el backend NO es
+    # sentence_transformers — permite tener modelos distintos por backend
+    # sin tocar embed_model (que es el nombre HuggingFace para ST).
+    #
+    # IMPORTANTE: cambiar backend o modelo invalida los índices existentes.
+    # Los vectores de backends distintos viven en rutas separadas:
+    #   /srv/ai/vector_stores/<backend>/<model_safe>/<category>/<collection>/
+    # donde model_safe reemplaza '/' por '_' para evitar subdirectorios.
+
+    embedding_backend: str = Field(default="sentence_transformers")
+    embedding_base_url: str = Field(default="http://127.0.0.1:11434")
+    embedding_api_key: str = Field(default="ollama")
+
+    @property
+    def embedding_model(self) -> str:
+        """Modelo efectivo: EMBEDDING_MODEL si está definido, si no embed_model."""
+        return self._embedding_model_override or self.embed_model
+
+    # Campo interno para el override; se lee del env como EMBEDDING_MODEL.
+    # El nombre con guion bajo evita colisión con la property pública.
+    _embedding_model_override: str = ""
+
+    @model_validator(mode="after")
+    def _resolve_embedding_model(self) -> "Settings":
+        """
+        Pydantic no puede definir una property que también lea del env.
+        Solución: leer EMBEDDING_MODEL manualmente en el validator y
+        guardarlo en el atributo privado que usa la property.
+        """
+        import os
+
+        override = os.environ.get("EMBEDDING_MODEL", "").strip()
+        object.__setattr__(self, "_embedding_model_override", override)
+        return self
+
+    @property
+    def embedding_model_safe(self) -> str:
+        """Nombre del modelo sanitizado para usar como directorio."""
+        return self.embedding_model.replace("/", "_").replace(":", "_")
+
+    @property
+    def vector_store_path_for_backend(self) -> Path:
+        """
+        Ruta base que incluye backend y modelo:
+        /srv/ai/vector_stores/<backend>/<model_safe>/
+
+        Los índices de backends/modelos distintos son incompatibles
+        (viven en espacios vectoriales distintos), por eso se aíslan
+        en subdirectorios separados en vez de mezclarlos.
+        """
+        return (
+            self.ai_home
+            / "vector_stores"
+            / self.embedding_backend
+            / self.embedding_model_safe
+        )
+
     # Chunking
     chunk_size: int = Field(default=500, gt=0)
     chunk_overlap: int = Field(default=100, ge=0)

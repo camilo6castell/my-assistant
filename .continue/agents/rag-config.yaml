@@ -74,14 +74,14 @@ models:
   ########################################################
   # EMBEDDINGS
   ########################################################
-  - name: Nomic Embeddings
+  - name: BGE-M3
     provider: ollama
-    model: nomic-embed-text
+    model: bge-m3
     apiBase: http://127.0.0.1:11434
     roles:
       - embed
     embedOptions:
-      maxChunkSize: 384
+      maxChunkSize: 512
       maxBatchSize: 16
     defaultCompletionOptions:
       keepAlive: 1800
