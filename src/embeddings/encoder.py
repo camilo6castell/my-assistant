@@ -38,14 +38,16 @@ Normalización:
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections.abc import Sequence
 from functools import lru_cache
+from typing import cast
+from numpy.typing import NDArray
 
 import numpy as np
 from openai import OpenAI
 
 from src.config.settings import settings
 from src.utils.logger import logger
-
 
 # ======================================================
 # INTERFAZ BASE
@@ -62,14 +64,14 @@ class EmbeddingEncoder(ABC):
     """
 
     @abstractmethod
-    def _encode_raw(self, texts: list[str]) -> np.ndarray:
+    def _encode_raw(self, texts: Sequence[str]) -> np.ndarray:
         """
         Devuelve embeddings SIN normalizar, como floats de cualquier dtype.
         Cada subclase implementa solo esto.
         """
         ...
 
-    def encode(self, texts: list[str]) -> np.ndarray:
+    def encode(self, texts: Sequence[str]) -> np.ndarray:
         """
         Devuelve embeddings L2-normalizados, float32, C-contiguos.
         Este es el contrato con el resto del sistema.
@@ -80,8 +82,8 @@ class EmbeddingEncoder(ABC):
         # L2-normalización en numpy: arr / ||arr||₂ por fila.
         # Equivalente a faiss.normalize_L2 pero sin depender de faiss aquí.
         norms = np.linalg.norm(arr, axis=1, keepdims=True)
-        norms = np.where(norms == 0, 1.0, norms)   # evita división por cero
-        return arr / norms
+        norms = np.where(norms == 0, 1.0, norms)  # evita división por cero
+        return cast(NDArray[np.float32], arr / norms)
 
 
 # ======================================================
@@ -104,12 +106,12 @@ class SentenceTransformersEncoder(EmbeddingEncoder):
         logger.info(
             f"[embeddings] Backend: sentence_transformers | model={settings.embedding_model}"
         )
-        self._model = SentenceTransformer(settings.embedding_model)
+        self._model: SentenceTransformer = SentenceTransformer(settings.embedding_model)
 
-    def _encode_raw(self, texts: list[str]) -> np.ndarray:
+    def _encode_raw(self, texts: Sequence[str]) -> np.ndarray:
         # normalize_embeddings=False porque la normalización la hace encode()
         result = self._model.encode(texts, normalize_embeddings=False)
-        return np.array(result)
+        return np.asarray(result)
 
 
 # ======================================================
@@ -142,23 +144,25 @@ class HttpEmbeddingEncoder(EmbeddingEncoder):
             f"base_url={settings.embedding_base_url} | "
             f"model={settings.embedding_model}"
         )
-        self._client = OpenAI(
+        self._client: OpenAI = OpenAI(
             base_url=f"{settings.embedding_base_url.rstrip('/')}/v1",
             api_key=settings.embedding_api_key,
         )
-        self._model = settings.embedding_model
+        self._model: str = settings.embedding_model
 
-    def _encode_raw(self, texts: list[str]) -> np.ndarray:
+    def _encode_raw(self, texts: Sequence[str]) -> np.ndarray:
         all_embeddings: list[list[float]] = []
 
         for i in range(0, len(texts), self.BATCH_SIZE):
-            batch = texts[i : i + self.BATCH_SIZE]
+            batch = list(texts[i : i + self.BATCH_SIZE])
             response = self._client.embeddings.create(
                 model=self._model,
                 input=batch,
             )
             # La API devuelve los embeddings en el mismo orden que el input.
-            batch_embeddings = [item.embedding for item in response.data]
+            batch_embeddings: list[list[float]] = [
+                item.embedding for item in response.data
+            ]
             all_embeddings.extend(batch_embeddings)
 
         return np.array(all_embeddings, dtype=np.float32)
@@ -192,8 +196,7 @@ def get_encoder() -> EmbeddingEncoder:
     if backend not in _BACKEND_MAP:
         valid = ", ".join(sorted(_BACKEND_MAP))
         raise ValueError(
-            f"EMBEDDING_BACKEND={backend!r} no reconocido. "
-            f"Valores válidos: {valid}"
+            f"EMBEDDING_BACKEND={backend!r} no reconocido. " f"Valores válidos: {valid}"
         )
 
     encoder_cls = _BACKEND_MAP[backend]
