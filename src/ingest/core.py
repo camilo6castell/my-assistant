@@ -21,17 +21,13 @@ from typing import TYPE_CHECKING, TypedDict
 import faiss
 import numpy as np
 from pydantic import BaseModel, ConfigDict
-from sentence_transformers import SentenceTransformer
 
 from src.config.settings import settings
-
+from src.embeddings.encoder import get_encoder
 from src.utils.logger import logger
 
 if TYPE_CHECKING:
     from faiss import Index as FaissIndex
-
-
-model = SentenceTransformer(settings.embed_model)
 
 
 # ======================================================
@@ -125,7 +121,7 @@ def chunk_text(text: str) -> list[str]:
 
 
 def get_collection_paths(collection: str) -> CollectionPaths:
-    vector_path = settings.vector_store_path / collection
+    vector_path = settings.vector_store_path_for_backend / collection
     vector_path.mkdir(parents=True, exist_ok=True)
 
     return CollectionPaths(
@@ -219,15 +215,11 @@ def save_collection(
 
 
 def encode_chunks(chunks: list[str]) -> np.ndarray:
-    logger.info(f"Generando embeddings para {len(chunks)} chunks")
-
-    embeddings = model.encode(
-        chunks,
-        normalize_embeddings=True,
-        show_progress_bar=True,
+    logger.info(
+        f"Generando embeddings para {len(chunks)} chunks | "
+        f"backend={settings.embedding_backend} | model={settings.embedding_model}"
     )
-
-    return _to_f32(np.array(embeddings))
+    return get_encoder().encode(chunks)
 
 
 def create_faiss_index(dimension: int) -> FaissIndex:

@@ -7,14 +7,12 @@ Nota sobre # pyright: ignore[reportCallIssue] en index.search():
 from __future__ import annotations
 
 import numpy as np
-from sentence_transformers import SentenceTransformer
 
 from src.chat.modes import ChatMode
 from src.config.settings import settings
 from src.context.manager import LoadedCollection
 from src.context.models import SearchResult
-
-model = SentenceTransformer(settings.embed_model)
+from src.embeddings.encoder import get_encoder
 
 
 # ======================================================
@@ -46,8 +44,7 @@ def build_queries(question: str, mode: str) -> list[str]:
 
 
 def encode_queries(queries: list[str]) -> np.ndarray:
-    embeddings = model.encode(queries, normalize_embeddings=True)
-    return np.ascontiguousarray(embeddings, dtype=np.float32)
+    return get_encoder().encode(queries)
 
 
 # ======================================================

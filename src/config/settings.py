@@ -83,27 +83,10 @@ class Settings(BaseSettings):
     embedding_base_url: str = Field(default="http://127.0.0.1:11434")
     embedding_api_key: str = Field(default="ollama")
 
-    @property
-    def embedding_model(self) -> str:
-        """Modelo efectivo: EMBEDDING_MODEL si está definido, si no embed_model."""
-        return self._embedding_model_override or self.embed_model
-
-    # Campo interno para el override; se lee del env como EMBEDDING_MODEL.
-    # El nombre con guion bajo evita colisión con la property pública.
-    _embedding_model_override: str = ""
-
-    @model_validator(mode="after")
-    def _resolve_embedding_model(self) -> "Settings":
-        """
-        Pydantic no puede definir una property que también lea del env.
-        Solución: leer EMBEDDING_MODEL manualmente en el validator y
-        guardarlo en el atributo privado que usa la property.
-        """
-        import os
-
-        override = os.environ.get("EMBEDDING_MODEL", "").strip()
-        object.__setattr__(self, "_embedding_model_override", override)
-        return self
+    # EMBEDDING_MODEL sobreescribe EMBED_MODEL cuando está definido.
+    # Si no está en .env, el validator _resolve_embedding_model lo rellena
+    # con embed_model para que haya siempre un valor efectivo.
+    embedding_model: str = Field(default="")
 
     @property
     def embedding_model_safe(self) -> str:
@@ -119,13 +102,21 @@ class Settings(BaseSettings):
         Los índices de backends/modelos distintos son incompatibles
         (viven en espacios vectoriales distintos), por eso se aíslan
         en subdirectorios separados en vez de mezclarlos.
+        Las carpetas se crean automáticamente al primer uso en get_collection_paths().
         """
-        return (
-            self.ai_home
-            / "vector_stores"
-            / self.embedding_backend
-            / self.embedding_model_safe
-        )
+        return self.ai_home / "vector_stores" / self.embedding_backend / self.embedding_model_safe
+
+    @model_validator(mode="after")
+    def _resolve_embedding_model(self) -> "Settings":
+        """
+        Si EMBEDDING_MODEL no está definido en el entorno, usa EMBED_MODEL
+        como valor efectivo. Esto permite:
+          - sentence_transformers: EMBED_MODEL=BAAI/bge-small-en-v1.5
+          - ollama/fastflowlm:     EMBEDDING_MODEL=bge-m3 (sobreescribe)
+        """
+        if not self.embedding_model:
+            object.__setattr__(self, "embedding_model", self.embed_model)
+        return self
 
     # Chunking
     chunk_size: int = Field(default=500, gt=0)

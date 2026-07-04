@@ -48,7 +48,7 @@ class LoadedCollection(TypedDict):
 class ContextManager:
 
     def __init__(self) -> None:
-        self.base_path: Path = Path(settings.vector_store_path)
+        self.base_path: Path = settings.vector_store_path_for_backend
         self.loaded_contexts: dict[str, LoadedCollection] = {}
 
     # =====================================================
