@@ -86,7 +86,7 @@ def _apply_think_mode(
             f"El provider '{config.name}' no tiene think_param configurado "
             f"-- ver {config.name.upper()}_THINK_PARAM en .env.providers."
         )
-    # extra_body[config.think_param] = think_mode
+    extra_body[config.think_param] = think_mode
 
 
 def _complete(
@@ -109,12 +109,18 @@ def _complete(
     """
     client, config = get_client(provider_name)
     effective_temp = settings.llm_temperature if temperature is None else temperature
+    # Sin override explícito, cae al default configurado del provider
+    # (ProviderConfig.default_think / LOCAL_THINK_DEFAULT en .env) en vez
+    # de omitir el campo -- omitirlo deja que el modelo use SU propio
+    # default (Qwen3 viene con thinking ON), que es justo lo que hace
+    # imposible "apagarlo" si nunca se manda el campo explícitamente.
+    effective_think = config.default_think if think_mode is None else think_mode
 
     logger.info(
         f"{log_prefix}Consultando LLM | provider={provider_name} | model={config.model} "
         f"| timeout={settings.llm_timeout}s | temp={effective_temp}"
         + (f" | max_tokens={max_tokens}" if max_tokens is not None else "")
-        + (f" | think_mode={think_mode}" if think_mode is not None else "")
+        + (f" | think_mode={effective_think}" if effective_think is not None else "")
     )
 
     kwargs: dict[str, Any] = {
@@ -130,8 +136,8 @@ def _complete(
     # request -- así es como se le pasan campos propios de un runtime
     # (ej. "think") que el SDK de OpenAI no conoce nativamente.
     extra_body: dict[str, Any] = {}
-    if think_mode is not None:
-        _apply_think_mode(extra_body, think_mode, config)
+    if effective_think is not None:
+        _apply_think_mode(extra_body, effective_think, config)
     if extra:
         extra_body.update(extra)
     if extra_body:

@@ -31,8 +31,9 @@ import asyncio
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from src.api import deps
 from src.api.routers import chat, config, files
@@ -89,6 +90,30 @@ app.add_middleware(
 app.include_router(chat.router, prefix="/api/v1")
 app.include_router(files.router, prefix="/api/v1")
 app.include_router(config.router, prefix="/api/v1")
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    """
+    Red de seguridad para cualquier excepción no capturada dentro de un
+    endpoint (bugs de prompts, del grafo, lo que sea).
+
+    Sin esto, Starlette resuelve una excepción no manejada con su propio
+    ServerErrorMiddleware, que envuelve por FUERA al CORSMiddleware que
+    agregamos arriba -- la respuesta 500 resultante nunca pasa por
+    CORSMiddleware y llega al navegador sin headers CORS. El navegador
+    entonces bloquea la lectura de esa respuesta y la reporta como error
+    de red, no como el 500 que en realidad es -- exactamente el síntoma
+    de "no se pudo conectar con el backend" aunque el backend sí
+    respondió (y el log del servidor sí tiene el traceback real).
+    Registrar un handler acá hace que FastAPI lo resuelva vía
+    ExceptionMiddleware, que sí queda DENTRO de CORSMiddleware.
+    """
+    logger.exception(f"[api] Excepción no manejada en {request.method} {request.url.path}")
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Error interno del servidor. Revisá los logs del backend."},
+    )
 
 
 @app.get("/health")

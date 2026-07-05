@@ -162,11 +162,11 @@ If the answer satisfies every criterion:
 
 Otherwise:
 
-{
+{{
   "passed": false,
   "reason": "<grounding|missing_sources>",
   "feedback": "<concise explanation of the problem>"
-}
+}}
 
 Do not return markdown, code fences, explanations, or any text outside the JSON object.
 """

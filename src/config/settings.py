@@ -156,12 +156,19 @@ class Settings(BaseSettings):
     # el provider no soporta think_mode (y no debería estar en
     # local_supports en ese caso).
     local_think_param: str = Field(default="think")
+    # Default de think_mode cuando el request NO trae un override explícito.
+    # "true"/"false" = se manda ese valor siempre (anula el default propio
+    # del modelo -- Qwen3 viene con thinking ON por defecto, ver su model
+    # card en HuggingFace). Vacío = no mandar el campo si no hay override
+    # explícito, dejando que el modelo/runtime decida su propio default.
+    local_think_default: str = Field(default="")
 
     gemini_base_url: str = Field(default="")
     gemini_api_key: str = Field(default="")
     gemini_model: str = Field(default="")
     gemini_supports: str = Field(default="temperature,max_tokens")
     gemini_think_param: str = Field(default="")
+    gemini_think_default: str = Field(default="")
 
     # Qué proveedor usa cada nodo del grafo. Configurable en .env,
     # sin tocar código — esto es lo que hace la arquitectura extensible.

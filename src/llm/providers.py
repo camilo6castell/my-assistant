@@ -58,6 +58,13 @@ class ProviderConfig:
     # introspectar automáticamente un servidor OpenAI-compatible
     # arbitrario para saber qué espera.
     think_param: str | None = None
+    # Valor de think_mode a usar cuando el request NO trae un override
+    # explícito. None = no mandar el campo si no hay override (el
+    # modelo/runtime decide su propio default). True/False = se manda
+    # siempre ese valor, anulando el default propio del modelo -- útil
+    # porque algunos modelos (ej. Qwen3) vienen con razonamiento activado
+    # por defecto y no hay forma de "apagarlo" si nunca se envía el campo.
+    default_think: bool | None = None
 
 
 # (nombre, prefijo en Settings) -- agregar un provider nuevo es agregar
@@ -69,6 +76,16 @@ _PROVIDER_ENV_PREFIXES: tuple[str, ...] = ("local", "gemini")
 def _parse_supports(raw: str) -> frozenset[str]:
     """'temperature,max_tokens,think_mode' -> frozenset(...), tolerante a espacios/vacíos."""
     return frozenset(item.strip() for item in raw.split(",") if item.strip())
+
+
+def _parse_optional_bool(raw: str) -> bool | None:
+    """'true'/'false' -> bool; '' (o cualquier otra cosa) -> None ("sin default")."""
+    normalized = raw.strip().lower()
+    if normalized == "true":
+        return True
+    if normalized == "false":
+        return False
+    return None
 
 
 def _build_provider_table() -> dict[str, ProviderConfig]:
@@ -87,6 +104,7 @@ def _build_provider_table() -> dict[str, ProviderConfig]:
             model=getattr(settings, f"{prefix}_model"),
             supports=_parse_supports(getattr(settings, f"{prefix}_supports")),
             think_param=getattr(settings, f"{prefix}_think_param", "") or None,
+            default_think=_parse_optional_bool(getattr(settings, f"{prefix}_think_default", "")),
         )
         for prefix in _PROVIDER_ENV_PREFIXES
     }
