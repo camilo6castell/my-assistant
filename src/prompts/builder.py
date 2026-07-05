@@ -14,32 +14,68 @@ Funciones exportadas:
 from src.chat.modes import ChatMode
 
 
+def build_system_prompt() -> str:
+    return f"""
+You are an assistant specialized in Retrieval-Augmented Generation (RAG).
+
+Your knowledge for each response is limited to the context provided by the user. Always prioritize the retrieved context over any prior knowledge.
+
+Guidelines:
+
+- Respond in the same language as the user's question.
+- Use only information that is supported by the provided context.
+- Do not fabricate or infer facts that are not grounded in the context.
+- If the context is insufficient to answer the question, explicitly say so.
+- Integrate information from multiple fragments when they complement each other.
+- If the retrieved fragments contain contradictions, point them out instead of resolving them yourself.
+- Provide clear, precise, and well-structured answers.
+- When the answer is supported by one or more fragments, cite their sources whenever possible.
+
+The user will specify one of the following response modes:
+
+HARD
+{build_mode_rules(ChatMode.HARD)}
+
+SOFT
+{build_mode_rules(ChatMode.SOFT)}
+"""
+
+
+def build_reformulation_system_prompt() -> str:
+    return """
+You are an expert in semantic information retrieval for Retrieval-Augmented Generation (RAG).
+
+Your task is to rewrite the user's question to maximize retrieval quality in a vector database.
+
+Requirements:
+
+- Preserve the original intent exactly.
+- Do not answer the question.
+- Do not introduce new facts or assumptions.
+- Resolve ambiguity only when it can be inferred from the original wording.
+- Prefer clear, specific, and self-contained questions.
+- Replace vague references with explicit terms whenever possible.
+- Keep the rewritten question concise and natural.
+- Output only the rewritten question, with no explanations or additional text.
+"""
+
+
 def build_context_block(context_chunks: list[str]) -> str:
     return "\n\n---\n\n".join(context_chunks)
 
 
-def build_rules_block(mode: str) -> str:
-    if mode == ChatMode.SOFT:
+def build_mode_rules(mode: str) -> str:
+    if mode == ChatMode.HARD:
         return """
-REGLAS (MODO SOFT):
-
-- Puedes conectar ideas entre múltiples fuentes.
-- Puedes sintetizar conceptos.
-- Puedes abstraer principios generales.
-- Puedes explicar implicaciones teóricas.
-- Mantente fiel al contexto.
-- Nunca inventes información externa.
-- Indica fuentes cuando sea posible.
+- Restrict the answer to information explicitly stated in the context.
+- Avoid paraphrasing beyond what is necessary for readability.
+- Do not generalize or draw implicit conclusions.
 """
 
     return """
-REGLAS (MODO HARD):
-
-- Usa únicamente el contenido presente en el contexto.
-- No inventes información.
-- No uses conocimiento externo.
-- Si algo no está en el contexto, dilo explícitamente.
-- Prioriza precisión textual.
+- You may synthesize and connect information from multiple fragments.
+- You may explain relationships and high-level implications that are directly supported by the context.
+- Never introduce external knowledge or unsupported assumptions.
 """
 
 
@@ -55,28 +91,13 @@ def build_prompt(
     mensajes de API en build_messages(), no como texto en el prompt.
     """
     return f"""
-Eres un asistente RAG.
+Mode: {"SOFT" if mode == ChatMode.SOFT else "HARD"}
 
-Tu tarea es responder preguntas usando
-EXCLUSIVAMENTE el contexto proporcionado.
-
-{build_rules_block(mode)}
-
-========================================
-CONTEXTO
-========================================
-
+Context:
 {build_context_block(context_chunks)}
 
-========================================
-PREGUNTA
-========================================
-
+Question:
 {question}
-
-========================================
-RESPUESTA
-========================================
 """
 
 
@@ -86,66 +107,68 @@ def build_review_prompt(
     answer: str,
 ) -> str:
     """
-    Prompt para review_node.
+    Build the prompt used by the review node.
 
-    Le entrega a Gemini los mismos chunks que usó generate_node,
-    la pregunta original, y la respuesta producida. Le pide que
-    evalúe dos dimensiones críticas de RAG:
-      1. Anclaje: ¿cada afirmación tiene respaldo en el contexto?
-      2. Citas: ¿la respuesta menciona las fuentes cuando las usa?
+    The reviewer validates that the generated answer satisfies the
+    quality requirements of the RAG system before it is returned to
+    the user.
 
-    Formato de respuesta esperado (JSON estricto) para parseo simple:
-      { "passed": true }
-      { "passed": false, "feedback": "motivo concreto del rechazo" }
+    Evaluation criteria:
+      1. Grounding: every factual statement must be supported by the
+         retrieved context.
+      2. Source attribution: whenever factual information is used,
+         the answer should cite the corresponding source when available.
 
-    Se usa JSON en vez de texto libre para evitar parseos frágiles.
-    Gemini recibe instrucción explícita de no añadir nada fuera del JSON.
+    The reviewer must return only a valid JSON object so the response
+    can be parsed deterministically.
     """
+
     return f"""
-Eres un evaluador de calidad para un sistema RAG.
-Tu tarea es revisar si una respuesta cumple dos criterios:
+You are a quality reviewer for a Retrieval-Augmented Generation (RAG) system.
 
-CRITERIO 1 — ANCLAJE:
-Cada afirmación de la respuesta debe estar respaldada por el contexto.
-Si la respuesta contiene información que NO aparece en el contexto (alucinación),
-debe ser rechazada.
+Your task is to evaluate whether the generated answer satisfies the required quality standards.
 
-CRITERIO 2 — CITAS:
-La respuesta debe mencionar de qué fuente proviene la información
-cuando hace afirmaciones concretas (ej: "Según [fuente]...").
-Si no cita ninguna fuente siendo que el contexto tiene metadatos de fuente,
-debe ser rechazada.
+Evaluation criteria:
 
-========================================
-CONTEXTO RECUPERADO
-========================================
+1. Grounding
+- Every factual statement must be supported by the retrieved context.
+- Reject the answer if it contains unsupported information, hallucinations, or external knowledge.
+
+2. Source attribution
+- When the retrieved context includes source metadata, the answer should cite the relevant source(s) for factual statements.
+- Reject the answer if source citations are missing when they should reasonably be provided.
+
+3. If the answer fails to meet the criteria, the value of "reason" must be one of:
+- "grounding": the answer contains unsupported information, hallucinations, or external knowledge.
+- "missing_sources": the answer is grounded in the context but fails to cite the relevant source(s) when source metadata is available.
+
+Retrieved context:
 
 {build_context_block(context_chunks)}
 
-========================================
-PREGUNTA ORIGINAL
-========================================
+Original question:
 
 {question}
 
-========================================
-RESPUESTA A EVALUAR
-========================================
+Generated answer:
 
 {answer}
 
-========================================
-INSTRUCCIÓN
-========================================
+Return only one valid JSON object.
 
-Responde ÚNICAMENTE con un objeto JSON válido, sin texto adicional,
-sin bloques de código, sin explicaciones fuera del JSON.
+If the answer satisfies every criterion:
 
-Si la respuesta cumple ambos criterios:
 {{"passed": true}}
 
-Si falla algún criterio:
-{{"passed": false, "feedback": "descripción concreta del problema"}}
+Otherwise:
+
+{
+  "passed": false,
+  "reason": "<grounding|missing_sources>",
+  "feedback": "<concise explanation of the problem>"
+}
+
+Do not return markdown, code fences, explanations, or any text outside the JSON object.
 """
 
 
@@ -157,50 +180,48 @@ def build_correction_prompt(
     mode: str,
 ) -> str:
     """
-    Prompt para generate_node cuando el reviewer rechazó la respuesta anterior.
+    Build the prompt used to repair a response rejected by the review node.
 
-    Incluye la respuesta rechazada y el feedback del reviewer para que
-    el modelo local corrija exactamente lo que falló, sin regenerar desde cero.
+    The model receives the original context, the rejected answer, and
+    the reviewer's feedback. Its goal is to minimally modify the answer
+    so that it satisfies every review criterion while preserving all
+    correct information.
     """
+
     return f"""
-Eres un asistente RAG.
+The previous answer was rejected during the RAG review process.
 
-Tu tarea es CORREGIR una respuesta previa que fue rechazada por un evaluador.
+Your task is to correct the answer, not to generate a completely new one.
 
-{build_rules_block(mode)}
+Response mode: {mode}
 
-========================================
-CONTEXTO
-========================================
+Apply the rules associated with this response mode.
+
+Retrieved context:
 
 {build_context_block(context_chunks)}
 
-========================================
-PREGUNTA
-========================================
+Original question:
 
 {question}
 
-========================================
-RESPUESTA ANTERIOR (RECHAZADA)
-========================================
+Rejected answer:
 
 {previous_answer}
 
-========================================
-MOTIVO DEL RECHAZO
-========================================
+Reviewer feedback:
 
 {feedback}
 
-========================================
-INSTRUCCIÓN
-========================================
+Instructions:
 
-Genera una nueva respuesta que corrija el problema indicado.
-Mantén lo que estaba bien. Corrige solo lo señalado.
+- Correct every issue identified by the reviewer.
+- Preserve all information that is already correct.
+- Modify only the parts necessary to address the review feedback.
+- Keep the answer fully grounded in the retrieved context.
+- Do not introduce external knowledge.
+- Cite sources whenever appropriate.
+- Respond in the same language as the original question.
 
-========================================
-RESPUESTA CORREGIDA
-========================================
+Return only the corrected answer.
 """

@@ -35,32 +35,13 @@ from src.chat.types import TurnMemory
 from src.config.settings import settings
 from src.llm.providers import ProviderConfig, get_client
 from src.utils.logger import logger
-
-SYSTEM_PROMPT: str = """
-Eres un asistente RAG especializado en responder
-usando unicamente el contexto proporcionado.
-
-Reglas:
-
-- Prioriza el contenido recuperado.
-- No inventes informacion.
-- Si el contexto no contiene suficiente informacion,
-  dilo explicitamente.
-- Responde de forma clara y estructurada.
-- Cuando sea posible, conecta conceptos relacionados.
-"""
-
-REFORMULATION_SYSTEM_PROMPT: str = """
-Eres un experto en recuperación de información semántica (RAG).
-Tu única tarea es reformular preguntas para mejorar el recall en búsquedas vectoriales.
-No respondas la pregunta. No añadas explicaciones. Devuelve solo la pregunta reformulada.
-"""
+from src.prompts.builder import build_system_prompt, build_reformulation_system_prompt
 
 
 def build_messages(
     prompt: str,
     chat_memory: list[TurnMemory],
-    system_prompt: str = SYSTEM_PROMPT,
+    system_prompt: str = build_system_prompt(),
 ) -> list[ChatCompletionMessageParam]:
     """
     Construye el array de mensajes para la API.
@@ -87,7 +68,9 @@ def build_messages(
     return messages
 
 
-def _apply_think_mode(extra_body: dict[str, Any], think_mode: bool, config: ProviderConfig) -> None:
+def _apply_think_mode(
+    extra_body: dict[str, Any], think_mode: bool, config: ProviderConfig
+) -> None:
     """
     Activa/desactiva el modo de razonamiento usando el nombre de campo
     declarado por el provider (config.think_param), sin conocer nada
@@ -103,7 +86,7 @@ def _apply_think_mode(extra_body: dict[str, Any], think_mode: bool, config: Prov
             f"El provider '{config.name}' no tiene think_param configurado "
             f"-- ver {config.name.upper()}_THINK_PARAM en .env.providers."
         )
-    extra_body[config.think_param] = think_mode
+    # extra_body[config.think_param] = think_mode
 
 
 def _complete(
@@ -215,7 +198,7 @@ def ask_llm_internal(
     """
     provider_name = provider or settings.reformulate_provider
     messages = build_messages(
-        prompt=prompt, chat_memory=[], system_prompt=REFORMULATION_SYSTEM_PROMPT
+        prompt=prompt, chat_memory=[], system_prompt=build_reformulation_system_prompt()
     )
 
     content = _complete(

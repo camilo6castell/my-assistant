@@ -96,10 +96,10 @@ def show_about() -> None:
 
     print(f"""
   ─────────────────────────────────────────────────────────────────
-  My-Asisstant is a RAG SYSTEM made by Camilo6Castell
+  My-Asisstant is a RAG SYSTEM made by camilo6castell
   ─────────────────────────────────────────────────────────────────
-  Embedding model : {settings.embed_model}
-  LLM model       : {settings.llm_model}
+  Embedding model : {settings.embedding_model}
+  LLM model       : {settings.local_model}
   Chunk size      : {settings.chunk_size} chars  (overlap {settings.chunk_overlap})
   Top-K riguroso  : {settings.hard_top_k_final} resultados finales
   Top-K interpret : {settings.soft_top_k_final} resultados finales

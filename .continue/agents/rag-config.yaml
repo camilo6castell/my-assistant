@@ -125,7 +125,7 @@ rules:
   # 🔹 Prevención de alucinaciones
   - "Never invent APIs, files, libraries, or functionality that doesn't exist."
   - "If repository context is insufficient, explicitly state what's missing before proceeding."
-  - "When uncertain about implementation details, ask for clarification or note assumptions."
+  - "When uncertain about implementation details, ask for clarification or note assumptions and simply say 'I don't know' if necessary."
   # 🔹 Estilo de respuesta
   - "Keep answers concise, technical, and actionable."
   - "Include code examples only when directly relevant to the question."

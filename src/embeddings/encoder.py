@@ -1,12 +1,6 @@
 """
 Capa de embeddings multi-backend.
 
-Problema que resuelve:
-  El sistema original instanciaba SentenceTransformer dos veces (una en
-  core.py y otra en search.py), siempre con el mismo modelo, sin opción
-  de usar un runtime distinto. Esto impedía aprovechar la GPU vía Ollama
-  o la NPU vía FastFlowLM para el paso de embeddings.
-
 Diseño:
   Un único punto de entrada: get_encoder() devuelve una instancia de
   EmbeddingEncoder cacheada. Toda la lógica de backend vive aquí —

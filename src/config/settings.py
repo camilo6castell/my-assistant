@@ -51,9 +51,6 @@ class Settings(BaseSettings):
     def log_path(self) -> Path:
         return self.ai_home / "logs"
 
-    # Embeddings
-    embed_model: str = Field(default="BAAI/bge-small-en-v1.5")
-
     # ======================================================
     # EMBEDDING BACKEND
     # ======================================================
@@ -70,23 +67,15 @@ class Settings(BaseSettings):
     #                            Requiere: EMBEDDING_BASE_URL, EMBEDDING_MODEL.
     #                            Usa el endpoint OpenAI-compatible /v1/embeddings.
     #
-    # EMBEDDING_MODEL sobreescribe embed_model cuando el backend NO es
-    # sentence_transformers — permite tener modelos distintos por backend
-    # sin tocar embed_model (que es el nombre HuggingFace para ST).
-    #
     # IMPORTANTE: cambiar backend o modelo invalida los índices existentes.
     # Los vectores de backends distintos viven en rutas separadas:
     #   /srv/ai/vector_stores/<backend>/<model_safe>/<category>/<collection>/
     # donde model_safe reemplaza '/' por '_' para evitar subdirectorios.
 
+    embedding_model: str = Field(default="BAAI/bge-m3")
     embedding_backend: str = Field(default="sentence_transformers")
     embedding_base_url: str = Field(default="http://127.0.0.1:11434")
     embedding_api_key: str = Field(default="ollama")
-
-    # EMBEDDING_MODEL sobreescribe EMBED_MODEL cuando está definido.
-    # Si no está en .env, el validator _resolve_embedding_model lo rellena
-    # con embed_model para que haya siempre un valor efectivo.
-    embedding_model: str = Field(default="")
 
     @property
     def embedding_model_safe(self) -> str:
@@ -104,19 +93,12 @@ class Settings(BaseSettings):
         en subdirectorios separados en vez de mezclarlos.
         Las carpetas se crean automáticamente al primer uso en get_collection_paths().
         """
-        return self.ai_home / "vector_stores" / self.embedding_backend / self.embedding_model_safe
-
-    @model_validator(mode="after")
-    def _resolve_embedding_model(self) -> "Settings":
-        """
-        Si EMBEDDING_MODEL no está definido en el entorno, usa EMBED_MODEL
-        como valor efectivo. Esto permite:
-          - sentence_transformers: EMBED_MODEL=BAAI/bge-small-en-v1.5
-          - ollama/fastflowlm:     EMBEDDING_MODEL=bge-m3 (sobreescribe)
-        """
-        if not self.embedding_model:
-            object.__setattr__(self, "embedding_model", self.embed_model)
-        return self
+        return (
+            self.ai_home
+            / "vector_stores"
+            / self.embedding_backend
+            / self.embedding_model_safe
+        )
 
     # Chunking
     chunk_size: int = Field(default=500, gt=0)
@@ -147,13 +129,6 @@ class Settings(BaseSettings):
     soft_top_k_final: int = Field(default=7, gt=0)
 
     max_turns: int = Field(default=4, gt=0)
-
-    # LLM (legacy / default provider — se mantiene por compatibilidad con
-    # .env.local y .env.gemini, que siguen sobreescribiendo estas claves
-    # cuando se usa un único modelo)
-    llm_base_url: str = Field(default="http://127.0.0.1:52625/v1")
-    llm_api_key: str = Field(default="flm")
-    llm_model: str = Field(default="qwen3:8b")
     llm_temperature: float = Field(default=0.2, ge=0.0, le=2.0)
     llm_timeout: int = Field(default=600, gt=0)
 
@@ -166,10 +141,6 @@ class Settings(BaseSettings):
     #
     # local  -> modelo en runtime local (FastFlowLM/Ollama, OpenAI-compatible)
     # gemini -> Gemini vía endpoint OpenAI-compatible de Google
-    #
-    # Si LOCAL_* / GEMINI_* no están seteados, caen por defecto a llm_*
-    # (compatibilidad con el setup mono-modelo actual).
-
     local_base_url: str = Field(default="")
     local_api_key: str = Field(default="")
     local_model: str = Field(default="")
@@ -196,17 +167,6 @@ class Settings(BaseSettings):
     # sin tocar código — esto es lo que hace la arquitectura extensible.
     reformulate_provider: str = Field(default="gemini")
     generate_provider: str = Field(default="local")
-
-    @model_validator(mode="after")
-    def _fallback_provider_configs(self) -> "Settings":
-        """Si LOCAL_*/GEMINI_* no se definieron, usar llm_* como 'local'."""
-        if not self.local_base_url:
-            self.local_base_url = self.llm_base_url
-        if not self.local_api_key:
-            self.local_api_key = self.llm_api_key
-        if not self.local_model:
-            self.local_model = self.llm_model
-        return self
 
     # Agent — umbral de foco temático para el grafo LangGraph.
     # Con 1 colección mide spread de chunk_index (menor = match).
