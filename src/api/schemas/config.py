@@ -24,3 +24,8 @@ class ProvidersResponse(BaseModel):
     """Respuesta de GET /api/v1/config/providers."""
 
     providers: dict[str, ProviderInfo]
+    # Nombre del provider que /query y /query/agent usan para la respuesta
+    # final al usuario (settings.generate_provider) -- el frontend lo usa
+    # para saber cuál entrada de `providers` mirar al decidir qué controles
+    # de GenerationOptions mostrar (ej. el switch de think mode).
+    active_generation_provider: str

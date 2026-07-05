@@ -43,7 +43,7 @@ Routing review:   passed=True  → END
 
 from __future__ import annotations
 
-from typing import Hashable
+from typing import Any, Hashable, cast
 
 from langgraph.graph import END, StateGraph
 from langgraph.graph.state import CompiledStateGraph
@@ -121,6 +121,14 @@ def build_rag_graph() -> CompiledStateGraph[RAGState]:
         {"end": END, "correct": _CORRECT},
     )
 
-    compiled = graph.compile()
+    # StateGraph.compile() no resuelve su TypeVar genérico igual en todas
+    # las versiones de langgraph (en algunas queda un StateT libre en el
+    # tipo inferido para Input/Output en vez de bindearlo a RAGState).
+    # Un cast directo a CompiledStateGraph[RAGState] sería "redundante"
+    # en una versión y "incompatible" en otra -- cast(Any, ...) nunca es
+    # redundante (Any nunca coincide con lo que mypy infiera) y la
+    # anotación de la variable impone el tipo real hacia afuera, así que
+    # esto se mantiene correcto sin importar la versión instalada.
+    compiled: CompiledStateGraph[RAGState] = cast(Any, graph.compile())
     logger.info("[graph] Grafo RAG compilado correctamente")
     return compiled

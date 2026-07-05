@@ -32,7 +32,11 @@ from src.config.settings import settings
 from src.context.models import SearchResult
 from src.graph.state import RAGState, RAGStateUpdate
 from src.llm.generate import ask_llm, ask_llm_internal
-from src.prompts.builder import build_correction_prompt, build_prompt, build_review_prompt
+from src.prompts.builder import (
+    build_correction_prompt,
+    build_prompt,
+    build_review_prompt,
+)
 from src.retrieval.search import search
 from src.utils.logger import logger
 from src.context.manager import LoadedCollection
@@ -264,19 +268,29 @@ def review_node(state: RAGState) -> RAGStateUpdate:
     try:
         # Gemini a veces envuelve el JSON en ```json ... ``` aunque se le pide
         # que no lo haga. Limpieza defensiva antes de parsear.
-        clean = raw.strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
+        clean = (
+            raw.strip()
+            .removeprefix("```json")
+            .removeprefix("```")
+            .removesuffix("```")
+            .strip()
+        )
         result = json.loads(clean)
         passed: bool = bool(result.get("passed", True))
         feedback: str = str(result.get("feedback", ""))
     except (json.JSONDecodeError, AttributeError):
-        logger.warning("[graph] review_node | no se pudo parsear JSON → aprobando por defecto")
+        logger.warning(
+            "[graph] review_node | no se pudo parsear JSON → aprobando por defecto"
+        )
         passed = True
         feedback = ""
 
     if passed:
         logger.info("[graph] review_node | ✓ respuesta aprobada")
     else:
-        logger.info(f"[graph] review_node | ✗ respuesta rechazada | feedback={feedback!r}")
+        logger.info(
+            f"[graph] review_node | ✗ respuesta rechazada | feedback={feedback!r}"
+        )
 
     return {
         "review_passed": passed,

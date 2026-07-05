@@ -10,6 +10,7 @@ from __future__ import annotations
 from fastapi import APIRouter
 
 from src.api.schemas.config import ProviderInfo, ProvidersResponse
+from src.config.settings import settings
 from src.llm.providers import list_provider_configs
 
 router = APIRouter(prefix="/config", tags=["config"])
@@ -22,7 +23,8 @@ async def list_providers() -> ProvidersResponse:
     cada uno -- el frontend usa `supports` para decidir dinámicamente
     qué controles mostrar (ej. el switch de "think mode" solo aparece
     si el provider activo lo soporta), en vez de hardcodear por nombre
-    de modelo.
+    de modelo. `active_generation_provider` le dice cuál de todos es
+    el relevante para esa decisión.
     """
     table = list_provider_configs()
     return ProvidersResponse(
@@ -33,5 +35,6 @@ async def list_providers() -> ProvidersResponse:
                 supports=sorted(config.supports),
             )
             for name, config in table.items()
-        }
+        },
+        active_generation_provider=settings.generate_provider,
     )
