@@ -62,6 +62,13 @@ class ChunkMetadata(BaseModel):
     text: str
     chunk_index: int
     collection: str
+    file_id: str | None = None
+    """
+    Id del archivo de origen dentro de una colección efímera
+    (src/context/ephemeral.py). None en colecciones persistidas normales
+    -- default explícito para que los pickles viejos (sin esta clave)
+    sigan validando con model_validate() sin romperse.
+    """
 
 
 class RawCollection(TypedDict):
@@ -239,6 +246,7 @@ def build_metadata(
     chunk: str,
     chunk_index: int,
     collection: str,
+    file_id: str | None = None,
 ) -> ChunkMetadata:
     return ChunkMetadata(
         source=source,
@@ -247,4 +255,5 @@ def build_metadata(
         text=chunk,
         chunk_index=chunk_index,
         collection=collection,
+        file_id=file_id,
     )

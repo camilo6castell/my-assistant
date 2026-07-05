@@ -173,10 +173,24 @@ class Settings(BaseSettings):
     local_base_url: str = Field(default="")
     local_api_key: str = Field(default="")
     local_model: str = Field(default="")
+    # Qué GenerationOptions acepta este provider, separadas por coma
+    # (ver GenerationOptions en src/api/schemas/chat.py). "extra" habilita
+    # el passthrough genérico de parámetros no modelados explícitamente.
+    local_supports: str = Field(default="temperature,max_tokens,think_mode")
+    # Nombre del campo que este runtime espera en el payload para activar
+    # el modo de razonamiento. FastFlowLM y Ollama (los runtimes típicos
+    # para modelos como qwen3) lo exponen como un campo top-level
+    # "think": true/false -- se envía vía extra_body del cliente OpenAI,
+    # que inyecta claves adicionales en el JSON del request. Vacío =
+    # el provider no soporta think_mode (y no debería estar en
+    # local_supports en ese caso).
+    local_think_param: str = Field(default="think")
 
     gemini_base_url: str = Field(default="")
     gemini_api_key: str = Field(default="")
     gemini_model: str = Field(default="")
+    gemini_supports: str = Field(default="temperature,max_tokens")
+    gemini_think_param: str = Field(default="")
 
     # Qué proveedor usa cada nodo del grafo. Configurable en .env,
     # sin tocar código — esto es lo que hace la arquitectura extensible.

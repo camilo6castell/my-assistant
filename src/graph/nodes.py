@@ -199,6 +199,10 @@ def generate_node(state: RAGState) -> RAGStateUpdate:
         prompt=prompt,
         chat_memory=state["chat_memory"],
         provider=settings.generate_provider,
+        temperature=state.get("temperature"),
+        max_tokens=state.get("max_tokens"),
+        think_mode=state.get("think_mode"),
+        extra=state.get("extra"),
     )
 
     return {"answer": answer}
@@ -313,6 +317,10 @@ def correct_node(state: RAGState) -> RAGStateUpdate:
         prompt=correction_prompt,
         chat_memory=state["chat_memory"],
         provider=settings.generate_provider,
+        temperature=state.get("temperature"),
+        max_tokens=state.get("max_tokens"),
+        think_mode=state.get("think_mode"),
+        extra=state.get("extra"),
     )
 
     return {"answer": corrected, "review_passed": False}
