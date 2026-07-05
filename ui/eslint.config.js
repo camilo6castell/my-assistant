@@ -19,4 +19,14 @@ export default defineConfig([
       globals: globals.browser,
     },
   },
+  {
+    // shadcn/ui primitives conventionally export the component together
+    // with its `cva` variants (ej. `export { Button, buttonVariants }`) --
+    // rompe react-refresh/only-export-components, pero es el patrón
+    // estándar del registry, no vale la pena pelear contra él acá.
+    files: ['src/components/ui/**/*.{ts,tsx}'],
+    rules: {
+      'react-refresh/only-export-components': 'off',
+    },
+  },
 ])

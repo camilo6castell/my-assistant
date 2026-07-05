@@ -1,0 +1,71 @@
+import { AlertCircle, Layers, Sparkles } from "lucide-react"
+import ReactMarkdown from "react-markdown"
+import rehypeHighlight from "rehype-highlight"
+import remarkGfm from "remark-gfm"
+import { cn } from "@/lib/utils"
+import type { ChatMessage } from "@/types/chat"
+
+function ThinkingDots() {
+  return (
+    <span className="inline-flex items-center gap-1">
+      <span className="size-1.5 animate-bounce rounded-full bg-muted-foreground [animation-delay:-0.3s]" />
+      <span className="size-1.5 animate-bounce rounded-full bg-muted-foreground [animation-delay:-0.15s]" />
+      <span className="size-1.5 animate-bounce rounded-full bg-muted-foreground" />
+    </span>
+  )
+}
+
+export function MessageBubble({ message }: { message: ChatMessage }) {
+  const isUser = message.role === "user"
+
+  return (
+    <div className={cn("flex w-full", isUser ? "justify-end" : "justify-start")}>
+      <div
+        className={cn(
+          "max-w-[75ch] rounded-2xl px-4 py-3 text-sm leading-relaxed",
+          isUser
+            ? "bg-primary/90 text-primary-foreground"
+            : "border border-white/10 bg-white/[0.04] text-foreground backdrop-blur-xl",
+          message.isError && "border-destructive/30 bg-destructive/10 text-destructive"
+        )}
+      >
+        {message.isPending ? (
+          <ThinkingDots />
+        ) : isUser ? (
+          <p className="whitespace-pre-wrap">{message.content}</p>
+        ) : (
+          <div className="prose prose-sm prose-invert max-w-none prose-p:leading-relaxed prose-pre:bg-black/40">
+            <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]}>
+              {message.content}
+            </ReactMarkdown>
+          </div>
+        )}
+
+        {!isUser && !message.isPending && !message.isError && (
+          <div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-white/10 pt-2 text-[11px] text-muted-foreground">
+            {message.confidence !== undefined && (
+              <span className="inline-flex items-center gap-1">
+                <Sparkles className="size-3" />
+                confianza {(message.confidence * 100).toFixed(0)}%
+              </span>
+            )}
+            {!!message.collectionsUsed?.length && (
+              <span className="inline-flex items-center gap-1">
+                <Layers className="size-3" />
+                {message.collectionsUsed.join(", ")}
+              </span>
+            )}
+            {message.reformulated && <span>· pregunta reformulada</span>}
+          </div>
+        )}
+
+        {message.isError && (
+          <div className="mt-2 flex items-center gap-1.5 text-xs">
+            <AlertCircle className="size-3.5" />
+            No se pudo completar la respuesta
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
