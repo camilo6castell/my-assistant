@@ -27,6 +27,7 @@ from src.chat.types import TurnMemory
 from src.config.settings import settings
 from src.context.ephemeral import EphemeralStore
 from src.context.manager import ContextManager, LoadedCollection
+from src.config.models import get_model_capabilities, supports_set
 from src.graph.state import RAGState
 from src.llm.generate import ask_llm
 from src.llm.providers import get_provider
@@ -106,6 +107,7 @@ def _validate_generation_options(request: QueryRequest) -> None:
         return
 
     provider = get_provider(settings.generate_provider)
+    supports = supports_set(get_model_capabilities(provider.capabilities, provider.model))
     requested = {
         name
         for name, value in (
@@ -116,14 +118,14 @@ def _validate_generation_options(request: QueryRequest) -> None:
         )
         if value is not None
     }
-    unsupported = requested - provider.supports
+    unsupported = requested - supports
 
     if unsupported:
         raise HTTPException(
             status_code=400,
             detail=(
-                f"El provider '{provider.name}' no soporta: {sorted(unsupported)}. "
-                f"Soportados: {sorted(provider.supports)}."
+                f"El modelo '{provider.model}' (provider '{provider.name}') no soporta: "
+                f"{sorted(unsupported)}. Soportados: {sorted(supports)}."
             ),
         )
 

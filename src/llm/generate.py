@@ -1,5 +1,5 @@
 """
-Consulta al LLM local via cliente OpenAI-compatible.
+Consulta al LLM configurado, sin importar qué backend hay detrás.
 
 El historial de conversacion viaja aqui como mensajes estructurados
 user/assistant — es el unico lugar donde se incluye. El prompt no
@@ -17,32 +17,31 @@ Overrides de generación (temperature/max_tokens/think_mode/extra):
   settings/.env; el contrato completo vive en GenerationOptions
   (src/api/schemas/chat.py).
 
-think_mode es genérico a propósito: el nombre del campo que cada runtime
-espera en el payload (ej. "think" en FastFlowLM/Ollama) es
-ProviderConfig.think_param, configurable por .env (LOCAL_THINK_PARAM,
-GEMINI_THINK_PARAM...) -- este módulo no conoce ni le importa qué
-runtime hay detrás de cada provider.
+think_mode se resuelve acá contra ModelCapabilities (src/config/models/)
+-- este módulo traduce el bool lógico "pensar sí/no" al valor real que
+el modelo espera (True/False, o un nivel "low"/"high"...) y arma un
+CompletionRequest ya resuelto. El LLMClient (src/llm/backends/) que
+efectivamente lo manda no necesita saber nada de esto.
 """
 
 from __future__ import annotations
 
-from typing import Any
-
-from openai import OpenAIError
-from openai.types.chat import ChatCompletionMessageParam
-
 from src.chat.types import TurnMemory
+from src.config.models import get_model_capabilities
 from src.config.settings import settings
+from src.llm.backends.base import ChatTurn, CompletionRequest
 from src.llm.providers import ProviderConfig, get_client
+from src.prompts.builder import build_reformulation_system_prompt, build_system_prompt
 from src.utils.logger import logger
-from src.prompts.builder import build_system_prompt, build_reformulation_system_prompt
+
+ExtraFields = dict[str, bool | str | int | float]
 
 
 def build_messages(
     prompt: str,
     chat_memory: list[TurnMemory],
     system_prompt: str = build_system_prompt(),
-) -> list[ChatCompletionMessageParam]:
+) -> list[ChatTurn]:
     """
     Construye el array de mensajes para la API.
 
@@ -54,7 +53,7 @@ def build_messages(
     chat_memory vacío (caso de ask_llm_internal, que no tiene turnos de
     usuario) simplemente no agrega nada entre system y el prompt actual.
     """
-    messages: list[ChatCompletionMessageParam] = [
+    messages: list[ChatTurn] = [
         {"role": "system", "content": system_prompt},
     ]
 
@@ -68,94 +67,99 @@ def build_messages(
     return messages
 
 
-def _apply_think_mode(
-    extra_body: dict[str, Any], think_mode: bool, config: ProviderConfig
-) -> None:
+def _resolve_think(
+    think_mode: bool | None, config: ProviderConfig
+) -> tuple[bool | str | None, str | None]:
     """
-    Activa/desactiva el modo de razonamiento usando el nombre de campo
-    declarado por el provider (config.think_param), sin conocer nada
-    sobre el runtime real detrás de él.
+    Traduce el bool lógico "pensar sí/no" (o None = sin override) al
+    valor real que este modelo espera, según ModelCapabilities.
 
-    El router (src/api/routers/chat.py) ya valida think_mode contra
-    ProviderConfig.supports antes de llegar acá, así que este error solo
-    dispararía si algo llama a ask_llm()/ask_llm_internal() directamente
-    (ej. un script) pasando think_mode para un provider mal configurado.
+    Devuelve (valor, nombre_del_campo). (None, None) si no hay nada que
+    aplicar -- ni override, ni default configurado, ni ThinkMapping en
+    absoluto para este modelo.
+
+    Lanza ValueError si se pidió un valor explícito y el modelo no tiene
+    ThinkMapping -- el router (src/api/routers/chat.py) ya valida esto
+    contra `supports` antes de llegar acá, así que este error solo
+    dispararía si algo llama a ask_llm() directamente sin pasar por la
+    validación del endpoint.
     """
-    if not config.think_param:
-        raise ValueError(
-            f"El provider '{config.name}' no tiene think_param configurado "
-            f"-- ver {config.name.upper()}_THINK_PARAM en .env.providers."
-        )
-    extra_body[config.think_param] = think_mode
+    caps = get_model_capabilities(config.capabilities, config.model)
+
+    if caps.think is None:
+        if think_mode is not None:
+            raise ValueError(
+                f"El modelo '{config.model}' (provider '{config.name}') no tiene "
+                "modo de razonamiento configurado -- ver src/config/models/"
+                f"{config.capabilities}.py."
+            )
+        return None, None
+
+    # Sin override explícito, cae al default del modelo (ThinkMapping.default)
+    # en vez de omitir el campo -- omitirlo deja que el modelo use SU
+    # propio default (Qwen3 viene con thinking ON), que es justo lo que
+    # hace imposible "apagarlo" si nunca se manda el campo explícitamente.
+    effective = caps.think.default if think_mode is None else think_mode
+    if effective is None:
+        return None, None
+
+    return (caps.think.on if effective else caps.think.off), caps.think.param
 
 
 def _complete(
     *,
-    messages: list[ChatCompletionMessageParam],
+    messages: list[ChatTurn],
     provider_name: str,
     log_prefix: str,
     temperature: float | None,
     max_tokens: int | None,
     think_mode: bool | None,
-    extra: dict[str, Any] | None,
+    extra: ExtraFields | None,
 ) -> str | None:
     """
-    Llamada compartida a chat.completions.create().
+    Arma un CompletionRequest resuelto y se lo entrega al LLMClient del
+    provider -- este módulo no sabe (ni necesita saber) si eso termina
+    hablando con OpenAI, FastFlowLM u Ollama nativo.
 
     Devuelve None (nunca lanza) si el modelo respondió vacío o si la
-    llamada falló con un OpenAIError -- cada función pública decide su
-    propio fallback (ask_llm devuelve un mensaje de error visible al
-    usuario; ask_llm_internal devuelve el prompt original sin cambios).
+    llamada falló -- cada función pública decide su propio fallback
+    (ask_llm devuelve un mensaje de error visible al usuario;
+    ask_llm_internal devuelve el prompt original sin cambios).
     """
     client, config = get_client(provider_name)
+    caps = get_model_capabilities(config.capabilities, config.model)
     effective_temp = settings.llm_temperature if temperature is None else temperature
-    # Sin override explícito, cae al default configurado del provider
-    # (ProviderConfig.default_think / LOCAL_THINK_DEFAULT en .env) en vez
-    # de omitir el campo -- omitirlo deja que el modelo use SU propio
-    # default (Qwen3 viene con thinking ON), que es justo lo que hace
-    # imposible "apagarlo" si nunca se manda el campo explícitamente.
-    effective_think = config.default_think if think_mode is None else think_mode
+
+    think_value, think_param = _resolve_think(think_mode, config)
+
+    extra_fields: ExtraFields = {}
+    if think_param is not None and think_value is not None:
+        extra_fields[think_param] = think_value
+    if extra:
+        extra_fields.update(extra)
 
     logger.info(
         f"{log_prefix}Consultando LLM | provider={provider_name} | model={config.model} "
-        f"| timeout={settings.llm_timeout}s | temp={effective_temp}"
+        f"| timeout={settings.llm_timeout}s"
+        + (f" | temp={effective_temp}" if caps.supports_temperature else "")
         + (f" | max_tokens={max_tokens}" if max_tokens is not None else "")
-        + (f" | think_mode={effective_think}" if effective_think is not None else "")
+        + (f" | think={think_value}" if think_value is not None else "")
     )
 
-    kwargs: dict[str, Any] = {
-        "model": config.model,
-        "messages": messages,
-        "temperature": effective_temp,
-        "timeout": settings.llm_timeout,
-    }
-    if max_tokens is not None:
-        kwargs["max_tokens"] = max_tokens
+    request = CompletionRequest(
+        messages=messages,
+        model=config.model,
+        timeout=settings.llm_timeout,
+        temperature=effective_temp if caps.supports_temperature else None,
+        max_tokens=max_tokens if caps.supports_max_tokens else None,
+        extra_fields=extra_fields or None,
+    )
 
-    # extra_body inyecta claves top-level adicionales en el JSON del
-    # request -- así es como se le pasan campos propios de un runtime
-    # (ej. "think") que el SDK de OpenAI no conoce nativamente.
-    extra_body: dict[str, Any] = {}
-    if effective_think is not None:
-        _apply_think_mode(extra_body, effective_think, config)
-    if extra:
-        extra_body.update(extra)
-    if extra_body:
-        kwargs["extra_body"] = extra_body
-
-    try:
-        response = client.chat.completions.create(**kwargs)
-        content = response.choices[0].message.content
-
-        if not content:
-            logger.warning(f"{log_prefix}El modelo devolvio respuesta vacia.")
-            return None
-
-        return str(content).strip()
-
-    except OpenAIError:
-        logger.exception(f"{log_prefix}Error consultando LLM")
+    content = client.complete(request)
+    if not content:
+        logger.warning(f"{log_prefix}El modelo devolvio respuesta vacia.")
         return None
+    return content
 
 
 def ask_llm(
@@ -165,7 +169,7 @@ def ask_llm(
     temperature: float | None = None,
     max_tokens: int | None = None,
     think_mode: bool | None = None,
-    extra: dict[str, Any] | None = None,
+    extra: ExtraFields | None = None,
 ) -> str:
     provider_name = provider or settings.generate_provider
     messages = build_messages(prompt=prompt, chat_memory=chat_memory)
@@ -193,7 +197,7 @@ def ask_llm_internal(
     Llamada al LLM para operaciones internas del grafo (ej: reformulación de queries).
 
     Diferencias respecto a ask_llm():
-      - Usa REFORMULATION_SYSTEM_PROMPT en lugar del system prompt RAG.
+      - Usa el system prompt de reformulación en lugar del de RAG.
       - No acepta chat_memory: las operaciones internas no son turnos del usuario.
       - El log distingue la llamada como "[internal]" para facilitar el debug.
       - provider por defecto = settings.reformulate_provider (gemini),

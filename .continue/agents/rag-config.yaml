@@ -137,7 +137,7 @@ rules:
 #   - name: Continue Reference
 #     startUrl: https://docs.continue.dev/customize/deep-dives
 #     favicon: https://docs.continue.dev/favicon.ico
-docs:
-  - name: Pydantic Reference
-    startUrl: https://pydantic.dev/docs/validation/latest/get-started/
+# docs:
+#   - name: Pydantic Reference
+#     startUrl: https://pydantic.dev/docs/validation/latest/get-started/
     # favicon: https://docs.continue.dev/favicon.ico

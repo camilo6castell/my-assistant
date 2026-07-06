@@ -7,36 +7,43 @@ Problema que resuelve:
   Para usar dos modelos distintos en el mismo grafo (uno reformula, otro
   genera) hace falta poder pedir "el cliente del proveedor X" en runtime.
 
-Diseño:
-  - Cada proveedor es (base_url, api_key, model, supports, think_param)
-    -> un OpenAI client. Todo, incluyendo qué GenerationOptions acepta
-    (supports) y cómo activa el modo de razonamiento (think_param), sale
-    de settings/.env -- nada en este archivo menciona "FastFlowLM",
-    "Ollama" ni "qwen3" por nombre. Cambiar de runtime o de modelo es
-    editar .env.providers, no tocar código.
-  - Los clientes se cachean (un client por proveedor, no por request).
+Diseño (dos ejes independientes):
+  - `client`: QUÉ IMPLEMENTACIÓN de LLMClient usar para hablar con este
+    proveedor -- "openai_compat" o "ollama_native" (ver
+    src/llm/backends/). Es mecánica de transporte pura, no sabe nada de
+    modelos concretos.
+  - `capabilities`: QUÉ ARCHIVO de src/config/models/ mirar para saber
+    qué acepta el modelo de este proveedor (temperature, max_tokens,
+    think mode y cómo activarlo). Es descripción del modelo, no sabe
+    nada de HTTP.
+  Ambos ejes son independientes a propósito: dos proveedores podrían
+  compartir el mismo `client` (dos servidores OpenAI-compatible) con
+  `capabilities` distintas (modelos distintos), o viceversa.
+
+  - Los clientes concretos se cachean por ProviderConfig completo (un
+    dataclass frozen y hashable) -- un cliente por proveedor, no por
+    request.
   - Agregar un proveedor nuevo (Claude, OpenAI, Mistral...) es agregar
     una entrada a _PROVIDER_ENV_PREFIXES + los campos correspondientes
-    en Settings, no tocar graph.py, nodes.py ni generate.py.
-  - Los nodos del grafo no importan providers.py directamente: usan
+    en Settings, no tocar graph.py, nodes.py ni generate.py. Agregar un
+    modelo nuevo bajo un backend existente es una entrada en
+    src/config/models/<backend>.py, nada más.
+  - Los nodos del grafo no importan este módulo directamente: usan
     ask_llm(..., provider=...) / ask_llm_internal(..., provider=...) en
-    generate.py, que sí depende de este módulo. Así el grafo nunca sabe
-    de OpenAI clients, solo de "qué proveedor usar".
-
-Por qué no LangChain ChatModels aquí: el resto del proyecto ya habla
-directo con el SDK `openai` (ver llm/client.py original). Mantener esa
-misma interfaz para los providers nuevos evita una migración innecesaria
-y dos formas distintas de llamar al LLM conviviendo en el código.
+    generate.py, que sí depende de él. Así el grafo nunca sabe de
+    clientes LLM concretos, solo de "qué proveedor usar".
 """
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from functools import lru_cache
 
-from openai import OpenAI
-
 from src.config.settings import settings
+from src.llm.backends.base import LLMClient
+from src.llm.backends.ollama_native import OllamaNativeClient
+from src.llm.backends.openai_compat import OpenAICompatClient
 from src.utils.logger import logger
 
 
@@ -46,46 +53,27 @@ class ProviderConfig:
     base_url: str
     api_key: str
     model: str
-    # Qué GenerationOptions (src/api/schemas/chat.py) acepta este
-    # provider/modelo. temperature y max_tokens son universales en
-    # cualquier endpoint OpenAI-compatible; think_mode y extra NO -- ver
-    # think_param abajo y el docstring de GenerationOptions.extra.
-    supports: frozenset[str] = frozenset({"temperature", "max_tokens"})
-    # Nombre del campo que este runtime espera en el payload para activar
-    # el modo de razonamiento. None/"" = no soportado (y "think_mode" no
-    # debería estar en `supports` en ese caso). El mecanismo exacto varía
-    # por runtime -- por eso es data, no código: no hay forma de
-    # introspectar automáticamente un servidor OpenAI-compatible
-    # arbitrario para saber qué espera.
-    think_param: str | None = None
-    # Valor de think_mode a usar cuando el request NO trae un override
-    # explícito. None = no mandar el campo si no hay override (el
-    # modelo/runtime decide su propio default). True/False = se manda
-    # siempre ese valor, anulando el default propio del modelo -- útil
-    # porque algunos modelos (ej. Qwen3) vienen con razonamiento activado
-    # por defecto y no hay forma de "apagarlo" si nunca se envía el campo.
-    default_think: bool | None = None
+    # "openai_compat" | "ollama_native" -- ver _CLIENT_FACTORIES abajo.
+    client: str
+    # Clave en src/config/models/ (ej. "fastflowlm", "ollama", "gemini")
+    # -- qué archivo mirar para las capacidades reales de `model`.
+    capabilities: str
 
 
 # (nombre, prefijo en Settings) -- agregar un provider nuevo es agregar
-# una tupla acá + los campos <prefijo>_base_url/_api_key/_model/_supports/
-# _think_param en Settings (mismo patrón que local_*/gemini_*).
+# una tupla acá + los campos <prefijo>_base_url/_api_key/_model/_client/
+# _capabilities en Settings (mismo patrón que local_*/gemini_*).
 _PROVIDER_ENV_PREFIXES: tuple[str, ...] = ("local", "gemini")
 
-
-def _parse_supports(raw: str) -> frozenset[str]:
-    """'temperature,max_tokens,think_mode' -> frozenset(...), tolerante a espacios/vacíos."""
-    return frozenset(item.strip() for item in raw.split(",") if item.strip())
-
-
-def _parse_optional_bool(raw: str) -> bool | None:
-    """'true'/'false' -> bool; '' (o cualquier otra cosa) -> None ("sin default")."""
-    normalized = raw.strip().lower()
-    if normalized == "true":
-        return True
-    if normalized == "false":
-        return False
-    return None
+# client_kind -> factory que arma el LLMClient concreto a partir de un
+# ProviderConfig. Agregar un backend nuevo (ej. un cliente propio de
+# Anthropic) es una entrada acá + su archivo en src/llm/backends/.
+_CLIENT_FACTORIES: dict[str, Callable[[ProviderConfig], LLMClient]] = {
+    "openai_compat": lambda config: OpenAICompatClient(
+        base_url=config.base_url, api_key=config.api_key
+    ),
+    "ollama_native": lambda config: OllamaNativeClient(host=config.base_url),
+}
 
 
 def _build_provider_table() -> dict[str, ProviderConfig]:
@@ -102,9 +90,8 @@ def _build_provider_table() -> dict[str, ProviderConfig]:
             base_url=getattr(settings, f"{prefix}_base_url"),
             api_key=getattr(settings, f"{prefix}_api_key"),
             model=getattr(settings, f"{prefix}_model"),
-            supports=_parse_supports(getattr(settings, f"{prefix}_supports")),
-            think_param=getattr(settings, f"{prefix}_think_param", "") or None,
-            default_think=_parse_optional_bool(getattr(settings, f"{prefix}_think_default", "")),
+            client=getattr(settings, f"{prefix}_client"),
+            capabilities=getattr(settings, f"{prefix}_capabilities"),
         )
         for prefix in _PROVIDER_ENV_PREFIXES
     }
@@ -121,10 +108,25 @@ def list_provider_configs() -> dict[str, ProviderConfig]:
 
 
 @lru_cache(maxsize=None)
-def _client_for(base_url: str, api_key: str) -> OpenAI:
-    """Un OpenAI client por (base_url, api_key) único — evita recrear conexiones."""
-    logger.info(f"[providers] Inicializando cliente LLM | base_url={base_url}")
-    return OpenAI(base_url=base_url, api_key=api_key)
+def _client_for(config: ProviderConfig) -> LLMClient:
+    """
+    Un LLMClient por ProviderConfig único -- evita recrear conexiones.
+
+    ProviderConfig es un dataclass frozen de solo strings, por lo tanto
+    hashable: sirve directo como key de lru_cache sin descomponerlo en
+    argumentos posicionales.
+    """
+    factory = _CLIENT_FACTORIES.get(config.client)
+    if factory is None:
+        raise ValueError(
+            f"Tipo de cliente LLM desconocido: {config.client!r} "
+            f"(provider {config.name!r}). Válidos: {sorted(_CLIENT_FACTORIES)}"
+        )
+    logger.info(
+        f"[providers] Inicializando cliente LLM | provider={config.name} "
+        f"| client={config.client} | base_url={config.base_url}"
+    )
+    return factory(config)
 
 
 def get_provider(name: str) -> ProviderConfig:
@@ -153,8 +155,7 @@ def get_provider(name: str) -> ProviderConfig:
     return config
 
 
-def get_client(name: str) -> tuple[OpenAI, ProviderConfig]:
-    """Devuelve (client, config) listos para usar en chat.completions.create()."""
+def get_client(name: str) -> tuple[LLMClient, ProviderConfig]:
+    """Devuelve (client, config) listos para usar en LLMClient.complete()."""
     config = get_provider(name)
-    client = _client_for(config.base_url, config.api_key)
-    return client, config
+    return _client_for(config), config

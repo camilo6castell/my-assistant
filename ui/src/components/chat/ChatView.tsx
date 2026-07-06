@@ -1,9 +1,6 @@
 import { useMutation } from "@tanstack/react-query"
 import { nanoid } from "nanoid"
 import { Navigate, useParams } from "react-router-dom"
-import { useCollections } from "@/hooks/useCollections"
-import { useEphemeralFiles } from "@/hooks/useEphemeralFiles"
-import { useProviders } from "@/hooks/useProviders"
 import { apiErrorMessage, postQuery } from "@/lib/api/client"
 import { useConversationsStore } from "@/stores/conversationsStore"
 import type { ChatMessage } from "@/types/chat"
@@ -30,10 +27,6 @@ export function ChatView() {
   )
   const addMessage = useConversationsStore((s) => s.addMessage)
   const updateMessage = useConversationsStore((s) => s.updateMessage)
-
-  const { data: collectionsData } = useCollections()
-  const { data: providersData } = useProviders()
-  const ephemeralFiles = useEphemeralFiles(conversationId ?? null)
 
   const sendMutation = useMutation({
     mutationFn: (text: string) => {
@@ -104,12 +97,7 @@ export function ChatView() {
 
   return (
     <div className="flex h-full flex-col">
-      <ChatToolbar
-        conversation={conversation}
-        collections={collectionsData?.collections ?? []}
-        providers={providersData}
-        ephemeralFiles={ephemeralFiles}
-      />
+      <ChatToolbar conversation={conversation} />
       <MessageList messages={conversation.messages} />
       <MessageInput onSend={handleSend} disabled={sendMutation.isPending} />
     </div>

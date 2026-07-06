@@ -5,13 +5,13 @@ import { EmptyState } from "@/components/chat/EmptyState"
 
 function App() {
   return (
-    <AppShell>
-      <Routes>
+    <Routes>
+      <Route element={<AppShell />}>
         <Route path="/" element={<EmptyState />} />
         <Route path="/c/:conversationId" element={<ChatView />} />
         <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-    </AppShell>
+      </Route>
+    </Routes>
   )
 }
 

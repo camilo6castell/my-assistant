@@ -1,7 +1,8 @@
-import type { ReactNode } from "react"
+import { Outlet } from "react-router-dom"
+import { RightSidebar } from "./RightSidebar"
 import { Sidebar } from "./Sidebar"
 
-export function AppShell({ children }: { children: ReactNode }) {
+export function AppShell() {
   return (
     <div className="relative flex h-dvh w-full overflow-hidden bg-background text-foreground">
       {/* Glow de fondo sutil -- lo que le da el aire "glass" sin recargar la UI */}
@@ -16,7 +17,11 @@ export function AppShell({ children }: { children: ReactNode }) {
 
       <Sidebar />
 
-      <main className="relative flex min-w-0 flex-1 flex-col">{children}</main>
+      <main className="relative flex min-w-0 flex-1 flex-col">
+        <Outlet />
+      </main>
+
+      <RightSidebar />
     </div>
   )
 }

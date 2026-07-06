@@ -10,6 +10,7 @@ from __future__ import annotations
 from fastapi import APIRouter
 
 from src.api.schemas.config import ProviderInfo, ProvidersResponse
+from src.config.models import get_model_capabilities, supports_set
 from src.config.settings import settings
 from src.llm.providers import list_provider_configs
 
@@ -25,6 +26,10 @@ async def list_providers() -> ProvidersResponse:
     si el provider activo lo soporta), en vez de hardcodear por nombre
     de modelo. `active_generation_provider` le dice cuál de todos es
     el relevante para esa decisión.
+
+    `supports` sale de ModelCapabilities (src/config/models/), no de un
+    campo configurado a mano -- no puede desincronizarse del
+    comportamiento real (ver docstring de src/config/models/__init__.py).
     """
     table = list_provider_configs()
     return ProvidersResponse(
@@ -32,7 +37,9 @@ async def list_providers() -> ProvidersResponse:
             name: ProviderInfo(
                 name=config.name,
                 model=config.model,
-                supports=sorted(config.supports),
+                supports=sorted(
+                    supports_set(get_model_capabilities(config.capabilities, config.model))
+                ),
             )
             for name, config in table.items()
         },

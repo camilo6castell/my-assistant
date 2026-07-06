@@ -144,31 +144,20 @@ class Settings(BaseSettings):
     local_base_url: str = Field(default="")
     local_api_key: str = Field(default="")
     local_model: str = Field(default="")
-    # Qué GenerationOptions acepta este provider, separadas por coma
-    # (ver GenerationOptions en src/api/schemas/chat.py). "extra" habilita
-    # el passthrough genérico de parámetros no modelados explícitamente.
-    local_supports: str = Field(default="temperature,max_tokens,think_mode")
-    # Nombre del campo que este runtime espera en el payload para activar
-    # el modo de razonamiento. FastFlowLM y Ollama (los runtimes típicos
-    # para modelos como qwen3) lo exponen como un campo top-level
-    # "think": true/false -- se envía vía extra_body del cliente OpenAI,
-    # que inyecta claves adicionales en el JSON del request. Vacío =
-    # el provider no soporta think_mode (y no debería estar en
-    # local_supports en ese caso).
-    local_think_param: str = Field(default="think")
-    # Default de think_mode cuando el request NO trae un override explícito.
-    # "true"/"false" = se manda ese valor siempre (anula el default propio
-    # del modelo -- Qwen3 viene con thinking ON por defecto, ver su model
-    # card en HuggingFace). Vacío = no mandar el campo si no hay override
-    # explícito, dejando que el modelo/runtime decida su propio default.
-    local_think_default: str = Field(default="")
+    # "openai_compat" | "ollama_native" -- qué implementación de
+    # LLMClient usar (ver src/llm/backends/).
+    local_client: str = Field(default="openai_compat")
+    # Qué archivo de src/config/models/ mirar para las capacidades reales
+    # de local_model (temperature, max_tokens, think mode y cómo
+    # activarlo). El "supports" que antes vivía acá como string plana
+    # ahora se DERIVA de esa estructura tipada -- no puede desincronizarse.
+    local_capabilities: str = Field(default="fastflowlm")
 
     gemini_base_url: str = Field(default="")
     gemini_api_key: str = Field(default="")
     gemini_model: str = Field(default="")
-    gemini_supports: str = Field(default="temperature,max_tokens")
-    gemini_think_param: str = Field(default="")
-    gemini_think_default: str = Field(default="")
+    gemini_client: str = Field(default="openai_compat")
+    gemini_capabilities: str = Field(default="gemini")
 
     # Qué proveedor usa cada nodo del grafo. Configurable en .env,
     # sin tocar código — esto es lo que hace la arquitectura extensible.
