@@ -42,6 +42,9 @@ export function ChatView() {
             temperature: conversation.generation.temperature,
             max_tokens: conversation.generation.maxTokens,
             think_mode: conversation.generation.thinkMode,
+            max_turns: conversation.generation.maxTurns,
+            top_k_initial: conversation.generation.topKInitial,
+            top_k_final: conversation.generation.topKFinal,
           },
         },
         conversation.useAgent

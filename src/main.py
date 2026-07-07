@@ -5,6 +5,7 @@ Uso:
   python -m src.main                                   menú interactivo
   python -m src.main chat                              entra directo al chat
   python -m src.main api                               levanta la API REST
+  python -m src.main web                               levanta API + frontend (ui/) y abre el navegador
   python -m src.main ingest <cat> <col>                ingest de archivos locales
   python -m src.main ingest-url <cat> <col> <url>      ingest de una URL puntual
   python -m src.main crawl <cat> <col> <start_url>     rastrea un sitio completo
@@ -14,6 +15,7 @@ Ejemplos:
   python -m src.main ingest-url sociologia debord https://sitio.com/articulo
   python -m src.main crawl react hooks https://react.dev/learn
   python -m src.main api
+  python -m src.main web
 """
 
 from __future__ import annotations
@@ -67,6 +69,128 @@ def _cmd_api() -> None:
         reload=False,
         log_level="warning",
     )
+
+
+def _wait_for_port(host: str, port: int, timeout: float) -> bool:
+    """Sondea host:port hasta que acepte conexiones TCP o venza el timeout."""
+    import socket
+    import time
+
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        try:
+            with socket.create_connection((host, port), timeout=0.5):
+                return True
+        except OSError:
+            time.sleep(0.3)
+    return False
+
+
+def _cmd_web() -> None:
+    """
+    Levanta la API (in-process, como `api`) y el dev server de Vite de
+    ui/ (subproceso) en paralelo, y abre el navegador en la URL del
+    frontend apenas ambos responden.
+
+    Por qué la API corre en un thread y no en un subproceso separado:
+    reutiliza exactamente la misma configuración/lifespan que `_cmd_api`
+    sin duplicar el comando `uvicorn.run(...)` en dos lugares. El
+    frontend sí necesita ser un subproceso real porque es un proceso
+    Node/Vite independiente (pnpm/npm), no algo importable en Python.
+
+    Ctrl+C detiene ambos: primero el subproceso de Vite, después el
+    servidor uvicorn (server.should_exit = True), y se espera a que el
+    thread de la API termine antes de salir.
+    """
+    import shutil
+    import subprocess
+    import sys
+    import threading
+    import webbrowser
+    from pathlib import Path
+
+    import uvicorn
+
+    from src.config.settings import settings
+    from src.utils.logger import logger
+
+    project_root = Path(__file__).resolve().parent.parent
+    ui_dir = project_root / "ui"
+
+    if not ui_dir.exists():
+        print(f"\n  No se encontró el directorio del frontend en {ui_dir}\n")
+        sys.exit(1)
+
+    pkg_manager = shutil.which("pnpm") or shutil.which("npm")
+    if pkg_manager is None:
+        print(
+            "\n  No se encontró 'pnpm' ni 'npm' en el PATH.\n"
+            "  Instalá Node.js (y opcionalmente pnpm) para poder levantar ui/.\n"
+        )
+        sys.exit(1)
+
+    # --- API: mismo server que `_cmd_api`, corriendo en un thread propio ---
+    server_config = uvicorn.Config(
+        "src.api.app:app",
+        host=settings.api_host,
+        port=settings.api_port,
+        reload=False,
+        log_level="warning",
+    )
+    server = uvicorn.Server(server_config)
+    api_thread = threading.Thread(target=server.run, name="uvicorn-api", daemon=True)
+
+    # --- Frontend: dev server de Vite como subproceso ---
+    ui_process: subprocess.Popen[bytes] | None = None
+
+    # Vite por defecto sirve en 5173 (o el siguiente puerto libre si está
+    # ocupado, pero no hay forma de saberlo de antemano sin parsear su
+    # stdout). 5173 cubre el caso normal de desarrollo local.
+    frontend_host = "127.0.0.1"
+    frontend_port = 5173
+    frontend_url = f"http://{frontend_host}:{frontend_port}"
+
+    print(f"\n  Levantando API en http://{settings.api_host}:{settings.api_port} ...")
+    api_thread.start()
+
+    print(f"  Levantando frontend (ui/) con '{Path(pkg_manager).name} run dev' ...")
+    ui_process = subprocess.Popen(
+        [pkg_manager, "run", "dev"],
+        cwd=str(ui_dir),
+    )
+
+    try:
+        api_ready = _wait_for_port(settings.api_host, settings.api_port, timeout=20.0)
+        if not api_ready:
+            logger.warning("[web] La API no respondió en el tiempo esperado.")
+
+        ui_ready = _wait_for_port(frontend_host, frontend_port, timeout=30.0)
+        if ui_ready:
+            print(f"  Abriendo {frontend_url} en el navegador...\n")
+            webbrowser.open(frontend_url)
+        else:
+            print(
+                f"\n  El frontend no respondió en {frontend_url} dentro del "
+                "tiempo esperado. Revisá la salida de Vite arriba (puede "
+                "estar usando otro puerto) y abrí la URL manualmente.\n"
+            )
+
+        # Bloquea acá con la vida del subproceso de Vite -- Ctrl+C lo
+        # interrumpe y cae al finally, que apaga todo en orden.
+        ui_process.wait()
+    except KeyboardInterrupt:
+        print("\n  Cerrando frontend y API...")
+    finally:
+        if ui_process is not None and ui_process.poll() is None:
+            ui_process.terminate()
+            try:
+                ui_process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                ui_process.kill()
+
+        server.should_exit = True
+        api_thread.join(timeout=10)
+        print("  Listo.\n")
 
 
 def _cmd_ingest(args: list[str]) -> None:
@@ -135,6 +259,7 @@ CommandFn = Callable[..., None]
 COMMANDS: dict[str, tuple[CommandFn, int]] = {
     "chat": (_cmd_chat, 0),
     "api": (_cmd_api, 0),
+    "web": (_cmd_web, 0),
     "ingest": (_cmd_ingest, 2),
     "ingest-url": (_cmd_ingest_url, 3),
     "crawl": (_cmd_crawl, 3),

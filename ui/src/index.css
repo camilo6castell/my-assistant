@@ -174,3 +174,28 @@ body {
     @apply bg-background text-foreground;}
   html {
     @apply font-sans;}}
+
+/* Botón "Agente" activo: degradado animado estilo IA (ver GenerationSection.tsx). */
+@keyframes agent-gradient-flow {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+.agent-gradient-active {
+  background-image: linear-gradient(
+    115deg,
+    oklch(0.65 0.24 300),
+    oklch(0.7 0.22 25),
+    oklch(0.68 0.2 200),
+    oklch(0.65 0.24 300)
+  );
+  background-size: 300% 300%;
+  animation: agent-gradient-flow 5s ease infinite;
+}

@@ -3,7 +3,14 @@ import { create } from "zustand"
 import { persist } from "zustand/middleware"
 import type { ChatMessage, ChatMode, Conversation } from "@/types/chat"
 
-const emptyGeneration = { temperature: null, maxTokens: null, thinkMode: null }
+const emptyGeneration = {
+  temperature: null,
+  maxTokens: null,
+  thinkMode: null,
+  maxTurns: null,
+  topKInitial: null,
+  topKFinal: null,
+}
 
 function makeConversation(): Conversation {
   return {
@@ -30,6 +37,7 @@ interface ConversationsState {
 
   createConversation: () => string
   deleteConversation: (id: string) => void
+  renameConversation: (id: string, title: string) => void
   setActive: (id: string) => void
 
   setActiveCollections: (id: string, collections: string[]) => void
@@ -58,6 +66,17 @@ export const useConversationsStore = create<ConversationsState>()(
           const remaining = s.conversations.filter((c) => c.id !== id)
           const activeId = s.activeId === id ? (remaining[0]?.id ?? null) : s.activeId
           return { conversations: remaining, activeId }
+        }),
+
+      renameConversation: (id, title) =>
+        set((s) => {
+          const trimmed = title.trim()
+          if (!trimmed) return s // título vacío: no pisa el título existente
+          return {
+            conversations: s.conversations.map((c) =>
+              c.id === id ? { ...c, title: trimmed } : c
+            ),
+          }
         }),
 
       setActive: (id) => set({ activeId: id }),

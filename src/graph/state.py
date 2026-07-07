@@ -66,6 +66,14 @@ class RAGState(TypedDict):
     # del resto del proyecto: por definición puede contener cualquier
     # parámetro propio de un provider que el backend no modela.
     extra: dict[str, Any] | None
+    # Overrides de retrieval/historial por-request (ver GenerationOptions
+    # en src/api/schemas/chat.py). None = usar el default de settings
+    # (top_k según mode) o settings.max_turns respectivamente.
+    # Solo retrieve_node lee top_k_initial/top_k_final; solo
+    # generate_node/correct_node leen max_turns.
+    top_k_initial: int | None
+    top_k_final: int | None
+    max_turns: int | None
 
 
 class RAGStateUpdate(TypedDict, total=False):
@@ -95,3 +103,6 @@ class RAGStateUpdate(TypedDict, total=False):
     max_tokens: int | None
     think_mode: bool | None
     extra: dict[str, Any] | None
+    top_k_initial: int | None
+    top_k_final: int | None
+    max_turns: int | None

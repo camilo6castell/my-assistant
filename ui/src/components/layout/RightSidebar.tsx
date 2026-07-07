@@ -77,7 +77,7 @@ export function RightSidebar() {
       onResize={setRightWidth}
       collapsedContent={collapsedContent}
     >
-      <section className="flex min-h-0 flex-[3] flex-col pt-1">
+      <section className="flex min-h-0 flex-grow-1 flex-col pt-1">
         <SidebarSectionHeader icon={Paperclip} label="Archivos" count={fileCount} />
         <div className="min-h-0 flex-1 overflow-y-auto pb-3">
           <FilesSection files={ephemeralFiles} />
@@ -86,7 +86,7 @@ export function RightSidebar() {
 
       <div className="mx-3 border-t border-white/10" />
 
-      <section className="flex min-h-0 flex-[2] flex-col pt-3">
+      <section className="flex min-h-0 flex-shrink-0 flex-grow-0 flex-col pt-3">
         <SidebarSectionHeader icon={Settings2} label="Generación" />
         <div className="min-h-0 flex-1 overflow-y-auto pb-3">
           <GenerationSection conversation={conversation} providers={providersData} />

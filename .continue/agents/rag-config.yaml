@@ -3,6 +3,7 @@
 name: Local FLM Config
 version: 1.0.0
 schema: v1
+
 ########################################################
 # YAML ANCHORS - Para evitar duplicación
 ########################################################
@@ -19,6 +20,7 @@ defaults: &defaults
     topP: 0.9
   autocompleteOptions:
     disable: true
+
 ########################################################
 # MODELS
 ########################################################
@@ -30,12 +32,16 @@ models:
   - name: Qwen3 8B Agent
     <<: *defaults
     model: qwen3:8b
+    # defaultCompletionOptions:
+    #   <<: *defaults
+    #   reasoning: false
     capabilities:
       - tool_use
     roles:
       - chat
       - edit
       - apply
+
   # 2: Modelo para razonamiento complejo (usar selectivamente)
   - name: GPT-OSS 20B
     <<: *defaults
@@ -47,10 +53,11 @@ models:
     defaultCompletionOptions:
       <<: *defaults
       temperature: 0.2
-      # ⚠️ Verifica si este modelo soporta 'reasoning: true'
+      # ⚠ Verifica si este modelo soporta 'reasoning: true'
       # reasoning: true  # Solo para Claude 3.7+ y algunos modelos Ollama
+
   ########################################################
-  # AUTOCOMPLETE MODEL (Comentado - usando Copilot)
+  # AUTOCOMPLETE MODEL
   ########################################################
   # - name: Qwen3.5 2B Autocomplete
   #   <<: *defaults
@@ -71,12 +78,13 @@ models:
   #     maxTokens: 128
   #   requestOptions:
   #     timeout: 10000
+
   ########################################################
   # EMBEDDINGS
   ########################################################
   - name: BGE-M3
     provider: ollama
-    model: bge-m3
+    model: bge-m3:latest
     apiBase: http://127.0.0.1:11434
     roles:
       - embed
@@ -85,20 +93,22 @@ models:
       maxBatchSize: 16
     defaultCompletionOptions:
       keepAlive: 1800
-########################################################
-# RERANKER (Comentado - sin modelos óptimos disponibles)
-########################################################
-# - name: BGE Reranker
-#   provider: ollama
-#   model: bbjson/bge-reranker-base:latest
-#   apiBase: http://127.0.0.1:11434
-#   roles:
-#     - rerank
-#   defaultCompletionOptions:
-#     keepAlive: 1800
-########################################################
-# CONTEXT PROVIDERS
-########################################################
+
+  ########################################################
+  # RERANKER
+  ########################################################
+  # - name: BGE Reranker
+  #   provider: ollama
+  #   model: bbjson/bge-reranker-base:latest
+  #   apiBase: http://127.0.0.1:11434
+  #   roles:
+  #     - rerank
+  #   defaultCompletionOptions:
+  #     keepAlive: 1800
+
+  ########################################################
+  # CONTEXT PROVIDERS
+  ########################################################
 context:
   - provider: codebase
   - provider: file
@@ -111,33 +121,19 @@ context:
   - provider: problems
   - provider: os
   - provider: repo-map
-params:
-  includeSignatures: true
+
+# params:
+#   includeSignatures: true
+
 ########################################################
 # RULES - Consolidadas (aplican a todos los modos)
 ########################################################
 rules:
-  # 🔹 Principios de ingeniería
+  # Principios de ingeniería
   - "You are an expert senior software engineer and autonomous coding agent."
   - "Always analyze repository context before answering or making changes."
   - "Reuse existing project patterns, architecture, and conventions."
   - "Prefer minimal, targeted modifications over full rewrites."
-  # 🔹 Prevención de alucinaciones
+
+  # Prevención de alucinaciones
   - "Never invent APIs, files, libraries, or functionality that doesn't exist."
-  - "If repository context is insufficient, explicitly state what's missing before proceeding."
-  - "When uncertain about implementation details, ask for clarification or note assumptions and simply say 'I don't know' if necessary."
-  # 🔹 Estilo de respuesta
-  - "Keep answers concise, technical, and actionable."
-  - "Include code examples only when directly relevant to the question."
-  - "Use the same language as the user's query unless instructed otherwise."
-########################################################
-# DOCS (Opcional - descomentar si necesitas indexar docs)
-########################################################
-# docs:
-#   - name: Continue Reference
-#     startUrl: https://docs.continue.dev/customize/deep-dives
-#     favicon: https://docs.continue.dev/favicon.ico
-# docs:
-#   - name: Pydantic Reference
-#     startUrl: https://pydantic.dev/docs/validation/latest/get-started/
-    # favicon: https://docs.continue.dev/favicon.ico

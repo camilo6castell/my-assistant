@@ -7,6 +7,11 @@ export interface GenerationOptions {
   think_mode?: boolean | null
   /** Passthrough genérico sin validar en el cliente -- ver GenerationOptions.extra en el backend. */
   extra?: Record<string, unknown> | null
+  /** Ventana de historial (turnos) enviada al LLM. null = settings.max_turns. */
+  max_turns?: number | null
+  /** Overrides de retrieval, dependientes del modo SOFT/HARD del request. */
+  top_k_initial?: number | null
+  top_k_final?: number | null
 }
 
 export type ChatMode = "SOFT" | "HARD"
@@ -37,9 +42,19 @@ export interface ProviderInfo {
   supports: string[]
 }
 
+export interface GenerationDefaults {
+  temperature: number
+  max_turns: number
+  hard_top_k_initial: number
+  hard_top_k_final: number
+  soft_top_k_initial: number
+  soft_top_k_final: number
+}
+
 export interface ProvidersResponse {
   providers: Record<string, ProviderInfo>
   active_generation_provider: string
+  defaults: GenerationDefaults
 }
 
 export interface EphemeralFileInfo {

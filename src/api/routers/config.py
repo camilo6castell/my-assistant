@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
-from src.api.schemas.config import ProviderInfo, ProvidersResponse
+from src.api.schemas.config import GenerationDefaults, ProviderInfo, ProvidersResponse
 from src.config.models import get_model_capabilities, supports_set
 from src.config.settings import settings
 from src.llm.providers import list_provider_configs
@@ -44,4 +44,12 @@ async def list_providers() -> ProvidersResponse:
             for name, config in table.items()
         },
         active_generation_provider=settings.generate_provider,
+        defaults=GenerationDefaults(
+            temperature=settings.llm_temperature,
+            max_turns=settings.max_turns,
+            hard_top_k_initial=settings.hard_top_k_initial,
+            hard_top_k_final=settings.hard_top_k_final,
+            soft_top_k_initial=settings.soft_top_k_initial,
+            soft_top_k_final=settings.soft_top_k_final,
+        ),
     )

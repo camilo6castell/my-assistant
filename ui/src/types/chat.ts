@@ -21,6 +21,10 @@ export interface GenerationOptionsState {
   temperature: number | null
   maxTokens: number | null
   thinkMode: boolean | null
+  /** Overrides solo para esta conversación -- null = usar el default de .env/settings. */
+  maxTurns: number | null
+  topKInitial: number | null
+  topKFinal: number | null
 }
 
 export interface Conversation {

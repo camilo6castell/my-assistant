@@ -1,6 +1,7 @@
 import { formatDistanceToNow } from "date-fns"
 import { es } from "date-fns/locale"
-import { Layers, MessageSquarePlus, MessagesSquare, Trash2 } from "lucide-react"
+import { Check, Layers, MessageSquarePlus, MessagesSquare, Pencil, Trash2 } from "lucide-react"
+import { useState } from "react"
 import { useNavigate, useParams } from "react-router-dom"
 import { Button } from "@/components/ui/button"
 import { useCollections } from "@/hooks/useCollections"
@@ -17,10 +18,14 @@ export function Sidebar() {
   const conversations = useConversationsStore((s) => s.conversations)
   const createConversation = useConversationsStore((s) => s.createConversation)
   const deleteConversation = useConversationsStore((s) => s.deleteConversation)
+  const renameConversation = useConversationsStore((s) => s.renameConversation)
   const setActiveCollections = useConversationsStore((s) => s.setActiveCollections)
   const activeConversation = useConversationsStore((s) =>
     s.conversations.find((c) => c.id === conversationId)
   )
+
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editValue, setEditValue] = useState("")
 
   const leftWidth = useUiStore((s) => s.leftWidth)
   const leftCollapsed = useUiStore((s) => s.leftCollapsed)
@@ -42,6 +47,18 @@ export function Sidebar() {
     if (id === conversationId) {
       navigate(remaining[0] ? `/c/${remaining[0].id}` : "/")
     }
+  }
+
+  function handleStartEdit(e: React.MouseEvent, id: string, currentTitle: string) {
+    e.stopPropagation()
+    e.preventDefault()
+    setEditingId(id)
+    setEditValue(currentTitle)
+  }
+
+  function handleCommitEdit(id: string) {
+    renameConversation(id, editValue)
+    setEditingId(null)
   }
 
   const collapsedContent = (
@@ -93,7 +110,7 @@ export function Sidebar() {
         </Button>
       </div>
 
-      <section className="flex min-h-0 flex-[2] flex-col pt-1">
+      <section className="flex min-h-0 flex-grow-1 flex-col pt-1">
         <SidebarSectionHeader
           icon={MessagesSquare}
           label="Chats"
@@ -107,11 +124,18 @@ export function Sidebar() {
           )}
           {conversations.map((conv) => {
             const isActive = conv.id === conversationId
+            const isEditing = editingId === conv.id
             return (
-              <button
+              <div
                 key={conv.id}
-                type="button"
-                onClick={() => navigate(`/c/${conv.id}`)}
+                role="button"
+                tabIndex={0}
+                onClick={() => !isEditing && navigate(`/c/${conv.id}`)}
+                onKeyDown={(e) => {
+                  if (!isEditing && (e.key === "Enter" || e.key === " ")) {
+                    navigate(`/c/${conv.id}`)
+                  }
+                }}
                 className={cn(
                   "group flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2.5 text-left text-sm transition-colors",
                   isActive
@@ -120,21 +144,71 @@ export function Sidebar() {
                 )}
               >
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate">{conv.title}</span>
+                  {isEditing ? (
+                    <input
+                      autoFocus
+                      value={editValue}
+                      onClick={(e) => e.stopPropagation()}
+                      onChange={(e) => setEditValue(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault()
+                          handleCommitEdit(conv.id)
+                        } else if (e.key === "Escape") {
+                          e.preventDefault()
+                          setEditingId(null)
+                        }
+                      }}
+                      onBlur={() => handleCommitEdit(conv.id)}
+                      className="block w-full rounded-md border border-white/10 bg-white/[0.06] px-1.5 py-0.5 text-sm text-foreground outline-none focus:border-primary/50"
+                    />
+                  ) : (
+                    <span className="block truncate">{conv.title}</span>
+                  )}
                   <span className="block truncate text-[11px] text-muted-foreground/70">
                     {formatDistanceToNow(conv.createdAt, { addSuffix: true, locale: es })}
                   </span>
                 </span>
-                <span
-                  role="button"
-                  tabIndex={0}
-                  onClick={(e) => handleDelete(e, conv.id)}
-                  className="shrink-0 rounded-md p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-white/10 hover:text-destructive group-hover:opacity-100"
-                  aria-label="Eliminar conversación"
-                >
-                  <Trash2 className="size-3.5" />
+                <span className="flex shrink-0 items-center gap-0.5">
+                  {isEditing ? (
+                    <span
+                      role="button"
+                      tabIndex={0}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        e.preventDefault()
+                        handleCommitEdit(conv.id)
+                      }}
+                      className="rounded-md p-1 text-muted-foreground hover:bg-white/10 hover:text-foreground"
+                      aria-label="Guardar nombre"
+                    >
+                      <Check className="size-3.5" />
+                    </span>
+                  ) : (
+                    <span
+                      role="button"
+                      tabIndex={0}
+                      onClick={(e) => handleStartEdit(e, conv.id, conv.title)}
+                      className="rounded-md p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-white/10 hover:text-foreground group-hover:opacity-100"
+                      aria-label="Renombrar conversación"
+                    >
+                      <Pencil className="size-3.5" />
+                    </span>
+                  )}
+                  <span
+                    role="button"
+                    tabIndex={0}
+                    onClick={(e) => handleDelete(e, conv.id)}
+                    className={cn(
+                      "rounded-md p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-white/10 hover:text-destructive group-hover:opacity-100",
+                      isEditing && "hidden"
+                    )}
+                    aria-label="Eliminar conversación"
+                  >
+                    <Trash2 className="size-3.5" />
+                  </span>
                 </span>
-              </button>
+              </div>
             )
           })}
         </nav>
@@ -142,7 +216,7 @@ export function Sidebar() {
 
       <div className="mx-3 border-t border-white/10" />
 
-      <section className="flex min-h-0 flex-[3] flex-col pt-3">
+      <section className="flex min-h-0 flex-shrink-0 flex-grow-0 flex-col pt-3">
         <SidebarSectionHeader
           icon={Layers}
           label="Colecciones"

@@ -128,14 +128,25 @@ def search(
     question: str,
     mode: str,
     collections: list[LoadedCollection],
+    top_k_initial: int | None = None,
+    top_k_final: int | None = None,
 ) -> tuple[list[SearchResult], float]:
+    """
+    top_k_initial/top_k_final: overrides por-request (ver GenerationOptions
+    en src/api/schemas/chat.py). None en cualquiera de los dos usa el
+    default de settings para el modo (SOFT/HARD) -- igual que
+    temperature/max_tokens en src/llm/generate.py, nunca mutan settings.
+    """
 
     if mode == ChatMode.SOFT:
-        top_k_initial = settings.soft_top_k_initial
-        top_k_final = settings.soft_top_k_final
+        default_initial = settings.soft_top_k_initial
+        default_final = settings.soft_top_k_final
     else:
-        top_k_initial = settings.hard_top_k_initial
-        top_k_final = settings.hard_top_k_final
+        default_initial = settings.hard_top_k_initial
+        default_final = settings.hard_top_k_final
+
+    top_k_initial = default_initial if top_k_initial is None else top_k_initial
+    top_k_final = default_final if top_k_final is None else top_k_final
 
     queries = build_queries(question, mode)
     embeddings = encode_queries(queries)

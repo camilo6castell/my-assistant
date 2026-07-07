@@ -41,24 +41,31 @@ def build_messages(
     prompt: str,
     chat_memory: list[TurnMemory],
     system_prompt: str = build_system_prompt(),
+    max_turns: int | None = None,
 ) -> list[ChatTurn]:
     """
     Construye el array de mensajes para la API.
 
     Estructura:
       [system] -> instrucciones base
-      [user / assistant] x MAX_TURNS -> historial reciente (ventana deslizante)
+      [user / assistant] x max_turns -> historial reciente (ventana deslizante)
       [user] -> prompt actual (contexto recuperado + pregunta)
 
     chat_memory vacío (caso de ask_llm_internal, que no tiene turnos de
     usuario) simplemente no agrega nada entre system y el prompt actual.
+
+    max_turns: override por-request (ver GenerationOptions en
+    src/api/schemas/chat.py). None usa settings.max_turns -- mismo
+    contrato que temperature/max_tokens, nunca muta settings.
     """
+    effective_max_turns = settings.max_turns if max_turns is None else max_turns
+
     messages: list[ChatTurn] = [
         {"role": "system", "content": system_prompt},
     ]
 
     # TurnMemory es BaseModel: acceso por atributo (.user, .assistant)
-    for turn in chat_memory[-settings.max_turns :]:
+    for turn in chat_memory[-effective_max_turns:]:
         messages.append({"role": "user", "content": turn.user})
         messages.append({"role": "assistant", "content": turn.assistant})
 
@@ -159,6 +166,21 @@ def _complete(
     if not content:
         logger.warning(f"{log_prefix}El modelo devolvio respuesta vacia.")
         return None
+
+    # Log diagnóstico para el bug reportado de mensajes que llegan
+    # incompletos al frontend (a veces faltan los primeros ~16
+    # caracteres). No hay slicing en este módulo ni en el camino
+    # request->JSONResponse->frontend (revisado), así que si el corte ya
+    # está presente ACÁ (longitud/preview más corto de lo esperado, o el
+    # preview empieza a mitad de palabra) el origen es el provider/modelo
+    # o el cliente HTTP (OpenAI SDK / ollama-python), no este código. Si
+    # el contenido llega completo hasta acá pero el frontend lo muestra
+    # incompleto, el problema está en el tramo API->navegador (red,
+    # proxy, o el estado de React), no en la generación.
+    logger.info(
+        f"{log_prefix}Respuesta del LLM | len={len(content)} "
+        f"| preview={content[:40]!r}"
+    )
     return content
 
 
@@ -170,9 +192,10 @@ def ask_llm(
     max_tokens: int | None = None,
     think_mode: bool | None = None,
     extra: ExtraFields | None = None,
+    max_turns: int | None = None,
 ) -> str:
     provider_name = provider or settings.generate_provider
-    messages = build_messages(prompt=prompt, chat_memory=chat_memory)
+    messages = build_messages(prompt=prompt, chat_memory=chat_memory, max_turns=max_turns)
 
     content = _complete(
         messages=messages,

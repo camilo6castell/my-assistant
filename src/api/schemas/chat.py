@@ -30,6 +30,18 @@ class GenerationOptions(BaseModel):
     ProviderConfig en src/llm/providers.py): es un opt-in explícito, no
     "cualquier JSON pasa a cualquier servidor".
 
+    max_turns: cuántos turnos de chat_history se incluyen en el prompt
+    (ventana deslizante, ver build_messages en src/llm/generate.py).
+    None = usar settings.max_turns.
+
+    top_k_initial/top_k_final: overrides del retrieval (ver
+    src/retrieval/search.py). None = usar el default de settings para el
+    modo (SOFT/HARD) de este request. Si ambos vienen seteados,
+    top_k_final no puede ser mayor que top_k_initial -- si solo viene uno
+    de los dos, se valida contra el default de settings para ese modo (ver
+    _validate_generation_options en src/api/routers/chat.py, que sí
+    conoce el modo del request).
+
     Ninguno de estos valores muta Settings ni ProviderConfig -- son
     parámetros por-request, no estado del servidor (ver docstring de
     src/llm/generate.py para el porqué). El servidor valida cada campo
@@ -41,6 +53,9 @@ class GenerationOptions(BaseModel):
     max_tokens: int | None = Field(default=None, gt=0)
     think_mode: bool | None = None
     extra: dict[str, Any] | None = None
+    max_turns: int | None = Field(default=None, gt=0)
+    top_k_initial: int | None = Field(default=None, gt=0)
+    top_k_final: int | None = Field(default=None, gt=0)
 
 
 class QueryRequest(BaseModel):
