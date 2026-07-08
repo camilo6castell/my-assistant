@@ -14,7 +14,7 @@ archivos que ya importan directamente (ej: from src.config.settings import CHUNK
 
 from pathlib import Path
 
-from pydantic import Field, field_validator, ValidationInfo, model_validator
+from pydantic import Field, ValidationInfo, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 

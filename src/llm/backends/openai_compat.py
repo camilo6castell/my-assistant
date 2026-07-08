@@ -36,8 +36,28 @@ class OpenAICompatClient:
 
         try:
             response = self._client.chat.completions.create(**kwargs)
-            content = response.choices[0].message.content
-            return str(content).strip() if content else None
         except OpenAIError:
             logger.exception("[openai_compat] Error consultando LLM")
             return None
+
+        # Algunos runtimes OpenAI-compatible (ej. FastFlowLM sobre NPU)
+        # pueden devolver HTTP 200 con un body sin 'choices' cuando el
+        # proceso de inferencia falla internamente a mitad de generación
+        # -- no es un error que el SDK de OpenAI reconozca como tal (no
+        # es un OpenAIError), así que indexar choices[0] a ciegas
+        # crashea con un TypeError sin manejar y tumba el request entero
+        # con un 500. Tratarlo como respuesta vacía es consistente con
+        # el resto del contrato de complete() (ver base.py: "None si
+        # vino vacía") y deja que el caller haga el fallback normal
+        # ("El modelo no devolvio respuesta.", ver generate.py) en vez
+        # de propagar una excepción no manejada hasta el endpoint.
+        if not response.choices:
+            logger.warning(
+                "[openai_compat] La respuesta del servidor no trae 'choices' "
+                "(posible fallo interno del runtime, ej. timeout o abortado a "
+                "mitad de generación) -- se trata como respuesta vacia."
+            )
+            return None
+
+        content = response.choices[0].message.content
+        return str(content).strip() if content else None

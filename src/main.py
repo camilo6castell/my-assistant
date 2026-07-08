@@ -25,17 +25,17 @@ from typing import Callable
 
 
 def _cmd_chat() -> None:
-    from src.chat.session import ChatSession
     from src.chat.interface import start_chat
+    from src.chat.session import ChatSession
 
     session = ChatSession()
     start_chat(session)
 
 
 def _cmd_menu() -> None:
-    from src.chat.session import ChatSession
     from src.chat.interface import start_chat
-    from src.cli.commands import show_main_menu, show_contexts, show_modes, show_about
+    from src.chat.session import ChatSession
+    from src.cli.commands import show_about, show_contexts, show_main_menu, show_modes
 
     session = ChatSession()
 
@@ -60,6 +60,7 @@ def _cmd_menu() -> None:
 
 def _cmd_api() -> None:
     import uvicorn
+
     from src.config.settings import settings
 
     uvicorn.run(
@@ -146,7 +147,19 @@ def _cmd_web() -> None:
     # Vite por defecto sirve en 5173 (o el siguiente puerto libre si está
     # ocupado, pero no hay forma de saberlo de antemano sin parsear su
     # stdout). 5173 cubre el caso normal de desarrollo local.
-    frontend_host = "127.0.0.1"
+    #
+    # "localhost" y NO "127.0.0.1": Node (y por lo tanto Vite) resuelve
+    # el host "localhost" con la política de DNS del propio Node, que en
+    # versiones recientes puede preferir ::1 (IPv6) sobre 127.0.0.1
+    # según el sistema -- si Vite terminó bindeado a ::1, un probe TCP
+    # explícito a 127.0.0.1 nunca conecta y el timeout salta aunque Vite
+    # esté listo (esto pasaba antes: el log de Vite mostraba "ready" pero
+    # _wait_for_port igual reportaba timeout). socket.create_connection
+    # con un hostname (en vez de una IP literal) prueba todas las
+    # direcciones que devuelva getaddrinfo, en el mismo orden que
+    # preferiría el navegador -- coincide con lo que Vite haya bindeado
+    # realmente, sea IPv4 o IPv6.
+    frontend_host = "localhost"
     frontend_port = 5173
     frontend_url = f"http://{frontend_host}:{frontend_port}"
 
