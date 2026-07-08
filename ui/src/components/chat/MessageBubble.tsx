@@ -1,16 +1,19 @@
-import { AlertCircle, Layers, Sparkles } from "lucide-react"
+import { AlertCircle, Globe, Layers, Sparkles } from "lucide-react"
 import ReactMarkdown from "react-markdown"
 import rehypeHighlight from "rehype-highlight"
 import remarkGfm from "remark-gfm"
 import { cn } from "@/lib/utils"
 import type { ChatMessage } from "@/types/chat"
 
-function ThinkingDots() {
+function ThinkingDots({ label }: { label?: string }) {
   return (
-    <span className="inline-flex items-center gap-1">
-      <span className="size-1.5 animate-bounce rounded-full bg-muted-foreground [animation-delay:-0.3s]" />
-      <span className="size-1.5 animate-bounce rounded-full bg-muted-foreground [animation-delay:-0.15s]" />
-      <span className="size-1.5 animate-bounce rounded-full bg-muted-foreground" />
+    <span className="inline-flex items-center gap-2">
+      {label && <span className="text-xs text-muted-foreground">{label}</span>}
+      <span className="inline-flex items-center gap-1">
+        <span className="size-1.5 animate-bounce rounded-full bg-muted-foreground [animation-delay:-0.3s]" />
+        <span className="size-1.5 animate-bounce rounded-full bg-muted-foreground [animation-delay:-0.15s]" />
+        <span className="size-1.5 animate-bounce rounded-full bg-muted-foreground" />
+      </span>
     </span>
   )
 }
@@ -30,7 +33,7 @@ export function MessageBubble({ message }: { message: ChatMessage }) {
         )}
       >
         {message.isPending ? (
-          <ThinkingDots />
+          <ThinkingDots label={message.pendingLabel} />
         ) : isUser ? (
           <p className="whitespace-pre-wrap">{message.content}</p>
         ) : (
@@ -55,7 +58,31 @@ export function MessageBubble({ message }: { message: ChatMessage }) {
                 {message.collectionsUsed.join(", ")}
               </span>
             )}
+            {message.usedWebSearch && (
+              <span className="inline-flex items-center gap-1">
+                <Globe className="size-3" />
+                incluye búsqueda web
+              </span>
+            )}
             {message.reformulated && <span>· pregunta reformulada</span>}
+          </div>
+        )}
+
+        {!!message.webSources?.length && (
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {message.webSources.map((source) => (
+              <a
+                key={source.url}
+                href={source.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                title={source.url}
+                className="inline-flex max-w-[220px] items-center gap-1 truncate rounded-full border border-white/10 bg-white/[0.04] px-2 py-0.5 text-[11px] text-muted-foreground transition-colors hover:bg-white/10 hover:text-foreground"
+              >
+                <Globe className="size-3 shrink-0" />
+                <span className="truncate">{source.title}</span>
+              </a>
+            ))}
           </div>
         )}
 

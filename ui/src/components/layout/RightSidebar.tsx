@@ -1,29 +1,29 @@
-import { Paperclip, Settings2 } from "lucide-react"
-import { useParams } from "react-router-dom"
-import { FilesSection } from "@/components/chat/FilesSection"
-import { GenerationSection } from "@/components/chat/GenerationSection"
-import { useEphemeralFiles } from "@/hooks/useEphemeralFiles"
-import { useProviders } from "@/hooks/useProviders"
-import { useConversationsStore } from "@/stores/conversationsStore"
-import { useUiStore } from "@/stores/uiStore"
-import { SidebarSectionHeader } from "./SidebarSectionHeader"
-import { SidebarShell } from "./SidebarShell"
+import { Paperclip, Settings2 } from "lucide-react";
+import { useParams } from "react-router-dom";
+import { FilesSection } from "@/components/chat/FilesSection";
+import { GenerationSection } from "@/components/chat/GenerationSection";
+import { useEphemeralFiles } from "@/hooks/useEphemeralFiles";
+import { useProviders } from "@/hooks/useProviders";
+import { useConversationsStore } from "@/stores/conversationsStore";
+import { useUiStore } from "@/stores/uiStore";
+import { SidebarSectionHeader } from "./SidebarSectionHeader";
+import { SidebarShell } from "./SidebarShell";
 
 export function RightSidebar() {
-  const { conversationId } = useParams<{ conversationId: string }>()
+  const { conversationId } = useParams<{ conversationId: string }>();
   const conversation = useConversationsStore((s) =>
-    s.conversations.find((c) => c.id === conversationId)
-  )
+    s.conversations.find((c) => c.id === conversationId),
+  );
 
-  const rightWidth = useUiStore((s) => s.rightWidth)
-  const rightCollapsed = useUiStore((s) => s.rightCollapsed)
-  const setRightWidth = useUiStore((s) => s.setRightWidth)
-  const toggleRightCollapsed = useUiStore((s) => s.toggleRightCollapsed)
+  const rightWidth = useUiStore((s) => s.rightWidth);
+  const rightCollapsed = useUiStore((s) => s.rightCollapsed);
+  const setRightWidth = useUiStore((s) => s.setRightWidth);
+  const toggleRightCollapsed = useUiStore((s) => s.toggleRightCollapsed);
 
-  const ephemeralFiles = useEphemeralFiles(conversationId ?? null)
-  const { data: providersData } = useProviders()
+  const ephemeralFiles = useEphemeralFiles(conversationId ?? null);
+  const { data: providersData } = useProviders();
 
-  const fileCount = ephemeralFiles.data?.files.length ?? 0
+  const fileCount = ephemeralFiles.data?.files.length ?? 0;
 
   const collapsedContent = (
     <>
@@ -49,7 +49,7 @@ export function RightSidebar() {
         <Settings2 className="size-4" />
       </button>
     </>
-  )
+  );
 
   if (!conversation) {
     return (
@@ -62,11 +62,16 @@ export function RightSidebar() {
         collapsedContent={collapsedContent}
       >
         <p className="px-3 py-6 text-center text-xs text-muted-foreground">
-          Elegí o creá una conversación para ver sus archivos y opciones de generación.
+          Elegí o creá una conversación para ver sus archivos y opciones de
+          generación.
         </p>
       </SidebarShell>
-    )
+    );
   }
+
+  const activeProvider = providersData
+    ? providersData.providers[providersData.active_generation_provider]
+    : undefined;
 
   return (
     <SidebarShell
@@ -78,7 +83,11 @@ export function RightSidebar() {
       collapsedContent={collapsedContent}
     >
       <section className="flex min-h-0 flex-grow-1 flex-col pt-1">
-        <SidebarSectionHeader icon={Paperclip} label="Archivos" count={fileCount} />
+        <SidebarSectionHeader
+          icon={Paperclip}
+          label="Archivos"
+          count={fileCount}
+        />
         <div className="min-h-0 flex-1 overflow-y-auto pb-3">
           <FilesSection files={ephemeralFiles} />
         </div>
@@ -87,11 +96,18 @@ export function RightSidebar() {
       <div className="mx-3 border-t border-white/10" />
 
       <section className="flex min-h-0 flex-shrink-0 flex-grow-0 flex-col pt-3">
-        <SidebarSectionHeader icon={Settings2} label="Generación" />
+        <SidebarSectionHeader
+          icon={Settings2}
+          label="Generación"
+          count={activeProvider?.name + " · " + activeProvider?.model}
+        />
         <div className="min-h-0 flex-1 overflow-y-auto pb-3">
-          <GenerationSection conversation={conversation} providers={providersData} />
+          <GenerationSection
+            conversation={conversation}
+            providers={providersData}
+          />
         </div>
       </section>
     </SidebarShell>
-  )
+  );
 }

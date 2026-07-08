@@ -273,6 +273,14 @@ def _handle_agent_question(session: ChatSession, question: str) -> None:
         "max_tokens": None,
         "think_mode": None,
         "extra": None,
+        # El CLI no tiene overrides de sesión para estos (a diferencia de
+        # GenerationOptions en la API) -- None usa siempre los defaults
+        # de settings, mismo comportamiento que antes de agregar estas
+        # claves a RAGState (ver src/api/routers/chat.py para el caso
+        # con overrides reales, vía _resolve_top_k y GenerationOptions.max_turns).
+        "top_k_initial": None,
+        "top_k_final": None,
+        "max_turns": None,
     }
 
     # CompiledStateGraph.invoke() está tipado en la librería como

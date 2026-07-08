@@ -228,6 +228,14 @@ def ask_llm_internal(
       - No acepta think_mode/extra: las tareas internas (reformular,
         revisar) son de una sola pasada sobre texto corto, no se
         benefician de razonamiento extendido ni de parámetros avanzados.
+
+    El fallback en caso de fallo es devolver `prompt` sin cambios --
+    seguro específicamente para reformulación (equivale a "no
+    reformular", la pregunta original sigue siendo una query válida).
+    NO uses esta función para tareas donde el prompt es scaffolding
+    interno que no debería mostrarse al usuario tal cual -- para eso
+    existe ask_llm_supplement(), que devuelve None en vez de ecoar el
+    prompt.
     """
     provider_name = provider or settings.reformulate_provider
     messages = build_messages(
@@ -247,3 +255,40 @@ def ask_llm_internal(
     # Fallback: devuelve el prompt original sin cambios si el modelo
     # falló o respondió vacío -- mejor no reformular que romper el flujo.
     return content if content is not None else prompt
+
+
+def ask_llm_supplement(
+    prompt: str,
+    system_prompt: str,
+    provider: str | None = None,
+    temperature: float | None = None,
+    max_tokens: int | None = None,
+) -> str | None:
+    """
+    Variante de ask_llm_internal() para tareas internas de una sola
+    pasada donde un fallo NO debe hacer eco del prompt como fallback.
+
+    Por qué esto necesita existir aparte de ask_llm_internal(): ahí el
+    fallback "devolver el prompt sin cambios" es seguro porque el prompt
+    ES la pregunta del usuario (reformular query). Acá el prompt es
+    scaffolding interno arbitrario (ej. la respuesta ya generada +
+    fragmentos de una búsqueda web, ver build_web_supplement_prompt() en
+    src/prompts/builder.py) -- si el modelo falla y este caller hiciera
+    el mismo fallback, ese scaffolding completo terminaría pegado en la
+    respuesta que ve el usuario. Por eso devuelve None en vez de prompt:
+    fuerza al caller a decidir explícitamente qué hacer ante un fallo
+    (típicamente: omitir el complemento en silencio, ver
+    src/api/routers/chat.py).
+    """
+    provider_name = provider or settings.reformulate_provider
+    messages = build_messages(prompt=prompt, chat_memory=[], system_prompt=system_prompt)
+
+    return _complete(
+        messages=messages,
+        provider_name=provider_name,
+        log_prefix="[internal:web_supplement] ",
+        temperature=temperature,
+        max_tokens=max_tokens,
+        think_mode=None,
+        extra=None,
+    )

@@ -174,6 +174,24 @@ class Settings(BaseSettings):
     api_host: str = Field(default="127.0.0.1")
     api_port: int = Field(default=8000, gt=0)
 
+    # ======================================================
+    # WEB SEARCH (Tavily)
+    # ======================================================
+    # Búsqueda web como fuente de retrieval complementaria/alternativa a
+    # las colecciones locales (ver QueryRequest.web_search en
+    # src/api/schemas/chat.py y src/retrieval/web_search.py).
+    #
+    # web_search_enabled es un kill-switch global e independiente de si
+    # se manda web_search=True en el request: permite desactivar la
+    # feature entera en un ambiente (ej. sin salida a internet, o para
+    # no generar costo en la API de Tavily) sin tocar el frontend ni el
+    # código -- el router devuelve 400 si se pide web_search=True con
+    # esto en False.
+    web_search_enabled: bool = Field(default=False)
+    tavily_api_key: str = Field(default="")
+    web_search_timeout: int = Field(default=15, gt=0)
+    web_search_max_results: int = Field(default=5, gt=0)
+
 
 # Instancia singleton — se valida al importar el módulo.
 settings = Settings()

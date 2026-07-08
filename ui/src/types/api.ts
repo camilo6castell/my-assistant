@@ -23,6 +23,13 @@ export interface QueryRequest {
   chat_history: { user: string; assistant: string }[]
   conversation_id?: string | null
   generation?: GenerationOptions | null
+  /** Ver QueryRequest.web_search en el backend: complementa o reemplaza el contexto local. */
+  web_search?: boolean
+}
+
+export interface WebSource {
+  title: string
+  url: string
 }
 
 export interface QueryResponse {
@@ -30,6 +37,11 @@ export interface QueryResponse {
   confidence: number
   collections_used: string[]
   reformulated: boolean
+  /** Lo que REALMENTE pasó, no lo que se pidió -- ver QueryResponse.used_web_search en el backend. */
+  used_web_search: boolean
+  web_sources: WebSource[] | null
+  /** Se agotó la cuota de la cuenta de Tavily -- ver QueryResponse.web_search_quota_exceeded. */
+  web_search_quota_exceeded: boolean
 }
 
 export interface CollectionsResponse {

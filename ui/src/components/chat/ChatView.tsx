@@ -1,7 +1,7 @@
 import { useMutation } from "@tanstack/react-query"
 import { nanoid } from "nanoid"
 import { Navigate, useParams } from "react-router-dom"
-import { apiErrorMessage, postQuery } from "@/lib/api/client"
+import { apiErrorMessage, isWebSearchQuotaExceededError, postQuery } from "@/lib/api/client"
 import { useConversationsStore } from "@/stores/conversationsStore"
 import type { ChatMessage } from "@/types/chat"
 import { ChatToolbar } from "./ChatToolbar"
@@ -27,6 +27,7 @@ export function ChatView() {
   )
   const addMessage = useConversationsStore((s) => s.addMessage)
   const updateMessage = useConversationsStore((s) => s.updateMessage)
+  const setWebSearchQuotaExceeded = useConversationsStore((s) => s.setWebSearchQuotaExceeded)
 
   const sendMutation = useMutation({
     mutationFn: (text: string) => {
@@ -46,6 +47,7 @@ export function ChatView() {
             top_k_initial: conversation.generation.topKInitial,
             top_k_final: conversation.generation.topKFinal,
           },
+          web_search: conversation.useWebSearch,
         },
         conversation.useAgent
       )
@@ -73,6 +75,7 @@ export function ChatView() {
       content: "",
       createdAt: Date.now(),
       isPending: true,
+      pendingLabel: conversation.useWebSearch ? "Revisando la web..." : undefined,
     }
 
     addMessage(conversation.id, userMsg)
@@ -85,8 +88,17 @@ export function ChatView() {
           confidence: data.confidence,
           collectionsUsed: data.collections_used,
           reformulated: data.reformulated,
+          usedWebSearch: data.used_web_search,
+          webSources: data.web_sources ?? undefined,
           isPending: false,
         })
+        // Caso B silencioso (ver _supplement_with_web en el backend): la
+        // respuesta principal se generó igual, pero el complemento web
+        // se omitió por cuota agotada -- el mensaje no lo refleja, así
+        // que esta es la única señal.
+        if (data.web_search_quota_exceeded) {
+          setWebSearchQuotaExceeded(true)
+        }
       },
       onError: (error) => {
         updateMessage(conversation.id, assistantId, {
@@ -94,6 +106,12 @@ export function ChatView() {
           isPending: false,
           isError: true,
         })
+        // Caso A (ver _answer_web_only en el backend): sin colecciones,
+        // la búsqueda web falló por cuota agotada y el 422 lo comunica
+        // en el detail estructurado.
+        if (isWebSearchQuotaExceededError(error)) {
+          setWebSearchQuotaExceeded(true)
+        }
       },
     })
   }

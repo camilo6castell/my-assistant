@@ -21,6 +21,7 @@ function makeConversation(): Conversation {
     activeCollections: [],
     mode: "SOFT",
     useAgent: false,
+    useWebSearch: false,
     generation: { ...emptyGeneration },
   }
 }
@@ -34,6 +35,17 @@ function titleFromMessage(content: string): string {
 interface ConversationsState {
   conversations: Conversation[]
   activeId: string | null
+  /**
+   * Global (no por-conversación): se agotó la cuota de la cuenta de
+   * Tavily -- ver isWebSearchQuotaExceededError en lib/api/client.ts.
+   * A diferencia de useWebSearch (por conversación), esto refleja un
+   * estado de LA CUENTA de Tavily, no una preferencia del chat, así que
+   * aplica a todas las conversaciones por igual hasta que el usuario lo
+   * reinicie manualmente (ver resetWebSearchQuotaExceeded en
+   * GenerationSection.tsx) -- ej. después de actualizar el plan o al
+   * empezar un nuevo mes de facturación.
+   */
+  webSearchQuotaExceeded: boolean
 
   createConversation: () => string
   deleteConversation: (id: string) => void
@@ -43,7 +55,9 @@ interface ConversationsState {
   setActiveCollections: (id: string, collections: string[]) => void
   setMode: (id: string, mode: ChatMode) => void
   setUseAgent: (id: string, useAgent: boolean) => void
+  setUseWebSearch: (id: string, useWebSearch: boolean) => void
   setGeneration: (id: string, patch: Partial<Conversation["generation"]>) => void
+  setWebSearchQuotaExceeded: (value: boolean) => void
 
   addMessage: (id: string, message: ChatMessage) => void
   updateMessage: (id: string, messageId: string, patch: Partial<ChatMessage>) => void
@@ -54,6 +68,7 @@ export const useConversationsStore = create<ConversationsState>()(
     (set) => ({
       conversations: [],
       activeId: null,
+      webSearchQuotaExceeded: false,
 
       createConversation: () => {
         const conv = makeConversation()
@@ -98,12 +113,19 @@ export const useConversationsStore = create<ConversationsState>()(
           conversations: s.conversations.map((c) => (c.id === id ? { ...c, useAgent } : c)),
         })),
 
+      setUseWebSearch: (id, useWebSearch) =>
+        set((s) => ({
+          conversations: s.conversations.map((c) => (c.id === id ? { ...c, useWebSearch } : c)),
+        })),
+
       setGeneration: (id, patch) =>
         set((s) => ({
           conversations: s.conversations.map((c) =>
             c.id === id ? { ...c, generation: { ...c.generation, ...patch } } : c
           ),
         })),
+
+      setWebSearchQuotaExceeded: (value) => set({ webSearchQuotaExceeded: value }),
 
       addMessage: (id, message) =>
         set((s) => ({
@@ -132,6 +154,26 @@ export const useConversationsStore = create<ConversationsState>()(
           ),
         })),
     }),
-    { name: "myassistant-conversations" }
+    {
+      name: "myassistant-conversations",
+      // Conversaciones guardadas en localStorage ANTES de agregar
+      // useWebSearch no tienen ese campo -- sin este merge, quedarían en
+      // `undefined` en vez de `false` (Conversation lo declara como
+      // boolean no-opcional, pero persist rehidrata sin pasar por el
+      // type-checker). undefined se comporta como falsy en casi todos
+      // lados, pero mejor no depender de eso.
+      merge: (persistedState, currentState) => {
+        const persisted = persistedState as ConversationsState | undefined
+        if (!persisted) return currentState
+        return {
+          ...currentState,
+          ...persisted,
+          conversations: persisted.conversations.map((c) => ({
+            ...c,
+            useWebSearch: c.useWebSearch ?? false,
+          })),
+        }
+      },
+    }
   )
 )

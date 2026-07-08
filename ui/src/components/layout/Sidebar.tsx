@@ -110,7 +110,7 @@ export function Sidebar() {
         </Button>
       </div>
 
-      <section className="flex min-h-0 flex-grow-1 flex-col pt-1">
+      <section className="flex min-h-0 flex-1 flex-col pt-1">
         <SidebarSectionHeader
           icon={MessagesSquare}
           label="Chats"
@@ -216,13 +216,13 @@ export function Sidebar() {
 
       <div className="mx-3 border-t border-white/10" />
 
-      <section className="flex min-h-0 flex-shrink-0 flex-grow-0 flex-col pt-3">
+      <section className="flex h-[fit-content] max-h-[50%] min-h-0 flex-col pt-3">
         <SidebarSectionHeader
           icon={Layers}
           label="Colecciones"
           count={collectionsData?.collections.length ?? 0}
         />
-        <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-4">
+        <div className="h-[fit-content] max-h-full min-h-0 overflow-y-auto px-3 pb-4">
           {activeConversation ? (
             <CollectionsPicker
               collections={collectionsData?.collections ?? []}

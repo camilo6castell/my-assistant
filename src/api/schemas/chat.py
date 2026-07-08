@@ -58,6 +58,13 @@ class GenerationOptions(BaseModel):
     top_k_final: int | None = Field(default=None, gt=0)
 
 
+class WebSource(BaseModel):
+    """Fuente web citada en una respuesta (ver QueryResponse.web_sources)."""
+
+    title: str
+    url: str
+
+
 class QueryRequest(BaseModel):
     """
     Payload para POST /query y POST /query/agent.
@@ -66,10 +73,9 @@ class QueryRequest(BaseModel):
                     ["sociologia", "psicoanalisis/Freud_Suenos"].
                     Puede venir vacío SI conversation_id apunta a una
                     conversación con archivos efímeros subidos (ver
-                    POST /api/v1/files) -- en ese caso el retrieval usa
-                    solo esos archivos. El router devuelve 422 si no hay
-                    ninguna fuente de contexto (ni colecciones ni
-                    archivos efímeros).
+                    POST /api/v1/files), o si web_search=True (ver
+                    abajo) -- el router devuelve 422 si ninguna de las
+                    tres fuentes de contexto está presente.
     mode:           "SOFT" (default) | "HARD"
     chat_history:   turnos previos de conversación. Cada turno es un dict
                     {"user": "...", "assistant": "..."}. El cliente es
@@ -80,6 +86,14 @@ class QueryRequest(BaseModel):
                     frontend). Solo hace falta si esa conversación tiene
                     archivos efímeros adjuntos; si no, se puede omitir.
     generation:     overrides opcionales de temperatura/tokens/think mode.
+    web_search:     si True, complementa (o reemplaza, si no hay
+                    colecciones/archivos) el contexto con una búsqueda
+                    web vía Tavily -- ver _run_web_search en
+                    src/api/routers/chat.py para el detalle de los dos
+                    modos. Requiere settings.web_search_enabled=True; si
+                    no, el router devuelve 400. Best-effort: si la
+                    búsqueda web falla y SÍ hay colecciones/archivos, el
+                    request no falla por eso (ver QueryResponse.used_web_search).
     """
 
     question: str = Field(..., min_length=1)
@@ -88,13 +102,15 @@ class QueryRequest(BaseModel):
     chat_history: list[dict[str, str]] = Field(default_factory=list)
     conversation_id: str | None = None
     generation: GenerationOptions | None = None
+    web_search: bool = False
 
     @model_validator(mode="after")
     def _require_some_context_source(self) -> "QueryRequest":
-        if not self.collections and not self.conversation_id:
+        if not self.collections and not self.conversation_id and not self.web_search:
             raise ValueError(
-                "Se requiere al menos una colección en 'collections' o un "
-                "'conversation_id' con archivos efímeros adjuntos."
+                "Se requiere al menos una colección en 'collections', un "
+                "'conversation_id' con archivos efímeros adjuntos, o "
+                "web_search=True."
             )
         return self
 
@@ -103,14 +119,32 @@ class QueryResponse(BaseModel):
     """
     Respuesta de POST /query y POST /query/agent.
 
-    reformulated: solo relevante en /query/agent. True si el grafo
-                  reformuló la query antes de generar.
+    reformulated:     solo relevante en /query/agent. True si el grafo
+                       reformuló la query antes de generar.
+    used_web_search:   lo que REALMENTE pasó, no lo que se pidió -- False
+                       si se pidió web_search=True pero la búsqueda no
+                       devolvió resultados utilizables (ver
+                       src/retrieval/web_search.py), aunque el resto de
+                       la respuesta se haya generado igual con el
+                       contexto local disponible.
+    web_sources:       fuentes web efectivamente usadas (título + URL),
+                       para que el frontend las muestre como citas. None
+                       si used_web_search es False.
+    web_search_quota_exceeded: True si Tavily devolvió que se agotó la
+                       cuota de la cuenta (free tier u otro plan) --
+                       señal distinta de "sin resultados" para que el
+                       frontend pueda avisar al usuario y deshabilitar
+                       el botón de búsqueda web en vez de fallar en
+                       silencio en cada mensaje siguiente.
     """
 
     answer: str
     confidence: float
     collections_used: list[str]
     reformulated: bool = False
+    used_web_search: bool = False
+    web_sources: list[WebSource] | None = None
+    web_search_quota_exceeded: bool = False
 
 
 class CollectionsResponse(BaseModel):
