@@ -32,6 +32,7 @@ from src.config.models import get_model_capabilities, supports_set
 from src.graph.state import RAGState
 from src.llm.generate import ask_llm, ask_llm_supplement
 from src.llm.providers import get_provider
+from src.llm.roles import LLMRole
 from src.prompts.builder import (
     build_prompt,
     build_web_supplement_prompt,
@@ -106,14 +107,14 @@ def _build_chat_memory(history: list[dict[str, str]]) -> list[TurnMemory]:
 def _validate_generation_options(request: QueryRequest) -> None:
     """
     Rechaza con 400 las opciones de generación que el provider activo
-    (settings.generate_provider, el que escribe la respuesta final) no
-    soporta -- en vez de aceptarlas en silencio y que el cliente crea
-    que se aplicaron cuando no pasó nada.
+    (settings.provider_for(LLMRole.GENERATE), el que escribe la
+    respuesta final) no soporta -- en vez de aceptarlas en silencio y
+    que el cliente crea que se aplicaron cuando no pasó nada.
     """
     if request.generation is None:
         return
 
-    provider = get_provider(settings.generate_provider)
+    provider = get_provider(settings.provider_for(LLMRole.GENERATE))
     supports = supports_set(get_model_capabilities(provider.capabilities, provider.model))
     requested = {
         name
@@ -271,6 +272,7 @@ def _answer_web_only(
     answer = ask_llm(
         prompt=prompt,
         chat_memory=chat_memory,
+        provider=settings.provider_for(LLMRole.GENERATE),
         **_generation_kwargs(request.generation),
     )
     return answer, _web_sources_from_results(outcome.results)
@@ -312,6 +314,7 @@ def _supplement_with_web(
         supplement = ask_llm_supplement(
             prompt=supplement_prompt,
             system_prompt=build_web_supplement_system_prompt(),
+            provider=settings.provider_for(LLMRole.WEB_SUPPLEMENT),
             temperature=gen_kwargs["temperature"],
             max_tokens=gen_kwargs["max_tokens"],
         )
@@ -457,6 +460,7 @@ async def query(
         answer = ask_llm(
             prompt=prompt,
             chat_memory=chat_memory,
+            provider=settings.provider_for(LLMRole.GENERATE),
             **_generation_kwargs(request.generation),
         )
 

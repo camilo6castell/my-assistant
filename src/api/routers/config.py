@@ -13,6 +13,7 @@ from src.api.schemas.config import GenerationDefaults, ProviderInfo, ProvidersRe
 from src.config.models import get_model_capabilities, supports_set
 from src.config.settings import settings
 from src.llm.providers import list_provider_configs
+from src.llm.roles import LLMRole
 
 router = APIRouter(prefix="/config", tags=["config"])
 
@@ -43,7 +44,8 @@ async def list_providers() -> ProvidersResponse:
             )
             for name, config in table.items()
         },
-        active_generation_provider=settings.generate_provider,
+        active_generation_provider=settings.provider_for(LLMRole.GENERATE),
+        provider_roles={role.value: settings.provider_for(role) for role in LLMRole},
         defaults=GenerationDefaults(
             temperature=settings.llm_temperature,
             max_turns=settings.max_turns,

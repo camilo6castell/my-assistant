@@ -113,6 +113,46 @@ def _resolve_think(
     return (caps.think.on if effective else caps.think.off), caps.think.param
 
 
+def _dump_request_for_debug(request: CompletionRequest) -> None:
+    """
+    Escribe el body EXACTO que se le manda al provider (mismo shape que
+    espera /v1/chat/completions, con extra_fields ya aplanado a
+    top-level) a ./debug_last_llm_request.json en la raíz del proyecto
+    -- listo para:
+
+        curl -v --max-time 300 http://<base_url>/chat/completions \\
+          -H "Content-Type: application/json" \\
+          -d @debug_last_llm_request.json
+
+    Se sobreescribe en cada llamada (solo importa el último request) y
+    solo se activa con settings.llm_debug_dump=True -- nunca corre en
+    uso normal. Cualquier fallo al escribir se loguea y se ignora: es un
+    diagnóstico opcional, nunca debe romper una consulta real al LLM.
+    """
+    import json
+
+    body: dict[str, object] = {
+        "model": request.model,
+        "messages": request.messages,
+    }
+    if request.temperature is not None:
+        body["temperature"] = request.temperature
+    if request.max_tokens is not None:
+        body["max_tokens"] = request.max_tokens
+    if request.extra_fields:
+        body.update(request.extra_fields)
+
+    try:
+        with open("debug_last_llm_request.json", "w", encoding="utf-8") as f:
+            json.dump(body, f, ensure_ascii=False, indent=2)
+        logger.info(
+            "[debug] Request volcado a ./debug_last_llm_request.json "
+            f"({sum(len(m['content']) for m in request.messages)} caracteres de mensajes)"
+        )
+    except OSError as e:
+        logger.warning(f"[debug] No se pudo volcar el request para debug: {e}")
+
+
 def _complete(
     *,
     messages: list[ChatTurn],
@@ -162,6 +202,16 @@ def _complete(
         extra_fields=extra_fields or None,
     )
 
+    # Diagnóstico opt-in (ver settings.llm_debug_dump / LLM_DEBUG_DUMP en
+    # .env): vuelca el request EXACTO que se le manda al provider a un
+    # archivo, listo para reproducir con curl sin adivinar tamaño de
+    # prompt ni reconstruir 'extra_fields' a mano. Pensado para casos
+    # como "el modelo local devuelve vacío solo con prompts de RAG
+    # grandes" -- sin esto, aislar si es tamaño/contenido del prompt
+    # implica reconstruir el payload real a ojo.
+    if settings.llm_debug_dump:
+        _dump_request_for_debug(request)
+
     content = client.complete(request)
     if not content:
         logger.warning(f"{log_prefix}El modelo devolvio respuesta vacia.")
@@ -187,19 +237,25 @@ def _complete(
 def ask_llm(
     prompt: str,
     chat_memory: list[TurnMemory],
-    provider: str | None = None,
+    provider: str,
     temperature: float | None = None,
     max_tokens: int | None = None,
     think_mode: bool | None = None,
     extra: ExtraFields | None = None,
     max_turns: int | None = None,
 ) -> str:
-    provider_name = provider or settings.generate_provider
+    """
+    provider es obligatorio y siempre debe venir de
+    settings.provider_for(LLMRole.GENERATE) -- ver src/llm/roles.py. Este
+    módulo ya no elige un default por su cuenta: el único lugar donde se
+    decide "qué modelo genera la respuesta" es Settings.provider_for(),
+    para que no haya una segunda fuente de verdad silenciosa.
+    """
     messages = build_messages(prompt=prompt, chat_memory=chat_memory, max_turns=max_turns)
 
     content = _complete(
         messages=messages,
-        provider_name=provider_name,
+        provider_name=provider,
         log_prefix="",
         temperature=temperature,
         max_tokens=max_tokens,
@@ -212,7 +268,7 @@ def ask_llm(
 
 def ask_llm_internal(
     prompt: str,
-    provider: str | None = None,
+    provider: str,
     temperature: float | None = None,
     max_tokens: int | None = None,
 ) -> str:
@@ -223,11 +279,16 @@ def ask_llm_internal(
       - Usa el system prompt de reformulación en lugar del de RAG.
       - No acepta chat_memory: las operaciones internas no son turnos del usuario.
       - El log distingue la llamada como "[internal]" para facilitar el debug.
-      - provider por defecto = settings.reformulate_provider (gemini),
-        independiente del proveedor que use generate_node.
       - No acepta think_mode/extra: las tareas internas (reformular,
         revisar) son de una sola pasada sobre texto corto, no se
         benefician de razonamiento extendido ni de parámetros avanzados.
+
+    provider es obligatorio -- debe venir de settings.provider_for(role)
+    con el LLMRole que corresponda a la tarea del caller (REFORMULATE o
+    REVIEW, ver src/llm/roles.py). Antes tenía un default implícito a
+    settings.reformulate_provider que reformular Y revisar compartían
+    sin ninguna razón real; ahora cada caller decide su propio rol
+    explícitamente.
 
     El fallback en caso de fallo es devolver `prompt` sin cambios --
     seguro específicamente para reformulación (equivale a "no
@@ -237,14 +298,13 @@ def ask_llm_internal(
     existe ask_llm_supplement(), que devuelve None en vez de ecoar el
     prompt.
     """
-    provider_name = provider or settings.reformulate_provider
     messages = build_messages(
         prompt=prompt, chat_memory=[], system_prompt=build_reformulation_system_prompt()
     )
 
     content = _complete(
         messages=messages,
-        provider_name=provider_name,
+        provider_name=provider,
         log_prefix="[internal] ",
         temperature=temperature,
         max_tokens=max_tokens,
@@ -260,7 +320,7 @@ def ask_llm_internal(
 def ask_llm_supplement(
     prompt: str,
     system_prompt: str,
-    provider: str | None = None,
+    provider: str,
     temperature: float | None = None,
     max_tokens: int | None = None,
 ) -> str | None:
@@ -279,13 +339,15 @@ def ask_llm_supplement(
     fuerza al caller a decidir explícitamente qué hacer ante un fallo
     (típicamente: omitir el complemento en silencio, ver
     src/api/routers/chat.py).
+
+    provider es obligatorio -- debe venir de
+    settings.provider_for(LLMRole.WEB_SUPPLEMENT).
     """
-    provider_name = provider or settings.reformulate_provider
     messages = build_messages(prompt=prompt, chat_memory=[], system_prompt=system_prompt)
 
     return _complete(
         messages=messages,
-        provider_name=provider_name,
+        provider_name=provider,
         log_prefix="[internal:web_supplement] ",
         temperature=temperature,
         max_tokens=max_tokens,

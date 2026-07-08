@@ -32,6 +32,7 @@ from src.config.settings import settings
 from src.context.models import SearchResult
 from src.graph.state import RAGState, RAGStateUpdate
 from src.llm.generate import ask_llm, ask_llm_internal
+from src.llm.roles import LLMRole
 from src.prompts.builder import (
     build_correction_prompt,
     build_prompt,
@@ -158,7 +159,7 @@ def reformulate_node(state: RAGState) -> RAGStateUpdate:
 
     reformulated_question = ask_llm_internal(
         prompt=reformulation_prompt,
-        provider=settings.reformulate_provider,
+        provider=settings.provider_for(LLMRole.REFORMULATE),
     )
 
     logger.info(
@@ -204,7 +205,7 @@ def generate_node(state: RAGState) -> RAGStateUpdate:
     answer = ask_llm(
         prompt=prompt,
         chat_memory=state["chat_memory"],
-        provider=settings.generate_provider,
+        provider=settings.provider_for(LLMRole.GENERATE),
         temperature=state.get("temperature"),
         max_tokens=state.get("max_tokens"),
         think_mode=state.get("think_mode"),
@@ -263,7 +264,7 @@ def review_node(state: RAGState) -> RAGStateUpdate:
 
     raw = ask_llm_internal(
         prompt=review_prompt,
-        provider=settings.reformulate_provider,  # Gemini — el reviewer externo
+        provider=settings.provider_for(LLMRole.REVIEW),
     )
 
     logger.info(f"[graph] review_node | respuesta raw del reviewer: {raw!r}")
@@ -333,7 +334,7 @@ def correct_node(state: RAGState) -> RAGStateUpdate:
     corrected = ask_llm(
         prompt=correction_prompt,
         chat_memory=state["chat_memory"],
-        provider=settings.generate_provider,
+        provider=settings.provider_for(LLMRole.GENERATE),
         temperature=state.get("temperature"),
         max_tokens=state.get("max_tokens"),
         think_mode=state.get("think_mode"),

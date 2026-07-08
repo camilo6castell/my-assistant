@@ -1,139 +1,182 @@
 %YAML 1.1
 ---
-name: Local FLM Config
+name: Local AI Stack
 version: 1.0.0
 schema: v1
 
 ########################################################
-# YAML ANCHORS - Para evitar duplicación
+# DEFAULTS
 ########################################################
+
 defaults: &defaults
   provider: openai
   apiBase: http://127.0.0.1:52625/v1
   apiKey: flm
+
   requestOptions:
     timeout: 720000
+
   defaultCompletionOptions:
     contextLength: 32768
     maxTokens: 4096
-    temperature: 0.1
-    topP: 0.9
-  autocompleteOptions:
-    disable: true
+    temperature: 0.0
+    topP: 0.95
 
 ########################################################
 # MODELS
 ########################################################
+
 models:
-  ########################################################
-  # MAIN AGENT MODELS (NPU via FLM)
-  ########################################################
-  # 1: General purpose coding assistant
+
+########################################################
+# PRIMARY CODING MODEL
+########################################################
+
   - name: Qwen3 8B Agent
     <<: *defaults
+
     model: qwen3:8b
-    # defaultCompletionOptions:
-    #   <<: *defaults
-    #   reasoning: false
-    capabilities:
-      - tool_use
+
     roles:
       - chat
       - edit
       - apply
 
-  # 2: Modelo para razonamiento complejo (usar selectivamente)
-  - name: GPT-OSS 20B
-    <<: *defaults
-    model: gpt-oss:20b
     capabilities:
       - tool_use
+
+########################################################
+# HEAVY REASONING MODEL
+########################################################
+
+  - name: GPT-OSS 20B
+    <<: *defaults
+
+    model: gpt-oss:20b
+
     roles:
       - chat
+
+    capabilities:
+      - tool_use
+
     defaultCompletionOptions:
-      <<: *defaults
-      temperature: 0.2
-      # ⚠ Verifica si este modelo soporta 'reasoning: true'
-      # reasoning: true  # Solo para Claude 3.7+ y algunos modelos Ollama
+      contextLength: 32768
+      maxTokens: 4096
+      temperature: 0.1
+      topP: 0.95
 
-  ########################################################
-  # AUTOCOMPLETE MODEL
-  ########################################################
-  # - name: Qwen3.5 2B Autocomplete
-  #   <<: *defaults
-  #   model: qwen3.5:2b
-  #   roles:
-  #     - autocomplete
-  #   autocompleteOptions:
-  #     disable: false
-  #     debounceDelay: 200
-  #     maxPromptTokens: 768
-  #     onlyMyCode: true
-  #     useCache: true
-  #     useImports: true
-  #     useRecentlyEdited: true
-  #     useRecentlyOpened: true
-  #   defaultCompletionOptions:
-  #     temperature: 0.1
-  #     maxTokens: 128
-  #   requestOptions:
-  #     timeout: 10000
+########################################################
+# AUTOCOMPLETE
+########################################################
 
-  ########################################################
-  # EMBEDDINGS
-  ########################################################
-  - name: BGE-M3
+#  - name: Qwen3.5 2B Autocomplete
+#
+#    <<: *defaults
+#
+#    model: qwen3.5:2b
+#
+#    roles:
+#      - autocomplete
+#
+#    autocompleteOptions:
+#      disable: false
+#      debounceDelay: 150
+#      maxPromptTokens: 768
+#      onlyMyCode: true
+#      useCache: true
+#      useImports: true
+#      useRecentlyEdited: true
+#      useRecentlyOpened: true
+#
+#    requestOptions:
+#      timeout: 10000
+#
+#    defaultCompletionOptions:
+#      maxTokens: 128
+#      temperature: 0.0
+
+########################################################
+# EMBEDDINGS
+########################################################
+
+#  - name: BGE-M3
+#    provider: ollama
+#    apiBase: http://127.0.0.1:11434
+#    model: bge-m3:latest
+#    roles:
+#      - embed
+#
+#    embedOptions:
+#      maxChunkSize: 1024
+#      maxBatchSize: 32
+
+  - name: Snowflake Arctic Embed
     provider: ollama
-    model: bge-m3:latest
-    apiBase: http://127.0.0.1:11434
+    apiBase: http://192.168.2.24:11434
+    model: snowflake-arctic-embed:latest
+
     roles:
       - embed
+
     embedOptions:
+      # maxChunkSize: 1024
       maxChunkSize: 512
-      maxBatchSize: 16
-    defaultCompletionOptions:
-      keepAlive: 1800
+      maxBatchSize: 32
 
-  ########################################################
-  # RERANKER
-  ########################################################
-  # - name: BGE Reranker
-  #   provider: ollama
-  #   model: bbjson/bge-reranker-base:latest
-  #   apiBase: http://127.0.0.1:11434
-  #   roles:
-  #     - rerank
-  #   defaultCompletionOptions:
-  #     keepAlive: 1800
+########################################################
+# OPTIONAL RERANKER
+########################################################
 
-  ########################################################
-  # CONTEXT PROVIDERS
-  ########################################################
+#  - name: BGE Reranker
+#    provider: ollama
+#    apiBase: http://127.0.0.1:11434
+#    model: bbjson/bge-reranker-base:latest
+#    roles:
+#      - rerank
+
+########################################################
+# CONTEXT PROVIDERS
+########################################################
+
 context:
   - provider: codebase
+  - provider: repo-map
+  - provider: currentFile
   - provider: file
-  - provider: code
+  - provider: tree
   - provider: diff
   - provider: terminal
-  - provider: open
-  - provider: currentFile
-  - provider: tree
   - provider: problems
-  - provider: os
-  - provider: repo-map
-
-# params:
-#   includeSignatures: true
+  - provider: open
 
 ########################################################
-# RULES - Consolidadas (aplican a todos los modos)
+# RULES
 ########################################################
+
 rules:
-  # Principios de ingeniería
-  - "You are an expert senior software engineer and autonomous coding agent."
-  - "Always analyze repository context before answering or making changes."
-  - "Reuse existing project patterns, architecture, and conventions."
-  - "Prefer minimal, targeted modifications over full rewrites."
 
-  # Prevención de alucinaciones
-  - "Never invent APIs, files, libraries, or functionality that doesn't exist."
+  # Repository awareness
+  - "Inspect the repository before proposing changes."
+  - "Reuse the existing architecture, abstractions and coding patterns."
+  - "Prefer modifying existing code over creating new files."
+
+  # Reliability
+  - "Never invent APIs, files, classes, functions or libraries."
+  - "Ask for clarification when repository context is insufficient."
+  - "Never remove existing functionality unless explicitly requested."
+
+  # Code quality
+  - "Generate production-quality code."
+  - "Keep edits minimal, localized and easy to review."
+  - "Follow the project's naming conventions and formatting."
+  - "Maintain strict typing whenever possible."
+  - "Avoid duplicated code."
+  - "Prefer composition over duplication."
+
+  # Architecture
+  - "Preserve the project's architecture."
+  - "Explain architectural decisions when modifications span multiple files."
+
+  # General behaviour
+  - "Act as an expert senior software engineer."

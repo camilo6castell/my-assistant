@@ -52,10 +52,26 @@ class OpenAICompatClient:
         # ("El modelo no devolvio respuesta.", ver generate.py) en vez
         # de propagar una excepción no manejada hasta el endpoint.
         if not response.choices:
+            # Antes solo logueábamos que faltaba 'choices', sin decir por
+            # qué -- eso deja a ciegas justo el caso que más hace falta
+            # diagnosticar (ver conversación: FastFlowLM devolviendo esto
+            # consistentemente para un prompt de RAG, sin lanzar ningún
+            # error HTTP). El SDK de OpenAI modela la respuesta como un
+            # objeto pydantic, así que volcamos el JSON completo -- puede
+            # traer 'usage' (¿completion_tokens=0? sugiere que el server
+            # cortó la generación antes de emitir texto), un 'error'
+            # embebido que el runtime metió fuera del schema estándar, o
+            # finish_reason -- cualquiera de esos acota mucho más la causa
+            # que "no vinieron choices".
+            try:
+                raw_body = response.model_dump_json()
+            except Exception:
+                raw_body = repr(response)
             logger.warning(
                 "[openai_compat] La respuesta del servidor no trae 'choices' "
                 "(posible fallo interno del runtime, ej. timeout o abortado a "
-                "mitad de generación) -- se trata como respuesta vacia."
+                "mitad de generación) -- se trata como respuesta vacia. "
+                f"Body completo: {raw_body[:2000]}"
             )
             return None
 

@@ -17,6 +17,8 @@ from pathlib import Path
 from pydantic import Field, ValidationInfo, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from src.llm.roles import LLMRole
+
 
 class Settings(BaseSettings):
     """
@@ -131,6 +133,14 @@ class Settings(BaseSettings):
     max_turns: int = Field(default=4, gt=0)
     llm_temperature: float = Field(default=0.2, ge=0.0, le=2.0)
     llm_timeout: int = Field(default=600, gt=0)
+    # Diagnóstico opt-in: vuelca a ./debug_last_llm_request.json el
+    # request EXACTO (mensajes + extra_fields aplanados) que se le manda
+    # al provider en cada llamada -- ver _dump_request_for_debug en
+    # src/llm/generate.py. Pensado para reproducir con curl un fallo que
+    # depende del tamaño/contenido real del prompt (ej. RAG con muchos
+    # chunks) sin reconstruirlo a mano. Default False: nunca escribe
+    # archivos en uso normal.
+    llm_debug_dump: bool = Field(default=False)
 
     # ======================================================
     # MULTI-PROVIDER LLM
@@ -159,10 +169,35 @@ class Settings(BaseSettings):
     gemini_client: str = Field(default="openai_compat")
     gemini_capabilities: str = Field(default="gemini")
 
-    # Qué proveedor usa cada nodo del grafo. Configurable en .env,
-    # sin tocar código — esto es lo que hace la arquitectura extensible.
-    reformulate_provider: str = Field(default="gemini")
-    generate_provider: str = Field(default="local")
+    # ======================================================
+    # LLM POR ROL
+    # ======================================================
+    # Cada punto del pipeline que llama a un LLM se identifica con un rol
+    # (ver LLMRole en src/llm/roles.py), y el provider que lo atiende se
+    # configura acá, por separado -- este es el único lugar donde se
+    # decide "qué modelo hace qué". Antes reformular, revisar, y evaluar
+    # el complemento web compartían un mismo REFORMULATE_PROVIDER sin
+    # ninguna razón salvo que nunca se separaron; ahora cada uno tiene su
+    # propia env var, así se puede, por ejemplo, correr la respuesta
+    # final en un modelo local potente y las tareas cortas de apoyo
+    # (reformular/revisar/evaluar-web) en un modelo rápido en la nube,
+    # sin acoplar unas con otras. Todo call site que necesita un LLM
+    # pasa SIEMPRE por provider_for(role) más abajo -- ver
+    # src/llm/generate.py, donde provider dejó de tener un default
+    # implícito precisamente para forzar esto.
+    provider_generate: str = Field(default="local")
+    provider_reformulate: str = Field(default="local")
+    provider_review: str = Field(default="local")
+    provider_web_supplement: str = Field(default="local")
+
+    def provider_for(self, role: LLMRole) -> str:
+        """Único punto de lookup rol -> provider. Ver LLMRole para qué es cada uno."""
+        return {
+            LLMRole.GENERATE: self.provider_generate,
+            LLMRole.REFORMULATE: self.provider_reformulate,
+            LLMRole.REVIEW: self.provider_review,
+            LLMRole.WEB_SUPPLEMENT: self.provider_web_supplement,
+        }[role]
 
     # Agent — umbral de foco temático para el grafo LangGraph.
     # Con 1 colección mide spread de chunk_index (menor = match).

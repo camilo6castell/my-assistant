@@ -25,17 +25,17 @@ from typing import Callable
 
 
 def _cmd_chat() -> None:
-    from src.chat.interface import start_chat
     from src.chat.session import ChatSession
+    from src.chat.interface import start_chat
 
     session = ChatSession()
     start_chat(session)
 
 
 def _cmd_menu() -> None:
-    from src.chat.interface import start_chat
     from src.chat.session import ChatSession
-    from src.cli.commands import show_about, show_contexts, show_main_menu, show_modes
+    from src.chat.interface import start_chat
+    from src.cli.commands import show_main_menu, show_contexts, show_modes, show_about
 
     session = ChatSession()
 
@@ -60,7 +60,6 @@ def _cmd_menu() -> None:
 
 def _cmd_api() -> None:
     import uvicorn
-
     from src.config.settings import settings
 
     uvicorn.run(

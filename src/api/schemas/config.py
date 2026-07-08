@@ -45,8 +45,16 @@ class ProvidersResponse(BaseModel):
 
     providers: dict[str, ProviderInfo]
     # Nombre del provider que /query y /query/agent usan para la respuesta
-    # final al usuario (settings.generate_provider) -- el frontend lo usa
-    # para saber cuál entrada de `providers` mirar al decidir qué controles
-    # de GenerationOptions mostrar (ej. el switch de think mode).
+    # final al usuario (settings.provider_for(LLMRole.GENERATE)) -- el
+    # frontend lo usa para saber cuál entrada de `providers` mirar al
+    # decidir qué controles de GenerationOptions mostrar (ej. el switch
+    # de think mode). Redundante con provider_roles["generate"] de abajo,
+    # pero se mantiene como campo propio para no romper el contrato que
+    # ya usa el frontend.
     active_generation_provider: str
+    # Mapa completo rol -> provider (ver LLMRole en src/llm/roles.py y
+    # Settings.provider_for) -- de solo lectura, igual que el resto de
+    # este endpoint; pensado para poder inspeccionar de un vistazo qué
+    # modelo atiende cada punto del pipeline sin tener que leer .env.
+    provider_roles: dict[str, str]
     defaults: GenerationDefaults

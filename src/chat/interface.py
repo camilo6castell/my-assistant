@@ -24,11 +24,13 @@ import warnings
 from typing import cast
 
 from src.chat.session import ChatSession
+from src.config.settings import settings
 from src.context.manager import LoadedCollection
 from src.context.models import SearchResult
 from src.context.selector import match_contexts
 from src.graph import RAGState, build_rag_graph
 from src.llm.generate import ask_llm
+from src.llm.roles import LLMRole
 from src.prompts.builder import build_prompt
 from src.retrieval.search import search
 
@@ -214,6 +216,7 @@ def _handle_question(session: ChatSession, question: str) -> None:
     answer: str = ask_llm(
         prompt=prompt,
         chat_memory=session.chat_memory,
+        provider=settings.provider_for(LLMRole.GENERATE),
     )
 
     print("  Answer:\n")
