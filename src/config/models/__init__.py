@@ -95,38 +95,38 @@ def supports_set(caps: ModelCapabilities) -> frozenset[str]:
 # Los imports son perezosos (dentro de la función) para que agregar un
 # archivo nuevo en esta carpeta no requiera tocar este módulo salvo por
 # esta única línea de registro.
-def _registry() -> dict[str, dict[str, ModelCapabilities]]:
+def _registry() -> dict[str, dict[str, dict[str, dict[str, bool]]]]:
     from src.config.models import fastflowlm, gemini, ollama
 
     return {
-        "fastflowlm": fastflowlm.MODELS,
-        "ollama": ollama.MODELS,
-        "gemini": gemini.MODELS,
+        "fastflowlm": fastflowlm._MODELS,
+        "ollama": ollama._MODELS,
+        "gemini": gemini._MODELS,
     }
 
 
-def get_model_capabilities(capabilities_key: str, model: str) -> ModelCapabilities:
-    """
-    Busca las capacidades de `model` dentro del backend `capabilities_key`.
+# def get_model_capabilities(capabilities_key: str, model: str) -> ModelCapabilities:
+#     """
+#     Busca las capacidades de `model` dentro del backend `capabilities_key`.
 
-    Fallback conservador (solo temperature/max_tokens) si el backend o el
-    modelo no están registrados -- preferible a un KeyError en medio de
-    un request; queda un warning en el log para que no pase desapercibido.
-    """
-    backend_models = _registry().get(capabilities_key)
-    if backend_models is None:
-        logger.warning(
-            f"[models] Backend de capacidades desconocido: {capabilities_key!r}. "
-            "Usando capacidades conservadoras (solo temperature/max_tokens)."
-        )
-        return ModelCapabilities()
+#     Fallback conservador (solo temperature/max_tokens) si el backend o el
+#     modelo no están registrados -- preferible a un KeyError en medio de
+#     un request; queda un warning en el log para que no pase desapercibido.
+#     """
+#     backend_models = _registry().get(capabilities_key)
+#     if backend_models is None:
+#         logger.warning(
+#             f"[models] Backend de capacidades desconocido: {capabilities_key!r}. "
+#             "Usando capacidades conservadoras (solo temperature/max_tokens)."
+#         )
+#         return ModelCapabilities()
 
-    caps = backend_models.get(model)
-    if caps is None:
-        logger.warning(
-            f"[models] Modelo '{model}' no registrado en '{capabilities_key}'. "
-            "Usando capacidades conservadoras (solo temperature/max_tokens)."
-        )
-        return ModelCapabilities()
+#     caps = backend_models.get(model)
+#     if caps is None:
+#         logger.warning(
+#             f"[models] Modelo '{model}' no registrado en '{capabilities_key}'. "
+#             "Usando capacidades conservadoras (solo temperature/max_tokens)."
+#         )
+#         return ModelCapabilities()
 
-    return caps
+#     return caps

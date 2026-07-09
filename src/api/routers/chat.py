@@ -28,16 +28,14 @@ from src.chat.types import TurnMemory
 from src.config.settings import settings
 from src.context.ephemeral import EphemeralStore
 from src.context.manager import ContextManager, LoadedCollection
-from src.config.models import get_model_capabilities, supports_set
 from src.graph.state import RAGState
 from src.llm.generate import ask_llm, ask_llm_supplement
-from src.llm.providers import get_provider
 from src.llm.roles import LLMRole
 from src.prompts.builder import (
+    WEB_SUPPLEMENT_SENTINEL,
     build_prompt,
     build_web_supplement_prompt,
     build_web_supplement_system_prompt,
-    WEB_SUPPLEMENT_SENTINEL,
 )
 from src.retrieval.search import search
 from src.retrieval.web_search import WebSearchResult, WebSearchStatus, search_web
@@ -104,40 +102,6 @@ def _build_chat_memory(history: list[dict[str, str]]) -> list[TurnMemory]:
     return memory
 
 
-def _validate_generation_options(request: QueryRequest) -> None:
-    """
-    Rechaza con 400 las opciones de generación que el provider activo
-    (settings.provider_for(LLMRole.GENERATE), el que escribe la
-    respuesta final) no soporta -- en vez de aceptarlas en silencio y
-    que el cliente crea que se aplicaron cuando no pasó nada.
-    """
-    if request.generation is None:
-        return
-
-    provider = get_provider(settings.provider_for(LLMRole.GENERATE))
-    supports = supports_set(get_model_capabilities(provider.capabilities, provider.model))
-    requested = {
-        name
-        for name, value in (
-            ("temperature", request.generation.temperature),
-            ("max_tokens", request.generation.max_tokens),
-            ("think_mode", request.generation.think_mode),
-            ("extra", request.generation.extra),
-        )
-        if value is not None
-    }
-    unsupported = requested - supports
-
-    if unsupported:
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                f"El modelo '{provider.model}' (provider '{provider.name}') no soporta: "
-                f"{sorted(unsupported)}. Soportados: {sorted(supports)}."
-            ),
-        )
-
-
 def _resolve_top_k(request: QueryRequest) -> tuple[int | None, int | None]:
     """
     Resuelve (top_k_initial, top_k_final) del request contra los defaults
@@ -177,7 +141,9 @@ def _resolve_top_k(request: QueryRequest) -> tuple[int | None, int | None]:
     return top_k_initial, top_k_final
 
 
-def _require_context_source(collections: list[LoadedCollection], request: QueryRequest) -> None:
+def _require_context_source(
+    collections: list[LoadedCollection], request: QueryRequest
+) -> None:
     """
     422 si no hay ninguna fuente de contexto posible: ni colecciones/
     archivos ni web_search=True. Compartido por /query y /query/agent --
@@ -326,7 +292,11 @@ def _supplement_with_web(
         if not supplement or supplement == WEB_SUPPLEMENT_SENTINEL:
             return answer, [], False
 
-        return f"{answer}\n\n{supplement}", _web_sources_from_results(outcome.results), False
+        return (
+            f"{answer}\n\n{supplement}",
+            _web_sources_from_results(outcome.results),
+            False,
+        )
     except Exception as e:
         logger.warning(f"[web_search] Fallo el complemento web (se omite): {e}")
         return answer, [], False
@@ -407,7 +377,6 @@ async def query(
         f"| web_search={request.web_search}"
     )
 
-    _validate_generation_options(request)
     _validate_web_search(request)
     top_k_initial, top_k_final = _resolve_top_k(request)
 
@@ -525,7 +494,6 @@ async def query_agent(
         f"| web_search={request.web_search}"
     )
 
-    _validate_generation_options(request)
     _validate_web_search(request)
     top_k_initial, top_k_final = _resolve_top_k(request)
 

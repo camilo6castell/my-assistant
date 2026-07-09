@@ -29,7 +29,7 @@ from __future__ import annotations
 import json
 
 from src.config.settings import settings
-from src.context.models import SearchResult
+from src.context.manager import LoadedCollection
 from src.graph.state import RAGState, RAGStateUpdate
 from src.llm.generate import ask_llm, ask_llm_internal
 from src.llm.roles import LLMRole
@@ -40,7 +40,6 @@ from src.prompts.builder import (
 )
 from src.retrieval.search import search
 from src.utils.logger import logger
-from src.context.manager import LoadedCollection
 
 # Máximo de ciclos generate → review → generate antes de dar la respuesta
 # tal como está. Valor de 1 = un solo reintento (2 llamadas a generate total).

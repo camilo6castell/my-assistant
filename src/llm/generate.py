@@ -27,7 +27,6 @@ efectivamente lo manda no necesita saber nada de esto.
 from __future__ import annotations
 
 from src.chat.types import TurnMemory
-from src.config.models import get_model_capabilities
 from src.config.settings import settings
 from src.llm.backends.base import ChatTurn, CompletionRequest
 from src.llm.providers import ProviderConfig, get_client
@@ -135,12 +134,6 @@ def _dump_request_for_debug(request: CompletionRequest) -> None:
         "model": request.model,
         "messages": request.messages,
     }
-    if request.temperature is not None:
-        body["temperature"] = request.temperature
-    if request.max_tokens is not None:
-        body["max_tokens"] = request.max_tokens
-    if request.extra_fields:
-        body.update(request.extra_fields)
 
     try:
         with open("debug_last_llm_request.json", "w", encoding="utf-8") as f:
@@ -196,10 +189,6 @@ def _complete(
     request = CompletionRequest(
         messages=messages,
         model=config.model,
-        timeout=settings.llm_timeout,
-        temperature=effective_temp if caps.supports_temperature else None,
-        max_tokens=max_tokens if caps.supports_max_tokens else None,
-        extra_fields=extra_fields or None,
     )
 
     # Diagnóstico opt-in (ver settings.llm_debug_dump / LLM_DEBUG_DUMP en
@@ -251,7 +240,9 @@ def ask_llm(
     decide "qué modelo genera la respuesta" es Settings.provider_for(),
     para que no haya una segunda fuente de verdad silenciosa.
     """
-    messages = build_messages(prompt=prompt, chat_memory=chat_memory, max_turns=max_turns)
+    messages = build_messages(
+        prompt=prompt, chat_memory=chat_memory, max_turns=max_turns
+    )
 
     content = _complete(
         messages=messages,
@@ -343,7 +334,9 @@ def ask_llm_supplement(
     provider es obligatorio -- debe venir de
     settings.provider_for(LLMRole.WEB_SUPPLEMENT).
     """
-    messages = build_messages(prompt=prompt, chat_memory=[], system_prompt=system_prompt)
+    messages = build_messages(
+        prompt=prompt, chat_memory=[], system_prompt=system_prompt
+    )
 
     return _complete(
         messages=messages,

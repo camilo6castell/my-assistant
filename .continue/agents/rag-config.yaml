@@ -32,10 +32,10 @@ models:
 # PRIMARY CODING MODEL
 ########################################################
 
-  - name: Qwen3 8B Agent
+  - name: Qwen3.5 9B Agent
     <<: *defaults
 
-    model: qwen3:8b
+    model: qwen3.5:9b
 
     roles:
       - chat

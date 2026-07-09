@@ -1,28 +1,48 @@
-"""
-Capacidades de modelos servidos vía Ollama, usando su cliente nativo
-(src/llm/backends/ollama_native.py -- paquete `ollama`, no el endpoint
-OpenAI-compatible). El endpoint OpenAI-compatible de Ollama tiene
-comportamiento inconsistente/no documentado para think en varios
-modelos (confirmado por un issue abierto del proyecto); el cliente
-nativo sí soporta `think` de forma directa y tipada.
-"""
+"""Configuration for Ollama models."""
 
-from src.config.models import ModelCapabilities, ThinkMapping
+from __future__ import annotations
 
-MODELS: dict[str, ModelCapabilities] = {
-    "qwen3": ModelCapabilities(
-        think=ThinkMapping(param="think", on=True, off=False, default=False),
-    ),
-    # El cliente nativo de Ollama soporta think=True/False para deepseek-r1
-    # según su documentación. Si en la práctica no logra desactivarlo del
-    # todo para tu versión de modelo/Ollama, ajustar `off` acá -- es el
-    # único lugar que haría falta tocar.
-    "deepseek-r1": ModelCapabilities(
-        think=ThinkMapping(param="think", on=True, off=False, default=False),
-    ),
-    # gpt-oss no soporta apagar el razonamiento del todo, solo bajarlo a
-    # su nivel mínimo -- por eso `off` es "low", no False.
-    "gpt-oss": ModelCapabilities(
-        think=ThinkMapping(param="think", on="high", off="low", default=False),
-    ),
+from copy import deepcopy
+from typing import Any
+
+from src.llm.backends.base import ChatTurn
+
+_MODELS: dict[str, dict[str, Any]] = {
+    "deepseek-r1": {
+        "options": {
+            "temperature": 0.0,
+            "num_predict": 4096,
+            "top_p": 0.95,
+            "top_k": 20,
+        },
+        "think": False,
+    },
 }
+
+
+class ModelConfig:
+    def __init__(self, model_name: str) -> None:
+        try:
+            self._config = deepcopy(_MODELS[model_name])
+        except KeyError:
+            raise ValueError(f"Unsupported model: {model_name}") from None
+
+        self.model_name = model_name
+
+    def build_kwargs(
+        self,
+        messages: list[ChatTurn],
+    ) -> dict[str, Any]:
+        kwargs = deepcopy(self._config)
+
+        kwargs["model"] = self.model_name
+        kwargs["messages"] = messages
+
+        return kwargs
+
+    def supports_thinking(self) -> bool:
+        return "think" in self._config
+
+    def set_thinking(self, enabled: bool) -> None:
+        if self.supports_thinking():
+            self._config["think"] = enabled

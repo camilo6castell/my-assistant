@@ -10,7 +10,6 @@ from __future__ import annotations
 from fastapi import APIRouter
 
 from src.api.schemas.config import GenerationDefaults, ProviderInfo, ProvidersResponse
-from src.config.models import get_model_capabilities, supports_set
 from src.config.settings import settings
 from src.llm.providers import list_provider_configs
 from src.llm.roles import LLMRole
@@ -38,9 +37,6 @@ async def list_providers() -> ProvidersResponse:
             name: ProviderInfo(
                 name=config.name,
                 model=config.model,
-                supports=sorted(
-                    supports_set(get_model_capabilities(config.capabilities, config.model))
-                ),
             )
             for name, config in table.items()
         },

@@ -17,7 +17,6 @@ from pydantic import BaseModel
 class ProviderInfo(BaseModel):
     name: str
     model: str
-    supports: list[str]
 
 
 class GenerationDefaults(BaseModel):

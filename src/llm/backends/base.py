@@ -24,15 +24,6 @@ class ChatTurn(TypedDict):
 class CompletionRequest:
     messages: list[ChatTurn]
     model: str
-    timeout: float
-    temperature: float | None = None
-    max_tokens: int | None = None
-    # Campos ya resueltos por generate.py contra ModelCapabilities (ej.
-    # {"think": False} o {"think": "low"}), más lo que el cliente haya
-    # mandado en GenerationOptions.extra. El backend solo sabe DÓNDE
-    # meter cada clave en su propio protocolo -- nunca decide si el
-    # modelo lo soporta, eso ya se resolvió antes de llegar acá.
-    extra_fields: dict[str, bool | str | int | float] | None = None
 
 
 class LLMClient(Protocol):
