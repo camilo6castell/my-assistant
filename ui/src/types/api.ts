@@ -2,7 +2,11 @@
 // -- son dos lenguajes distintos, no hay generación automática todavía.
 
 export interface GenerationOptions {
-  temperature?: number | null
+  /**
+   * La temperatura NO vive acá: es una propiedad fija de cada modelo,
+   * definida en src/config/models/<backend>.py -- no hay override
+   * por-request ni por-UI para eso (ver docstring del backend).
+   */
   max_tokens?: number | null
   think_mode?: boolean | null
   /** Passthrough genérico sin validar en el cliente -- ver GenerationOptions.extra en el backend. */
@@ -52,10 +56,16 @@ export interface ProviderInfo {
   name: string
   model: string
   supports: string[]
+  /**
+   * Valor de thinking ya escrito en _MODELS[model] para este modelo --
+   * null si el modelo no tiene modo de razonamiento (en ese caso
+   * "think_mode" tampoco aparece en `supports`). El botón "Pensar" de
+   * GenerationSection arranca reflejando esto, no un false fijo.
+   */
+  default_think: boolean | null
 }
 
 export interface GenerationDefaults {
-  temperature: number
   max_turns: number
   hard_top_k_initial: number
   hard_top_k_final: number
@@ -66,6 +76,8 @@ export interface GenerationDefaults {
 export interface ProvidersResponse {
   providers: Record<string, ProviderInfo>
   active_generation_provider: string
+  /** Mapa completo rol -> provider (ver LLMRole en el backend). */
+  provider_roles: Record<string, string>
   defaults: GenerationDefaults
 }
 

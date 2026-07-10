@@ -11,8 +11,8 @@ Nota sobre # pyright: ignore[reportCallIssue] en llamadas a faiss:
 from __future__ import annotations
 
 import pickle
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Sequence
 
 import faiss
 import numpy as np

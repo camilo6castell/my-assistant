@@ -17,6 +17,20 @@ from pydantic import BaseModel
 class ProviderInfo(BaseModel):
     name: str
     model: str
+    # Ver get_supports() en src/config/models/__init__.py -- qué
+    # GenerationOptions acepta el modelo de este provider. El frontend
+    # lo usa para decidir dinámicamente qué controles mostrar (ej. el
+    # botón de "Pensar" solo aparece habilitado si "think_mode" está
+    # acá; si no, se muestra deshabilitado con un tooltip).
+    supports: list[str]
+    # Ver get_default_think() en src/config/models/__init__.py -- el
+    # valor de enable_thinking/think ya escrito en _MODELS[model] para
+    # este modelo (None si el modelo no tiene modo de razonamiento). El
+    # frontend lo usa para que el botón "Pensar" arranque reflejando el
+    # comportamiento REAL del modelo antes de que el usuario lo toque,
+    # en vez de arrancar apagado por defecto sin importar qué diga la
+    # config del backend.
+    default_think: bool | None
 
 
 class GenerationDefaults(BaseModel):
@@ -29,9 +43,13 @@ class GenerationDefaults(BaseModel):
     de que el usuario decida modificarlo, y como fallback cuando el
     override de la conversación es None. No hay forma de cambiarlos vía
     API (ver docstring del módulo): cambiar esto significa editar .env.
+
+    No incluye `temperature`: no es un default de settings/.env ni un
+    override por-conversación -- es una propiedad fija de cada modelo
+    (ver src/config/models/<backend>.py). No hay "valor actual" único
+    que mostrar acá porque cada modelo puede tener el suyo.
     """
 
-    temperature: float
     max_turns: int
     hard_top_k_initial: int
     hard_top_k_final: int

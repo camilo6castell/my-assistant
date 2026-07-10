@@ -272,7 +272,6 @@ def _handle_agent_question(session: ChatSession, question: str) -> None:
         "review_passed": False,
         "review_feedback": "",
         "review_attempts": 0,
-        "temperature": None,
         "max_tokens": None,
         "think_mode": None,
         "extra": None,

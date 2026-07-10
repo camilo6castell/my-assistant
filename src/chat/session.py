@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from src.chat.modes import SOFT, HARD
+from src.chat.modes import HARD, SOFT
 from src.chat.types import TurnMemory
 from src.context.manager import ContextManager, LoadedCollection
 

@@ -19,10 +19,13 @@ Campos:
   review_feedback  motivo del rechazo, usado para regenerar con corrección
   review_attempts  cuántas veces se regeneró tras un rechazo del reviewer
                    (evita loops infinitos: ver MAX_REVIEW_ATTEMPTS)
-  temperature/max_tokens/think_mode/extra
+  max_tokens/think_mode/extra
                    overrides de generación por-request (ver
                    GenerationOptions en src/api/schemas/chat.py); None
-                   en todos = comportamiento actual sin cambios.
+                   en todos = comportamiento actual sin cambios. La
+                   temperatura NO vive acá -- es una propiedad fija de
+                   cada modelo (src/config/models/<backend>.py), nunca
+                   un override por-request.
 
 NOTA: este módulo NO usa `from __future__ import annotations`.
 LangGraph llama get_type_hints(RAGState) en runtime para inspeccionar
@@ -58,7 +61,6 @@ class RAGState(TypedDict):
     # Solo generate_node/correct_node los leen -- reformulate_node y
     # review_node siempre usan la temperatura por defecto, son tareas
     # internas de una sola pasada, no la respuesta final al usuario.
-    temperature: float | None
     max_tokens: int | None
     think_mode: bool | None
     # Passthrough genérico sin validar (ver GenerationOptions.extra) --
@@ -99,7 +101,6 @@ class RAGStateUpdate(TypedDict, total=False):
     review_passed: bool
     review_feedback: str
     review_attempts: int
-    temperature: float | None
     max_tokens: int | None
     think_mode: bool | None
     extra: dict[str, Any] | None

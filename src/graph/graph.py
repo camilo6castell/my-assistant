@@ -43,7 +43,8 @@ Routing review:   passed=True  → END
 
 from __future__ import annotations
 
-from typing import Any, Hashable, cast
+from collections.abc import Hashable
+from typing import Any, cast
 
 from langgraph.graph import END, StateGraph
 from langgraph.graph.state import CompiledStateGraph

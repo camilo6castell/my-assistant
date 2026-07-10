@@ -4,7 +4,6 @@ import { persist } from "zustand/middleware"
 import type { ChatMessage, ChatMode, Conversation } from "@/types/chat"
 
 const emptyGeneration = {
-  temperature: null,
   maxTokens: null,
   thinkMode: null,
   maxTurns: null,

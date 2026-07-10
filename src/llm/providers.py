@@ -13,9 +13,9 @@ Diseño (dos ejes independientes):
     src/llm/backends/). Es mecánica de transporte pura, no sabe nada de
     modelos concretos.
   - `capabilities`: QUÉ ARCHIVO de src/config/models/ mirar para saber
-    qué acepta el modelo de este proveedor (temperature, max_tokens,
-    think mode y cómo activarlo). Es descripción del modelo, no sabe
-    nada de HTTP.
+    qué acepta el modelo de este proveedor (max_tokens, think mode y
+    cómo activarlo -- la temperatura no es un "acepta", es fija). Es
+    descripción del modelo, no sabe nada de HTTP.
   Ambos ejes son independientes a propósito: dos proveedores podrían
   compartir el mismo `client` (dos servidores OpenAI-compatible) con
   `capabilities` distintas (modelos distintos), o viceversa.
@@ -38,7 +38,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from functools import lru_cache
+from functools import cache
 
 from src.config.settings import settings
 from src.llm.backends.base import LLMClient
@@ -107,7 +107,7 @@ def list_provider_configs() -> dict[str, ProviderConfig]:
     return _build_provider_table()
 
 
-@lru_cache(maxsize=None)
+@cache
 def _client_for(config: ProviderConfig) -> LLMClient:
     """
     Un LLMClient por ProviderConfig único -- evita recrear conexiones.

@@ -40,7 +40,6 @@ export function ChatView() {
           chat_history: toHistory(conversation.messages),
           conversation_id: conversation.id,
           generation: {
-            temperature: conversation.generation.temperature,
             max_tokens: conversation.generation.maxTokens,
             think_mode: conversation.generation.thinkMode,
             max_turns: conversation.generation.maxTurns,

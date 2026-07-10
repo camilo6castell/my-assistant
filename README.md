@@ -510,7 +510,6 @@ All configuration is managed via Pydantic Settings (`src/config/settings.py`) an
 | `SOFT_TOP_K_FINAL`     | `7`                                                        | Chunks passed to prompt in SOFT mode               |
 | `MAX_TURNS`            | `4`                                                        | Conversation turns kept in context window          |
 | `CONFIDENCE_LIMIT`     | `0.79`                                                     | Cosine threshold below which query is reformulated |
-| `LLM_TEMPERATURE`      | `0.2`                                                      | Temperature for all LLM calls                      |
 | `LLM_TIMEOUT`          | `600`                                                      | LLM call timeout in seconds                        |
 | `LOCAL_BASE_URL`       | `http://127.0.0.1:52625/v1`                                | Local runtime endpoint                             |
 | `LOCAL_MODEL`          | _(from `LLM_MODEL`)_                                       | Model name at the local runtime                    |

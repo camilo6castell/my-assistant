@@ -1,4 +1,11 @@
-"""Configuration for Gemini models."""
+"""
+Configuración de modelos Gemini, vía su endpoint OpenAI-compatible.
+
+Mismo patrón que src/config/models/fastflowlm.py -- ver ese docstring
+para el razonamiento general. Gemini (vía este endpoint) no expone hoy
+un equivalente a enable_thinking/think, así que supports_thinking()
+siempre es False acá.
+"""
 
 from __future__ import annotations
 
@@ -17,30 +24,47 @@ _MODELS: dict[str, dict[str, Any]] = {
 }
 
 
-class ModelConfig:
-    def __init__(self, model_name: str) -> None:
-        try:
-            self._config = deepcopy(_MODELS[model_name])
-        except KeyError:
-            raise ValueError(f"Unsupported model: {model_name}") from None
+def _lookup(model_name: str) -> dict[str, Any]:
+    try:
+        return _MODELS[model_name]
+    except KeyError:
+        raise ValueError(f"Modelo Gemini no soportado: {model_name!r}") from None
 
-        self.model_name = model_name
 
-    def build_kwargs(
-        self,
-        messages: list[ChatTurn],
-    ) -> dict[str, Any]:
-        kwargs = deepcopy(self._config)
+def supports_thinking(model_name: str) -> bool:
+    _lookup(model_name)  # valida que el modelo exista
+    return False
 
-        kwargs["model"] = self.model_name
-        kwargs["messages"] = messages
 
-        return kwargs
+def default_think(model_name: str) -> bool | None:
+    _lookup(model_name)  # valida que el modelo exista
+    return None
 
-    def supports_thinking(self) -> bool:
-        return False
 
-    def set_thinking(self, enabled: bool) -> None:
-        # Gemini OpenAI-compatible no expone actualmente
-        # un equivalente a enable_thinking/think.
-        return
+def supports_max_tokens(model_name: str) -> bool:
+    return "max_tokens" in _lookup(model_name)
+
+
+def build_kwargs(
+    model_name: str,
+    messages: list[ChatTurn],
+    *,
+    max_tokens: int | None = None,
+    think: bool | None = None,
+    extra: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    if think is not None:
+        raise ValueError(
+            f"El modelo '{model_name}' (Gemini) no tiene modo de razonamiento configurado."
+        )
+
+    kwargs = deepcopy(_lookup(model_name))
+    kwargs["model"] = model_name
+    kwargs["messages"] = messages
+
+    if max_tokens is not None:
+        kwargs["max_tokens"] = max_tokens
+    if extra:
+        kwargs.setdefault("extra_body", {}).update(extra)
+
+    return kwargs

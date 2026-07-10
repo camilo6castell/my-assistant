@@ -1,5 +1,4 @@
-import { Bot, Globe } from "lucide-react";
-import { Switch } from "@/components/ui/switch";
+import { Bot, Brain, Globe } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useConversationsStore } from "@/stores/conversationsStore";
 import type { ProvidersResponse } from "@/types/api";
@@ -15,6 +14,11 @@ const WEB_SEARCH_EXPLANATION =
   "activas, la web pasa a ser la única fuente de contexto. Con colecciones " +
   "activas, primero responde con el RAG local y solo agrega un párrafo " +
   "'según la web...' si de verdad aporta algo nuevo.";
+
+const THINK_EXPLANATION =
+  "Modo razonamiento (think): el modelo piensa paso a paso antes de " +
+  "responder. Más lento, pero puede mejorar respuestas complejas. Solo " +
+  "disponible si el modelo activo lo soporta.";
 
 const WEB_SEARCH_QUOTA_EXCEEDED_EXPLANATION =
   "Se agotó la cuota de la cuenta de Tavily (free tier u otro plan). Revisá " +
@@ -49,7 +53,14 @@ export function GenerationSection({
     ? providers.providers[providers.active_generation_provider]
     : undefined;
   const supportsThinkMode =
-    activeProvider?.supports.includes("think_mode") ?? false;
+    activeProvider?.supports?.includes("think_mode") ?? false;
+  // Sin override en esta conversación (null), el efecto real es el
+  // default YA escrito en _MODELS[model] para el modelo activo (ver
+  // default_think en ProviderInfo) -- no un "apagado" fijo. El botón
+  // tiene que arrancar reflejando ESO, no un estado inventado por la UI
+  // que no tiene nada que ver con lo que el backend realmente manda.
+  const effectiveThink =
+    conversation.generation.thinkMode ?? activeProvider?.default_think ?? false;
   const defaults = providers?.defaults;
 
   // Defaults de retrieval dependientes del modo SOFT/HARD actual -- mismo
@@ -155,6 +166,30 @@ export function GenerationSection({
           </button>
           <button
             type="button"
+            onClick={() =>
+              setGeneration(conversation.id, { thinkMode: !effectiveThink })
+            }
+            disabled={!supportsThinkMode}
+            aria-pressed={effectiveThink}
+            title={
+              supportsThinkMode
+                ? THINK_EXPLANATION
+                : `El modelo activo (${activeProvider?.model ?? "sin provider"}) no tiene modo de razonamiento configurado.`
+            }
+            className={cn(
+              "flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors",
+              !supportsThinkMode
+                ? "cursor-not-allowed border-white/5 text-muted-foreground/40"
+                : effectiveThink
+                  ? "border-primary/40 bg-primary/15 text-primary"
+                  : "border-white/10 text-muted-foreground hover:bg-white/5",
+            )}
+          >
+            <Brain className="size-3.5" />
+            Pensar
+          </button>
+          <button
+            type="button"
             onClick={() => setUseAgent(conversation.id, !conversation.useAgent)}
             aria-pressed={conversation.useAgent}
             title={AGENT_EXPLANATION}
@@ -185,22 +220,7 @@ export function GenerationSection({
         </p>
       )}
 
-      {/* 3. Modo razonamiento */}
-      {supportsThinkMode && (
-        <label className="flex items-center justify-between">
-          <span className="text-xs text-muted-foreground">
-            Modo razonamiento (think)
-          </span>
-          <Switch
-            checked={conversation.generation.thinkMode ?? false}
-            onCheckedChange={(checked) =>
-              setGeneration(conversation.id, { thinkMode: checked })
-            }
-          />
-        </label>
-      )}
-
-      {/* 4. Cantidad de turnos */}
+      {/* 3. Cantidad de turnos */}
       <label className="block space-y-1.5">
         <span className="flex items-center justify-between text-xs text-muted-foreground">
           Turnos de historial
@@ -218,7 +238,7 @@ export function GenerationSection({
         />
       </label>
 
-      {/* 5. Top K inicial / final */}
+      {/* 4. Top K inicial / final */}
       <div className="space-y-1.5">
         <span className="flex items-center justify-between text-xs text-muted-foreground">
           Retrieval ({conversation.mode})
@@ -262,33 +282,6 @@ export function GenerationSection({
           automáticamente.
         </p>
       </div>
-
-      {/* 6. Temperatura */}
-      <label className="block space-y-1.5">
-        <span className="flex items-center justify-between text-xs text-muted-foreground">
-          Temperatura
-          <span>
-            {conversation.generation.temperature ??
-              defaults?.temperature ??
-              "default"}
-          </span>
-        </span>
-        <input
-          type="range"
-          min={0}
-          max={2}
-          step={0.1}
-          value={
-            conversation.generation.temperature ?? defaults?.temperature ?? 0.7
-          }
-          onChange={(e) =>
-            setGeneration(conversation.id, {
-              temperature: Number(e.target.value),
-            })
-          }
-          className="w-full accent-primary"
-        />
-      </label>
 
       {!activeProvider && (
         <p className="text-xs text-muted-foreground">

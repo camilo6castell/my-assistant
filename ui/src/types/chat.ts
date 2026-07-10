@@ -23,8 +23,13 @@ export interface ChatMessage {
 }
 
 export interface GenerationOptionsState {
-  temperature: number | null
   maxTokens: number | null
+  /**
+   * null = "sin override, usar el default que ya está escrito en
+   * _MODELS[model] para el modelo activo" (ver default_think en
+   * ProviderInfo). true/false = override explícito para esta
+   * conversación desde el botón "Pensar".
+   */
   thinkMode: boolean | null
   /** Overrides solo para esta conversación -- null = usar el default de .env/settings. */
   maxTurns: number | null

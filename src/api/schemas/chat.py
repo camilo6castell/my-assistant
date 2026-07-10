@@ -15,11 +15,22 @@ class GenerationOptions(BaseModel):
     Overrides opcionales de generación para una llamada puntual a
     POST /query o POST /query/agent.
 
-    temperature/max_tokens/think_mode: campos con nombre porque son
-    conceptos comunes a la mayoría de providers/modelos razonadores
-    (pensados para controles concretos en la UI: slider, input numérico,
-    switch). Cada uno en None significa "usar el default de settings/.env
-    para el provider activo".
+    La temperatura NO es uno de estos campos -- es responsabilidad
+    exclusiva de cada archivo en src/config/models/ (_MODELS[model]),
+    igual que top_p, presence_penalty, etc. No es un override
+    por-request: es una propiedad del modelo, se edita en el JSON de su
+    backend y aplica a todas las llamadas a ese modelo. Si en algún
+    momento hace falta volver a exponer un override real de temperatura
+    por-request, ver el historial de este archivo antes de reinventar la
+    rueda (el diseño anterior con Settings.llm_temperature pisaba
+    silenciosamente el valor de _MODELS en cada request; ver
+    src/llm/generate.py).
+
+    think_mode: campo con nombre porque es un concepto común a la
+    mayoría de providers/modelos razonadores (pensado para el botón
+    "Pensar" en la UI). None significa "usar el default que ya está
+    escrito en _MODELS[model] para este modelo" -- no "usar 0.2 de un
+    .env" como pasaba antes con temperature.
 
     extra: escape hatch genérico para cualquier parámetro que el backend
     NO modela explícitamente (top_p, presence_penalty, un flag propio de
@@ -49,9 +60,8 @@ class GenerationOptions(BaseModel):
     provider activo no lo soporta.
     """
 
-    temperature: float | None = Field(default=None, ge=0.0, le=2.0)
-    max_tokens: int | None = Field(default=None, gt=0)
     think_mode: bool | None = None
+    max_tokens: int | None = Field(default=None, gt=0)
     extra: dict[str, Any] | None = None
     max_turns: int | None = Field(default=None, gt=0)
     top_k_initial: int | None = Field(default=None, gt=0)
@@ -105,7 +115,7 @@ class QueryRequest(BaseModel):
     web_search: bool = False
 
     @model_validator(mode="after")
-    def _require_some_context_source(self) -> "QueryRequest":
+    def _require_some_context_source(self) -> QueryRequest:
         if not self.collections and not self.conversation_id and not self.web_search:
             raise ValueError(
                 "Se requiere al menos una colección en 'collections', un "

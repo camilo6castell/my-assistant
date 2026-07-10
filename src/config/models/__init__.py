@@ -1,7 +1,8 @@
 """
 Registro de capacidades por modelo -- reemplaza los antiguos
 `ProviderConfig.supports`/`think_param`/`default_think` (strings planas
-en .env) por estructuras tipadas, una por backend, en su propio archivo:
+en .env) por un dict JSON por modelo, uno por backend, en su propio
+archivo:
 
     src/config/models/fastflowlm.py
     src/config/models/ollama.py
@@ -10,123 +11,153 @@ en .env) por estructuras tipadas, una por backend, en su propio archivo:
 Por qué esto y no .env:
   Antes era posible declarar "think_mode" en LOCAL_SUPPORTS y olvidarse
   de configurar LOCAL_THINK_PARAM -- quedaban desincronizados porque eran
-  dos strings independientes. Acá `supports_set()` se DERIVA de la misma
-  estructura que define el comportamiento real (ThinkMapping), así que
-  no puede desincronizarse: si un modelo no tiene ThinkMapping, "think_mode"
-  simplemente no aparece en `supports`.
+  dos strings independientes. Acá `get_supports()` se DERIVA directo de
+  `_MODELS[model]` (misma estructura que build_kwargs() usa para armar
+  el request real), así que no puede desincronizarse: si un modelo no
+  tiene campo de thinking en su dict, "think_mode" simplemente no
+  aparece en `supports`.
 
-Agregar un modelo nuevo = una entrada en el dict MODELS del archivo de
-ese backend. Agregar un backend nuevo = un archivo nuevo acá + un cliente
+  Mismo criterio para la temperatura: NO es un override por-request
+  (build_kwargs() no acepta un parámetro `temperature`) -- es una
+  propiedad fija de _MODELS[model]["temperature"] en el archivo del
+  backend correspondiente. Para cambiarla se edita ese archivo, no hay
+  otro lugar (ni .env, ni GenerationOptions, ni un slider en la UI) que
+  pueda pisarla.
+
+Agregar un modelo nuevo = una entrada en el dict `_MODELS` del archivo
+de ese backend. Agregar un backend nuevo = un archivo nuevo acá (con las
+mismas 4 funciones: build_kwargs, supports_thinking, default_think,
+supports_max_tokens) + una línea nueva en `_registry()` + un cliente
 nuevo en src/llm/backends/ -- nunca hace falta tocar generate.py,
 providers.py, ni los routers.
+
+Este módulo es solo un DISPATCHER hacia el archivo del backend correcto
+-- no conoce el shape de ningún kwargs dict, ni muta nada. Cada función
+de acá simplemente reenvía a `<backend>.<misma_función>(model_name, ...)`.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Literal
+from typing import Any, Protocol
 
-from src.utils.logger import logger
-
-# bool para modelos on/off (FastFlowLM, la mayoría vía Ollama);
-# str de nivel para modelos que solo aceptan una escala (ej. gpt-oss).
-ThinkValue = bool | Literal["low", "medium", "high"]
+from src.llm.backends.base import ChatTurn
 
 
-@dataclass(frozen=True)
-class ThinkMapping:
+class _ModelBackend(Protocol):
     """
-    Cómo activar/desactivar el razonamiento para un modelo puntual.
-
-    `param` es el nombre real del campo/kwarg que esa API espera --
-    cada backend (src/llm/backends/*.py) decide cómo aplicarlo a su
-    propio transporte (extra_body para OpenAI-compatible, kwarg nativo
-    para Ollama). `on`/`off` son los valores lógicos; no siempre son
-    True/False -- gpt-oss vía Ollama, por ejemplo, no se puede apagar
-    del todo, solo bajar a su nivel mínimo.
+    Forma estructural que debe cumplir cada archivo de backend
+    (fastflowlm.py/gemini.py/ollama.py) para poder registrarse acá --
+    un módulo con estas funciones matchea este Protocol sin necesidad
+    de heredar nada ni de un cast explícito (typing estructural: mypy
+    compara la firma real del módulo contra esto). Le da tipado real a
+    `_module(...).build_kwargs(...)` en vez de degradar a `Any` como
+    pasaría devolviendo `ModuleType` a secas.
     """
 
-    param: str
-    on: ThinkValue
-    off: ThinkValue
-    # Valor lógico a asumir cuando el request NO trae un override
-    # explícito. None = no mandar el campo si no hay override (el
-    # modelo/runtime decide su propio comportamiento). True/False = se
-    # manda ese valor siempre que no venga un override -- necesario
-    # porque algunos modelos (Qwen3) vienen con razonamiento ON por
-    # defecto y no hay forma de "apagarlo" si nunca se manda el campo.
-    default: bool | None = None
+    def build_kwargs(
+        self,
+        model_name: str,
+        messages: list[ChatTurn],
+        *,
+        max_tokens: int | None = None,
+        think: bool | None = None,
+        extra: dict[str, Any] | None = None,
+    ) -> dict[str, Any]: ...
+
+    def supports_thinking(self, model_name: str) -> bool: ...
+    def default_think(self, model_name: str) -> bool | None: ...
+    def supports_max_tokens(self, model_name: str) -> bool: ...
 
 
-@dataclass(frozen=True)
-class ModelCapabilities:
-    """Qué acepta un modelo puntual, para un backend puntual."""
-
-    supports_temperature: bool = True
-    supports_max_tokens: bool = True
-    # None = el modelo no tiene modo de razonamiento activable.
-    think: ThinkMapping | None = None
-    # Si True, GenerationOptions.extra (passthrough sin validar) se deja
-    # pasar para este modelo. False por defecto -- opt-in explícito,
-    # igual que think: nunca "cualquier JSON pasa a cualquier servidor".
-    allows_extra: bool = False
-
-
-def supports_set(caps: ModelCapabilities) -> frozenset[str]:
-    """
-    GenerationOptions que acepta este modelo, derivado de sus
-    capacidades reales -- lo que antes era ProviderConfig.supports a
-    mano. Usado por GET /api/v1/config/providers y por la validación
-    de requests en el router de chat.
-    """
-    names: set[str] = set()
-    if caps.supports_temperature:
-        names.add("temperature")
-    if caps.supports_max_tokens:
-        names.add("max_tokens")
-    if caps.think is not None:
-        names.add("think_mode")
-    if caps.allows_extra:
-        names.add("extra")
-    return frozenset(names)
-
-
-# capabilities_key ("fastflowlm", "ollama", "gemini"...) -> {modelo: ModelCapabilities}
-# Los imports son perezosos (dentro de la función) para que agregar un
-# archivo nuevo en esta carpeta no requiera tocar este módulo salvo por
-# esta única línea de registro.
-def _registry() -> dict[str, dict[str, dict[str, dict[str, bool]]]]:
+def _registry() -> dict[str, _ModelBackend]:
+    # Import perezoso (dentro de la función) para que agregar un archivo
+    # nuevo en esta carpeta no requiera tocar nada acá salvo esta línea.
     from src.config.models import fastflowlm, gemini, ollama
 
     return {
-        "fastflowlm": fastflowlm._MODELS,
-        "ollama": ollama._MODELS,
-        "gemini": gemini._MODELS,
+        "fastflowlm": fastflowlm,
+        "ollama": ollama,
+        "gemini": gemini,
     }
 
 
-# def get_model_capabilities(capabilities_key: str, model: str) -> ModelCapabilities:
-#     """
-#     Busca las capacidades de `model` dentro del backend `capabilities_key`.
+def _module(capabilities_key: str) -> _ModelBackend:
+    registry = _registry()
+    try:
+        return registry[capabilities_key]
+    except KeyError:
+        valid = ", ".join(sorted(registry))
+        raise ValueError(
+            f"Backend de capacidades desconocido: {capabilities_key!r}. "
+            f"Válidos: {valid}"
+        ) from None
 
-#     Fallback conservador (solo temperature/max_tokens) si el backend o el
-#     modelo no están registrados -- preferible a un KeyError en medio de
-#     un request; queda un warning en el log para que no pase desapercibido.
-#     """
-#     backend_models = _registry().get(capabilities_key)
-#     if backend_models is None:
-#         logger.warning(
-#             f"[models] Backend de capacidades desconocido: {capabilities_key!r}. "
-#             "Usando capacidades conservadoras (solo temperature/max_tokens)."
-#         )
-#         return ModelCapabilities()
 
-#     caps = backend_models.get(model)
-#     if caps is None:
-#         logger.warning(
-#             f"[models] Modelo '{model}' no registrado en '{capabilities_key}'. "
-#             "Usando capacidades conservadoras (solo temperature/max_tokens)."
-#         )
-#         return ModelCapabilities()
+def build_kwargs(
+    capabilities_key: str,
+    model_name: str,
+    messages: list[ChatTurn],
+    *,
+    max_tokens: int | None = None,
+    think: bool | None = None,
+    extra: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """
+    Arma el dict de kwargs LISTO para pasarle al SDK del backend
+    correspondiente (`**kwargs` directo, sin transformación adicional en
+    src/llm/backends/*.py). El shape exacto lo decide cada módulo de
+    backend -- OpenAI-compatible (fastflowlm/gemini) devuelve kwargs
+    planos; ollama devuelve {model, messages, think, options}.
 
-#     return caps
+    No acepta `temperature` a propósito: siempre queda el valor de
+    _MODELS[model_name]["temperature"] tal como está escrito en el
+    archivo del backend -- no hay override por-request para eso (ver
+    docstring del módulo).
+    """
+    return _module(capabilities_key).build_kwargs(
+        model_name,
+        messages,
+        max_tokens=max_tokens,
+        think=think,
+        extra=extra,
+    )
+
+
+def get_supports(capabilities_key: str, model_name: str) -> frozenset[str]:
+    """
+    GenerationOptions que acepta este modelo -- usado por
+    GET /api/v1/config/providers (qué controles mostrar en la UI) y por
+    la validación de requests en el router de chat.
+
+    No incluye "temperature": no es una GenerationOption, es una
+    propiedad fija del modelo (ver docstring del módulo).
+
+    Fallback conservador (frozenset vacío) si el backend o el modelo no
+    están registrados, en vez de un 500 -- se loguea como excepción
+    normal más arriba en la pila si el caller no lo espera; acá alcanza
+    con no reventar el descubrimiento de providers por un modelo mal
+    configurado.
+    """
+    mod = _module(capabilities_key)
+    names: set[str] = set()
+    if mod.supports_max_tokens(model_name):
+        names.add("max_tokens")
+    if mod.supports_thinking(model_name):
+        names.add("think_mode")
+    # "extra" (passthrough) siempre se ofrece como opt-in -- cada backend
+    # decide qué hacer con él (fastflowlm/gemini lo mergean a extra_body,
+    # ollama lo ignora con warning, ver build_kwargs de cada uno).
+    names.add("extra")
+    return frozenset(names)
+
+
+def get_default_think(capabilities_key: str, model_name: str) -> bool | None:
+    """
+    El valor de thinking YA escrito en _MODELS[model_name] para este
+    modelo -- None si el modelo no tiene modo de razonamiento en
+    absoluto. Usado por GET /api/v1/config/providers para que el botón
+    "Pensar" de la UI arranque reflejando el comportamiento real del
+    modelo (ver ProviderInfo.default_think), en vez de arrancar en un
+    estado fijo sin relación con la config real.
+    """
+    return _module(capabilities_key).default_think(model_name)

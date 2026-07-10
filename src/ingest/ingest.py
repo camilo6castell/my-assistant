@@ -4,8 +4,8 @@ import sys
 from pathlib import Path
 
 import numpy as np
-from pypdf import PdfReader
 from bs4 import BeautifulSoup
+from pypdf import PdfReader
 
 from src.config.settings import settings
 from src.ingest.core import (
@@ -48,14 +48,14 @@ def read_pdf(path: Path) -> list[tuple[int, str]]:
 
 def read_html(path: Path) -> list[tuple[int, str]]:
     logger.info(f"Leyendo HTML: {path.name}")
-    with open(path, "r", encoding="utf-8") as f:
+    with open(path, encoding="utf-8") as f:
         soup: BeautifulSoup = BeautifulSoup(f, "html.parser")
     return [(1, soup.get_text(separator="\n"))]
 
 
 def read_txt(path: Path) -> list[tuple[int, str]]:
     logger.info(f"Leyendo TXT: {path.name}")
-    with open(path, "r", encoding="utf-8") as f:
+    with open(path, encoding="utf-8") as f:
         text: str = f.read()
     return [(1, text)]
 

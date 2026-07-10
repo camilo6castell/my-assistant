@@ -5,7 +5,7 @@ Uso:
   python -m src.main                                   menú interactivo
   python -m src.main chat                              entra directo al chat
   python -m src.main api                               levanta la API REST
-  python -m src.main web                               levanta API + frontend (ui/) y abre el navegador
+  python -m src.main web                               levanta API + frontend (ui/) y abre browser
   python -m src.main ingest <cat> <col>                ingest de archivos locales
   python -m src.main ingest-url <cat> <col> <url>      ingest de una URL puntual
   python -m src.main crawl <cat> <col> <start_url>     rastrea un sitio completo
@@ -21,21 +21,21 @@ Ejemplos:
 from __future__ import annotations
 
 import sys
-from typing import Callable
+from collections.abc import Callable
 
 
 def _cmd_chat() -> None:
-    from src.chat.session import ChatSession
     from src.chat.interface import start_chat
+    from src.chat.session import ChatSession
 
     session = ChatSession()
     start_chat(session)
 
 
 def _cmd_menu() -> None:
-    from src.chat.session import ChatSession
     from src.chat.interface import start_chat
-    from src.cli.commands import show_main_menu, show_contexts, show_modes, show_about
+    from src.chat.session import ChatSession
+    from src.cli.commands import show_about, show_contexts, show_main_menu, show_modes
 
     session = ChatSession()
 
@@ -60,6 +60,7 @@ def _cmd_menu() -> None:
 
 def _cmd_api() -> None:
     import uvicorn
+
     from src.config.settings import settings
 
     uvicorn.run(
@@ -223,9 +224,7 @@ def _cmd_ingest_url(args: list[str]) -> None:
     """
     if len(args) != 3:
         print("Uso: python -m src.main ingest-url <categoria> <coleccion> <url>")
-        print(
-            "Ej:  python -m src.main ingest-url sociologia debord https://sitio.com/articulo"
-        )
+        print("Ej:  python -m src.main ingest-url sociologia debord https://sitio.com/articulo")
         sys.exit(1)
     sys.argv = ["ingest-url", args[0], args[1], args[2]]
     from src.ingest.web_ingest import main as web_ingest_main

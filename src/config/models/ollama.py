@@ -1,4 +1,13 @@
-"""Configuration for Ollama models."""
+"""
+Configuración de modelos servidos vía el cliente nativo de Ollama.
+
+Mismo patrón que src/config/models/fastflowlm.py -- ver ese docstring
+para el razonamiento general. La diferencia es de FORMA, no de
+filosofía: acá build_kwargs() arma el dict que espera
+`ollama.Client().chat(**kwargs)` (model/messages/think/options), en vez
+del shape OpenAI-compatible -- cada backend decide su propio shape de
+salida, sus callers (src/llm/backends/*.py) no necesitan traducir nada.
+"""
 
 from __future__ import annotations
 
@@ -6,6 +15,7 @@ from copy import deepcopy
 from typing import Any
 
 from src.llm.backends.base import ChatTurn
+from src.utils.logger import logger
 
 _MODELS: dict[str, dict[str, Any]] = {
     "deepseek-r1": {
@@ -20,29 +30,60 @@ _MODELS: dict[str, dict[str, Any]] = {
 }
 
 
-class ModelConfig:
-    def __init__(self, model_name: str) -> None:
-        try:
-            self._config = deepcopy(_MODELS[model_name])
-        except KeyError:
-            raise ValueError(f"Unsupported model: {model_name}") from None
+def _lookup(model_name: str) -> dict[str, Any]:
+    try:
+        return _MODELS[model_name]
+    except KeyError:
+        raise ValueError(f"Modelo Ollama no soportado: {model_name!r}") from None
 
-        self.model_name = model_name
 
-    def build_kwargs(
-        self,
-        messages: list[ChatTurn],
-    ) -> dict[str, Any]:
-        kwargs = deepcopy(self._config)
+def supports_thinking(model_name: str) -> bool:
+    return "think" in _lookup(model_name)
 
-        kwargs["model"] = self.model_name
-        kwargs["messages"] = messages
 
-        return kwargs
+def default_think(model_name: str) -> bool | None:
+    cfg = _lookup(model_name)
+    if "think" not in cfg:
+        return None
+    return bool(cfg["think"])
 
-    def supports_thinking(self) -> bool:
-        return "think" in self._config
 
-    def set_thinking(self, enabled: bool) -> None:
-        if self.supports_thinking():
-            self._config["think"] = enabled
+def supports_max_tokens(model_name: str) -> bool:
+    return "num_predict" in _lookup(model_name).get("options", {})
+
+
+def build_kwargs(
+    model_name: str,
+    messages: list[ChatTurn],
+    *,
+    max_tokens: int | None = None,
+    think: bool | None = None,
+    extra: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    kwargs = deepcopy(_lookup(model_name))
+    options = kwargs.setdefault("options", {})
+
+    if max_tokens is not None:
+        options["num_predict"] = max_tokens
+
+    if think is not None:
+        if "think" not in kwargs:
+            raise ValueError(
+                f"El modelo '{model_name}' no tiene modo de razonamiento configurado."
+            )
+        kwargs["think"] = think
+
+    if extra:
+        # El cliente nativo de Ollama no tiene un passthrough genérico
+        # tipo extra_body -- solo entiende kwargs propios (model,
+        # messages, think, options, format...). Nunca hubo un lugar
+        # conocido donde meter claves arbitrarias, así que se ignoran
+        # con warning, igual que hacía antes OllamaNativeClient.
+        logger.warning(
+            f"[config.models.ollama] Campos 'extra' sin mapeo conocido para "
+            f"'{model_name}', se ignoran: {sorted(extra)}"
+        )
+
+    kwargs["model"] = model_name
+    kwargs["messages"] = messages
+    return kwargs

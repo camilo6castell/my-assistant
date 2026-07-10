@@ -6,23 +6,28 @@ de /v1/chat/completions).
 
 from __future__ import annotations
 
+from typing import Any
+
 from openai import OpenAI, OpenAIError
 
-from src.config.models.fastflowlm import fastFlowLMModelConfig
-from src.llm.backends.base import CompletionRequest
 from src.utils.logger import logger
 
 
 class OpenAICompatClient:
+    """
+    Transporte puro: no sabe nada de modelos concretos ni de
+    FastFlowLM/Gemini en particular -- sirve a cualquier provider cuyo
+    ProviderConfig.client sea "openai_compat" (ver src/llm/providers.py).
+    `kwargs` ya viene armado por src.config.models.build_kwargs() con el
+    modelo, los mensajes, y cualquier override ya resuelto.
+    """
+
     def __init__(self, base_url: str, api_key: str) -> None:
         self._client = OpenAI(base_url=base_url, api_key=api_key)
 
-    def complete(self, request: CompletionRequest) -> str | None:
-
+    def complete(self, kwargs: dict[str, Any]) -> str | None:
         try:
-            response = self._client.chat.completions.create(
-                **fastFlowLMModelConfig.build_kwargs(request.messages)
-            )
+            response = self._client.chat.completions.create(**kwargs)
         except OpenAIError:
             logger.exception("[openai_compat] Error consultando LLM")
             return None

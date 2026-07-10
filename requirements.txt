@@ -1,6 +1,11 @@
 # Generado a partir de los imports reales del proyecto (no existía
 # requirements.txt en el zip original — agregado para que el proyecto
 # sea instalable de forma reproducible).
+#
+# Fuente de verdad real: pyproject.toml [project.dependencies] -- este
+# archivo se mantiene igual porque el proyecto corre in-place (python -m
+# src.main, sin [build-system] en pyproject.toml, ver comentario ahí) y
+# `pip install -r requirements.txt` sigue siendo la forma de instalar.
 openai>=1.40.0
 langgraph>=0.2.0
 fastapi>=0.111.0
@@ -11,3 +16,9 @@ faiss-cpu>=1.8.0
 sentence-transformers>=3.0.0
 beautifulsoup4>=4.12.0
 requests>=2.32.0
+pypdf>=4.0.0
+readability-lxml>=0.8.0
+
+# Opcional -- solo si usás el backend "ollama_native" (ver
+# src/llm/backends/ollama_native.py, import lazy a propósito).
+# ollama>=0.3.0

@@ -25,11 +25,13 @@ from src.api.schemas.chat import (
     WebSource,
 )
 from src.chat.types import TurnMemory
+from src.config.models import get_supports
 from src.config.settings import settings
 from src.context.ephemeral import EphemeralStore
 from src.context.manager import ContextManager, LoadedCollection
 from src.graph.state import RAGState
 from src.llm.generate import ask_llm, ask_llm_supplement
+from src.llm.providers import get_provider
 from src.llm.roles import LLMRole
 from src.prompts.builder import (
     WEB_SUPPLEMENT_SENTINEL,
@@ -172,6 +174,41 @@ def _validate_web_search(request: QueryRequest) -> None:
         )
 
 
+def _validate_generation_options(request: QueryRequest) -> None:
+    """
+    400 si `request.generation` pide think_mode y/o extra pero el
+    provider que efectivamente va a generar la respuesta
+    (settings.provider_for(LLMRole.GENERATE)) no los soporta -- ver
+    get_supports() en src/config/models/. Fail-fast acá, antes de
+    resolver colecciones o tocar el LLM, mismo criterio que
+    _validate_web_search.
+
+    Solo valida contra el provider de GENERATE: es el único rol que la
+    UI expone como override configurable por el usuario (ver
+    GenerationSection.tsx) -- reformulate/review/web_supplement no
+    reciben think_mode/extra (ver ask_llm_internal/ask_llm_supplement).
+    """
+    generation = request.generation
+    if generation is None:
+        return
+
+    provider_name = settings.provider_for(LLMRole.GENERATE)
+    config = get_provider(provider_name)
+    supports = get_supports(config.capabilities, config.model)
+
+    if generation.think_mode is not None and "think_mode" not in supports:
+        raise HTTPException(
+            status_code=400,
+            detail=f"El modelo '{config.model}' (provider '{provider_name}') no "
+            "tiene modo de razonamiento (think_mode) configurado.",
+        )
+    if generation.extra and "extra" not in supports:
+        raise HTTPException(
+            status_code=400,
+            detail=f"El provider '{provider_name}' no acepta el campo 'extra'.",
+        )
+
+
 def _web_context_chunks(results: list[WebSearchResult]) -> list[str]:
     """Mismo formato que los chunks locales (SOURCE/.../texto) para que build_prompt() sea idéntico en ambos casos."""
     return [f"SOURCE: {r.title}\nURL: {r.url}\n\n{r.content}" for r in results]
@@ -281,7 +318,6 @@ def _supplement_with_web(
             prompt=supplement_prompt,
             system_prompt=build_web_supplement_system_prompt(),
             provider=settings.provider_for(LLMRole.WEB_SUPPLEMENT),
-            temperature=gen_kwargs["temperature"],
             max_tokens=gen_kwargs["max_tokens"],
         )
 
@@ -303,7 +339,6 @@ def _supplement_with_web(
 
 
 class _GenerationKwargs(TypedDict):
-    temperature: float | None
     max_tokens: int | None
     think_mode: bool | None
     extra: dict[str, Any] | None
@@ -319,18 +354,17 @@ def _generation_kwargs(generation: GenerationOptions | None) -> _GenerationKwarg
     real de ask_llm en vez de perder precisión con dict[str, object].
     top_k_initial/top_k_final no viven acá porque no son parámetros de
     ask_llm -- se resuelven aparte con _resolve_top_k() y van a search()
-    /RAGState.
+    /RAGState. `temperature` tampoco: no es un parámetro de ask_llm, es
+    una propiedad fija de cada modelo (ver src/config/models/).
     """
     if generation is None:
         return {
-            "temperature": None,
             "max_tokens": None,
             "think_mode": None,
             "extra": None,
             "max_turns": None,
         }
     return {
-        "temperature": generation.temperature,
         "max_tokens": generation.max_tokens,
         "think_mode": generation.think_mode,
         "extra": generation.extra,
@@ -378,6 +412,7 @@ async def query(
     )
 
     _validate_web_search(request)
+    _validate_generation_options(request)
     top_k_initial, top_k_final = _resolve_top_k(request)
 
     collections = _resolve_collections(request.collections)
@@ -495,6 +530,7 @@ async def query_agent(
     )
 
     _validate_web_search(request)
+    _validate_generation_options(request)
     top_k_initial, top_k_final = _resolve_top_k(request)
 
     collections = _resolve_collections(request.collections)
@@ -533,7 +569,6 @@ async def query_agent(
             "review_passed": False,
             "review_feedback": "",
             "review_attempts": 0,
-            "temperature": gen_kwargs["temperature"],
             "max_tokens": gen_kwargs["max_tokens"],
             "think_mode": gen_kwargs["think_mode"],
             "extra": gen_kwargs["extra"],

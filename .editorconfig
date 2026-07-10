@@ -1,0 +1,28 @@
+# https://editorconfig.org -- reglas de formato que cualquier editor
+# entiende (no solo VSCode), viajan con el repo. ruff format/eslint+
+# prettier ya aplican la mayoría de esto en save; esto es la red de
+# seguridad para los archivos que ninguno de los dos toca (.env.example,
+# .md, YAML de CI, etc.) y para quien clone el repo sin tus extensiones.
+
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 4
+
+[*.py]
+indent_size = 4
+max_line_length = 100
+
+[*.{js,jsx,ts,tsx,json,jsonc,css,html}]
+indent_size = 2
+
+[*.{yml,yaml,toml}]
+indent_size = 2
+
+[Makefile]
+indent_style = tab

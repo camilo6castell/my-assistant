@@ -1,11 +1,25 @@
-"""Configuration for FastFlowLM models."""
+"""
+Configuración de modelos FastFlowLM -- un backend OpenAI-compatible.
+
+_MODELS es la ÚNICA fuente de verdad: un dict por modelo con exactamente
+los kwargs que espera `client.chat.completions.create(**kwargs)`. Para
+tocar el comportamiento de un modelo puntual (temperatura, top_p, si
+piensa por defecto...) se edita acá, nada más -- build_kwargs() nunca
+hace falta tocarlo para eso.
+
+Todo acá son funciones puras sobre `model_name` + `_MODELS[model_name]`,
+sin estado mutable compartido: build_kwargs() siempre deepcopy-ea desde
+_MODELS antes de aplicar overrides, así que dos requests concurrentes
+para el mismo modelo nunca pueden pisarse un override del otro (a
+diferencia del diseño anterior, donde un único FastFlowLMModelConfig por
+proceso mutaba su propio _config con set_thinking()).
+"""
 
 from __future__ import annotations
 
 from copy import deepcopy
 from typing import Any
 
-from src.config.settings import settings
 from src.llm.backends.base import ChatTurn
 
 _MODELS: dict[str, dict[str, Any]] = {
@@ -46,44 +60,86 @@ _MODELS: dict[str, dict[str, Any]] = {
 }
 
 
-class FastFlowLMModelConfig:
-    def __init__(self, model_name: str) -> None:
-        try:
-            self._config = deepcopy(_MODELS[model_name])
-        except KeyError:
-            raise ValueError(f"Unsupported model: {model_name}") from None
-
-        self.model_name = model_name
-
-    def build_kwargs(
-        self,
-        messages: list[ChatTurn],
-    ) -> dict[str, Any]:
-        kwargs = deepcopy(self._config)
-        kwargs["model"] = self.model_name
-        kwargs["messages"] = messages
-        return kwargs
-
-    def supports_thinking(self) -> bool:
-        extra = self._config.get("extra_body", {})
-
-        if "enable_thinking" in extra:
-            return True
-
-        chat_kwargs = extra.get("chat_template_kwargs", {})
-        return "enable_thinking" in chat_kwargs
-
-    def set_thinking(self, enabled: bool) -> None:
-        if not self.supports_thinking():
-            return
-
-        extra = self._config.setdefault("extra_body", {})
-
-        if "enable_thinking" in extra:
-            extra["enable_thinking"] = enabled
-
-        if "chat_template_kwargs" in extra:
-            extra["chat_template_kwargs"]["enable_thinking"] = enabled
+def _lookup(model_name: str) -> dict[str, Any]:
+    try:
+        return _MODELS[model_name]
+    except KeyError:
+        raise ValueError(f"Modelo FastFlowLM no soportado: {model_name!r}") from None
 
 
-fastFlowLMModelConfig = FastFlowLMModelConfig(settings.local_model)
+def supports_thinking(model_name: str) -> bool:
+    extra = _lookup(model_name).get("extra_body", {})
+    if "enable_thinking" in extra:
+        return True
+    return "enable_thinking" in extra.get("chat_template_kwargs", {})
+
+
+def default_think(model_name: str) -> bool | None:
+    """Valor de enable_thinking YA escrito en _MODELS -- None si no aplica."""
+    if not supports_thinking(model_name):
+        return None
+    extra = _lookup(model_name).get("extra_body", {})
+    if "enable_thinking" in extra:
+        return bool(extra["enable_thinking"])
+    return bool(extra.get("chat_template_kwargs", {}).get("enable_thinking"))
+
+
+def supports_max_tokens(model_name: str) -> bool:
+    return "max_tokens" in _lookup(model_name)
+
+
+def _set_thinking(extra_body: dict[str, Any], enabled: bool) -> None:
+    """Muta un extra_body YA COPIADO (ver build_kwargs) -- nunca el original."""
+    if "enable_thinking" in extra_body:
+        extra_body["enable_thinking"] = enabled
+    chat_kwargs = extra_body.get("chat_template_kwargs")
+    if isinstance(chat_kwargs, dict) and "enable_thinking" in chat_kwargs:
+        chat_kwargs["enable_thinking"] = enabled
+
+
+def build_kwargs(
+    model_name: str,
+    messages: list[ChatTurn],
+    *,
+    max_tokens: int | None = None,
+    think: bool | None = None,
+    extra: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """
+    Arma el dict listo para `client.chat.completions.create(**kwargs)`.
+
+    No acepta `temperature`: siempre queda tal cual está en
+    _MODELS[model_name] -- no hay override por-request para eso, es
+    responsabilidad exclusiva de este archivo (editar la entrada del
+    modelo acá si hace falta cambiarla).
+
+    Los demás `None` significan "usar lo que ya está en
+    _MODELS[model_name]" -- por eso, por ejemplo, qwen3.5:9b viene con
+    thinking OFF por defecto sin que este módulo necesite un concepto
+    separado de "default": ya está escrito en su entrada de _MODELS.
+
+    Lanza ValueError si se pide `think` para un modelo sin soporte de
+    razonamiento -- el caller (src/llm/generate.py) ya valida esto contra
+    `supports_thinking()` antes de llegar acá, así que en circulación
+    normal este error nunca debería dispararse.
+    """
+    kwargs = deepcopy(_lookup(model_name))
+    kwargs["model"] = model_name
+    kwargs["messages"] = messages
+
+    if max_tokens is not None:
+        kwargs["max_tokens"] = max_tokens
+
+    if think is not None:
+        if not supports_thinking(model_name):
+            raise ValueError(
+                f"El modelo '{model_name}' no tiene modo de razonamiento configurado."
+            )
+        extra_body = kwargs.setdefault("extra_body", {})
+        _set_thinking(extra_body, think)
+
+    if extra:
+        extra_body = kwargs.setdefault("extra_body", {})
+        extra_body.update(extra)
+
+    return kwargs

@@ -69,7 +69,7 @@ def show_contexts(session: ChatSession) -> None:
 def show_modes() -> None:
     """Describe los modos de respuesta disponibles."""
 
-    print(f"""
+    print("""
   ─────────────────────────────────────────────────────────────────
   SOFT (default)
     - Can synthesize and connect concepts from different sources.

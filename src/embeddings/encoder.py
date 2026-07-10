@@ -35,9 +35,9 @@ from abc import ABC, abstractmethod
 from collections.abc import Sequence
 from functools import lru_cache
 from typing import cast
-from numpy.typing import NDArray
 
 import numpy as np
+from numpy.typing import NDArray
 from openai import OpenAI
 
 from src.config.settings import settings

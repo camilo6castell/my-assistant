@@ -14,7 +14,6 @@ from src.context.manager import LoadedCollection
 from src.context.models import SearchResult
 from src.embeddings.encoder import get_encoder
 
-
 # ======================================================
 # QUERY BUILDING
 # ======================================================
@@ -134,8 +133,8 @@ def search(
     """
     top_k_initial/top_k_final: overrides por-request (ver GenerationOptions
     en src/api/schemas/chat.py). None en cualquiera de los dos usa el
-    default de settings para el modo (SOFT/HARD) -- igual que
-    temperature/max_tokens en src/llm/generate.py, nunca mutan settings.
+    default de settings para el modo (SOFT/HARD) -- igual que max_tokens
+    en src/llm/generate.py, nunca mutan settings.
     """
 
     if mode == ChatMode.SOFT:

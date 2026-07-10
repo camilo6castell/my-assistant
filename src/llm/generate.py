@@ -8,7 +8,7 @@ contiene un bloque HISTORIAL para evitar redundancia.
 MAX_TURNS limita cuantos turnos se envian para proteger la ventana
 de contexto del modelo.
 
-Overrides de generación (temperature/max_tokens/think_mode/extra):
+Overrides de generación (max_tokens/think_mode/extra):
   Son parámetros *por-request*, nunca mutan `settings` ni ProviderConfig.
   Si `ask_llm()`/`ask_llm_internal()` mutaran un Settings global para
   aplicar un override, el cambio de una conversación se filtraría a
@@ -17,18 +17,36 @@ Overrides de generación (temperature/max_tokens/think_mode/extra):
   settings/.env; el contrato completo vive en GenerationOptions
   (src/api/schemas/chat.py).
 
-think_mode se resuelve acá contra ModelCapabilities (src/config/models/)
--- este módulo traduce el bool lógico "pensar sí/no" al valor real que
-el modelo espera (True/False, o un nivel "low"/"high"...) y arma un
-CompletionRequest ya resuelto. El LLMClient (src/llm/backends/) que
-efectivamente lo manda no necesita saber nada de esto.
+  La temperatura NO es uno de estos overrides -- es una propiedad fija
+  de cada modelo, definida en src/config/models/<backend>.py
+  (_MODELS[model]["temperature"]) y nunca pisada acá. Antes existía
+  settings.llm_temperature (.env) que se aplicaba SIEMPRE como default
+  cuando no venía override, tapando silenciosamente el valor real del
+  modelo (ej. qwen3.5:9b configurado con temperature=0.0 en su
+  _MODELS pero mostrando 0.2 igual, porque _complete() lo pisaba antes
+  de llegar a build_kwargs). Eliminado a propósito: si algún día hace
+  falta un override real de temperatura por-request, agregarlo de nuevo
+  acá explícitamente en vez de reintroducir un default silencioso.
+
+think_mode se valida acá contra `src.config.models.get_supports()` (el
+modelo activo tiene o no tiene modo de razonamiento) y se lo pasa tal
+cual a `src.config.models.build_kwargs()`, que arma el dict final ya en
+el shape nativo del backend (extra_body para OpenAI-compatible, kwarg
+`think` para Ollama). El LLMClient (src/llm/backends/) que efectivamente
+lo manda no necesita saber nada de esa mecánica. think_mode=None NO es
+"apagado" -- es "sin override", y build_kwargs() deja intacto lo que ya
+esté escrito en _MODELS[model] para ese modelo (ver
+src/config/models/fastflowlm.py).
 """
 
 from __future__ import annotations
 
+from typing import Any
+
 from src.chat.types import TurnMemory
+from src.config.models import build_kwargs, get_supports
 from src.config.settings import settings
-from src.llm.backends.base import ChatTurn, CompletionRequest
+from src.llm.backends.base import ChatTurn
 from src.llm.providers import ProviderConfig, get_client
 from src.prompts.builder import build_reformulation_system_prompt, build_system_prompt
 from src.utils.logger import logger
@@ -55,7 +73,7 @@ def build_messages(
 
     max_turns: override por-request (ver GenerationOptions en
     src/api/schemas/chat.py). None usa settings.max_turns -- mismo
-    contrato que temperature/max_tokens, nunca muta settings.
+    contrato que max_tokens, nunca muta settings.
     """
     effective_max_turns = settings.max_turns if max_turns is None else max_turns
 
@@ -73,55 +91,50 @@ def build_messages(
     return messages
 
 
-def _resolve_think(
-    think_mode: bool | None, config: ProviderConfig
-) -> tuple[bool | str | None, str | None]:
+def _validate_think(think_mode: bool | None, config: ProviderConfig) -> None:
     """
-    Traduce el bool lógico "pensar sí/no" (o None = sin override) al
-    valor real que este modelo espera, según ModelCapabilities.
+    Si vino un override explícito de think_mode, valida que el modelo
+    activo lo soporte -- ver `get_supports()` en src/config/models/.
 
-    Devuelve (valor, nombre_del_campo). (None, None) si no hay nada que
-    aplicar -- ni override, ni default configurado, ni ThinkMapping en
-    absoluto para este modelo.
+    think_mode=None (sin override) nunca necesita validación: significa
+    "dejar el default que ya está escrito en _MODELS[model] para este
+    modelo" (ver src/config/models/fastflowlm.py -- Qwen3 ya trae
+    enable_thinking=False como parte de su config base, así que "sin
+    override" nunca deja el campo sin mandar).
 
-    Lanza ValueError si se pidió un valor explícito y el modelo no tiene
-    ThinkMapping -- el router (src/api/routers/chat.py) ya valida esto
-    contra `supports` antes de llegar acá, así que este error solo
+    Lanza ValueError si se pidió un valor explícito y el modelo no
+    soporta think_mode -- el router (src/api/routers/chat.py) ya valida
+    esto contra `supports` antes de llegar acá, así que este error solo
     dispararía si algo llama a ask_llm() directamente sin pasar por la
     validación del endpoint.
     """
-    caps = get_model_capabilities(config.capabilities, config.model)
+    if think_mode is None:
+        return
 
-    if caps.think is None:
-        if think_mode is not None:
-            raise ValueError(
-                f"El modelo '{config.model}' (provider '{config.name}') no tiene "
-                "modo de razonamiento configurado -- ver src/config/models/"
-                f"{config.capabilities}.py."
-            )
-        return None, None
-
-    # Sin override explícito, cae al default del modelo (ThinkMapping.default)
-    # en vez de omitir el campo -- omitirlo deja que el modelo use SU
-    # propio default (Qwen3 viene con thinking ON), que es justo lo que
-    # hace imposible "apagarlo" si nunca se manda el campo explícitamente.
-    effective = caps.think.default if think_mode is None else think_mode
-    if effective is None:
-        return None, None
-
-    return (caps.think.on if effective else caps.think.off), caps.think.param
+    supports = get_supports(config.capabilities, config.model)
+    if "think_mode" not in supports:
+        raise ValueError(
+            f"El modelo '{config.model}' (provider '{config.name}') no tiene "
+            "modo de razonamiento configurado -- ver src/config/models/"
+            f"{config.capabilities}.py."
+        )
 
 
-def _dump_request_for_debug(request: CompletionRequest) -> None:
+def _dump_request_for_debug(kwargs: dict[str, Any]) -> None:
     """
-    Escribe el body EXACTO que se le manda al provider (mismo shape que
-    espera /v1/chat/completions, con extra_fields ya aplanado a
-    top-level) a ./debug_last_llm_request.json en la raíz del proyecto
-    -- listo para:
+    Escribe el body EXACTO que se le manda al provider (los mismos
+    kwargs que arma src.config.models.build_kwargs(), en el shape nativo
+    de ese backend) a ./debug_last_llm_request.json en la raíz del
+    proyecto -- listo para:
 
         curl -v --max-time 300 http://<base_url>/chat/completions \\
           -H "Content-Type: application/json" \\
           -d @debug_last_llm_request.json
+
+    (Para backends "ollama_native" el shape no es directamente el body
+    HTTP de /v1/chat/completions -- sirve igual para inspeccionar qué se
+    mandó, aunque el curl de arriba solo aplica tal cual a
+    "openai_compat".)
 
     Se sobreescribe en cada llamada (solo importa el último request) y
     solo se activa con settings.llm_debug_dump=True -- nunca corre en
@@ -130,17 +143,24 @@ def _dump_request_for_debug(request: CompletionRequest) -> None:
     """
     import json
 
-    body: dict[str, object] = {
-        "model": request.model,
-        "messages": request.messages,
-    }
+    # `kwargs["messages"]` es list[ChatTurn] en la práctica (build_kwargs
+    # siempre lo pone ahí), pero el tipo declarado es dict[str, Any] --
+    # se narrowea acá con isinstance en vez de asumirlo, así el cálculo
+    # de tamaño nunca revienta si algún backend nuevo cambia el shape.
+    raw_messages = kwargs.get("messages", [])
+    messages: list[dict[str, Any]] = (
+        raw_messages if isinstance(raw_messages, list) else []
+    )
 
     try:
         with open("debug_last_llm_request.json", "w", encoding="utf-8") as f:
-            json.dump(body, f, ensure_ascii=False, indent=2)
+            json.dump(kwargs, f, ensure_ascii=False, indent=2)
+        chars = sum(
+            len(m["content"]) for m in messages if isinstance(m, dict) and "content" in m
+        )
         logger.info(
             "[debug] Request volcado a ./debug_last_llm_request.json "
-            f"({sum(len(m['content']) for m in request.messages)} caracteres de mensajes)"
+            f"({chars} caracteres de mensajes)"
         )
     except OSError as e:
         logger.warning(f"[debug] No se pudo volcar el request para debug: {e}")
@@ -151,15 +171,19 @@ def _complete(
     messages: list[ChatTurn],
     provider_name: str,
     log_prefix: str,
-    temperature: float | None,
     max_tokens: int | None,
     think_mode: bool | None,
     extra: ExtraFields | None,
 ) -> str | None:
     """
-    Arma un CompletionRequest resuelto y se lo entrega al LLMClient del
-    provider -- este módulo no sabe (ni necesita saber) si eso termina
-    hablando con OpenAI, FastFlowLM u Ollama nativo.
+    Arma los kwargs resueltos (vía src.config.models.build_kwargs) y se
+    los entrega al LLMClient del provider -- este módulo no sabe (ni
+    necesita saber) si eso termina hablando con OpenAI, FastFlowLM u
+    Ollama nativo.
+
+    No recibe `temperature`: nunca se pasa un override acá, así que
+    build_kwargs() siempre deja intacto el valor que ya está en
+    _MODELS[model] para el modelo activo (ver docstring del módulo).
 
     Devuelve None (nunca lanza) si el modelo respondió vacío o si la
     llamada falló -- cada función pública decide su propio fallback
@@ -167,41 +191,37 @@ def _complete(
     ask_llm_internal devuelve el prompt original sin cambios).
     """
     client, config = get_client(provider_name)
-    caps = get_model_capabilities(config.capabilities, config.model)
-    effective_temp = settings.llm_temperature if temperature is None else temperature
+    supports = get_supports(config.capabilities, config.model)
 
-    think_value, think_param = _resolve_think(think_mode, config)
+    _validate_think(think_mode, config)
 
-    extra_fields: ExtraFields = {}
-    if think_param is not None and think_value is not None:
-        extra_fields[think_param] = think_value
-    if extra:
-        extra_fields.update(extra)
+    kwargs = build_kwargs(
+        config.capabilities,
+        config.model,
+        messages,
+        max_tokens=max_tokens if "max_tokens" in supports else None,
+        think=think_mode,
+        extra=extra,
+    )
 
     logger.info(
         f"{log_prefix}Consultando LLM | provider={provider_name} | model={config.model} "
         f"| timeout={settings.llm_timeout}s"
-        + (f" | temp={effective_temp}" if caps.supports_temperature else "")
         + (f" | max_tokens={max_tokens}" if max_tokens is not None else "")
-        + (f" | think={think_value}" if think_value is not None else "")
-    )
-
-    request = CompletionRequest(
-        messages=messages,
-        model=config.model,
+        + (f" | think={think_mode}" if think_mode is not None else "")
     )
 
     # Diagnóstico opt-in (ver settings.llm_debug_dump / LLM_DEBUG_DUMP en
     # .env): vuelca el request EXACTO que se le manda al provider a un
     # archivo, listo para reproducir con curl sin adivinar tamaño de
-    # prompt ni reconstruir 'extra_fields' a mano. Pensado para casos
-    # como "el modelo local devuelve vacío solo con prompts de RAG
-    # grandes" -- sin esto, aislar si es tamaño/contenido del prompt
-    # implica reconstruir el payload real a ojo.
+    # prompt ni reconstruir los kwargs a mano. Pensado para casos como
+    # "el modelo local devuelve vacío solo con prompts de RAG grandes" --
+    # sin esto, aislar si es tamaño/contenido del prompt implica
+    # reconstruir el payload real a ojo.
     if settings.llm_debug_dump:
-        _dump_request_for_debug(request)
+        _dump_request_for_debug(kwargs)
 
-    content = client.complete(request)
+    content = client.complete(kwargs)
     if not content:
         logger.warning(f"{log_prefix}El modelo devolvio respuesta vacia.")
         return None
@@ -227,7 +247,6 @@ def ask_llm(
     prompt: str,
     chat_memory: list[TurnMemory],
     provider: str,
-    temperature: float | None = None,
     max_tokens: int | None = None,
     think_mode: bool | None = None,
     extra: ExtraFields | None = None,
@@ -248,7 +267,6 @@ def ask_llm(
         messages=messages,
         provider_name=provider,
         log_prefix="",
-        temperature=temperature,
         max_tokens=max_tokens,
         think_mode=think_mode,
         extra=extra,
@@ -260,7 +278,6 @@ def ask_llm(
 def ask_llm_internal(
     prompt: str,
     provider: str,
-    temperature: float | None = None,
     max_tokens: int | None = None,
 ) -> str:
     """
@@ -297,7 +314,6 @@ def ask_llm_internal(
         messages=messages,
         provider_name=provider,
         log_prefix="[internal] ",
-        temperature=temperature,
         max_tokens=max_tokens,
         think_mode=None,
         extra=None,
@@ -312,7 +328,6 @@ def ask_llm_supplement(
     prompt: str,
     system_prompt: str,
     provider: str,
-    temperature: float | None = None,
     max_tokens: int | None = None,
 ) -> str | None:
     """
@@ -342,7 +357,6 @@ def ask_llm_supplement(
         messages=messages,
         provider_name=provider,
         log_prefix="[internal:web_supplement] ",
-        temperature=temperature,
         max_tokens=max_tokens,
         think_mode=None,
         extra=None,

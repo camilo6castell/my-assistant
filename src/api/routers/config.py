@@ -10,6 +10,7 @@ from __future__ import annotations
 from fastapi import APIRouter
 
 from src.api.schemas.config import GenerationDefaults, ProviderInfo, ProvidersResponse
+from src.config.models import get_default_think, get_supports
 from src.config.settings import settings
 from src.llm.providers import list_provider_configs
 from src.llm.roles import LLMRole
@@ -22,13 +23,15 @@ async def list_providers() -> ProvidersResponse:
     """
     Lista los providers configurados y qué GenerationOptions acepta
     cada uno -- el frontend usa `supports` para decidir dinámicamente
-    qué controles mostrar (ej. el switch de "think mode" solo aparece
-    si el provider activo lo soporta), en vez de hardcodear por nombre
-    de modelo. `active_generation_provider` le dice cuál de todos es
-    el relevante para esa decisión.
+    qué controles mostrar (ej. el botón de "Pensar" solo aparece
+    habilitado si el provider activo lo soporta, deshabilitado con
+    tooltip si no), en vez de hardcodear por nombre de modelo.
+    `default_think` le dice a la UI en qué estado arranca ese botón
+    antes de que el usuario lo toque. `active_generation_provider` le
+    dice cuál de todos es el relevante para esa decisión.
 
-    `supports` sale de ModelCapabilities (src/config/models/), no de un
-    campo configurado a mano -- no puede desincronizarse del
+    `supports`/`default_think` salen de src/config/models/, no de un
+    campo configurado a mano -- no pueden desincronizarse del
     comportamiento real (ver docstring de src/config/models/__init__.py).
     """
     table = list_provider_configs()
@@ -37,13 +40,14 @@ async def list_providers() -> ProvidersResponse:
             name: ProviderInfo(
                 name=config.name,
                 model=config.model,
+                supports=sorted(get_supports(config.capabilities, config.model)),
+                default_think=get_default_think(config.capabilities, config.model),
             )
             for name, config in table.items()
         },
         active_generation_provider=settings.provider_for(LLMRole.GENERATE),
         provider_roles={role.value: settings.provider_for(role) for role in LLMRole},
         defaults=GenerationDefaults(
-            temperature=settings.llm_temperature,
             max_turns=settings.max_turns,
             hard_top_k_initial=settings.hard_top_k_initial,
             hard_top_k_final=settings.hard_top_k_final,

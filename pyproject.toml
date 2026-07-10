@@ -1,0 +1,107 @@
+[project]
+name = "myassistant-rag"
+version = "0.1.0"
+description = "MyAssistant -- private semantic memory engine, local inference, multi-provider LLM review."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "Camilo Castellanos" }]
+
+# Corregido contra los imports reales de src/ (ver src/ingest/ingest.py,
+# web_crawler.py, web_ingest.py) -- el requirements.txt anterior no tenía
+# pypdf ni readability-lxml pese a que ambos se importan en producción.
+dependencies = [
+    "openai>=1.40.0",
+    "langgraph>=0.2.0",
+    "fastapi>=0.111.0",
+    "uvicorn>=0.30.0",
+    "pydantic>=2.7.0",
+    "pydantic-settings>=2.3.0",
+    "faiss-cpu>=1.8.0",
+    "sentence-transformers>=3.0.0",
+    "beautifulsoup4>=4.12.0",
+    "requests>=2.32.0",
+    "pypdf>=4.0.0",
+    "readability-lxml>=0.8.0",
+]
+
+[project.optional-dependencies]
+# Solo hace falta si vas a usar el backend "ollama_native" (ver
+# src/llm/backends/ollama_native.py) -- el import es lazy justamente para
+# no forzar esta dependencia en instalaciones que solo usan FastFlowLM/Gemini.
+ollama = ["ollama>=0.3.0"]
+dev = [
+    "mypy>=1.11.0",
+    "ruff>=0.6.0",
+    "pytest>=8.0.0",
+    "pytest-cov>=5.0.0",
+]
+
+# Sin [build-system]: el proyecto corre como app in-place (`python -m
+# src.main`, ver docstring de src/main.py), no como librería instalada vía
+# pip. Si en algún momento querés `pip install -e .`, agregar acá un
+# backend (hatchling/setuptools) -- pero eso implica primero sacar el
+# prefijo "src." de todos los imports (from src.config import ... -> from
+# config import ...), porque hoy "src" es el paquete raíz tal cual, no un
+# directorio de layout src/. Es un refactor de imports en todo el árbol,
+# no un cambio de config -- avisame si en algún momento lo querés y lo
+# encaramos aparte.
+
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle (errores)
+    "F",   # pyflakes
+    "I",   # isort (orden de imports)
+    "UP",  # pyupgrade (sintaxis moderna para py311)
+    "B",   # flake8-bugbear (bugs comunes no obvios)
+    "SIM", # flake8-simplify
+]
+
+[tool.ruff.lint.isort]
+combine-as-imports = true
+
+[tool.ruff.lint.flake8-bugbear]
+# B008 (function-call-in-default-argument) es un falso positivo para el
+# patrón `Depends(...)` de FastAPI -- es justamente así que FastAPI
+# resuelve dependencias, no un bug de argumento mutable compartido entre
+# llamadas. Whitelist puntual en vez de desactivar B008 entero: así B008
+# sigue protegiendo contra defaults mutables reales (listas/dicts) en el
+# resto del código.
+extend-immutable-calls = ["fastapi.Depends", "fastapi.Query", "fastapi.Path", "fastapi.Body"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "lf"
+docstring-code-format = true
+
+
+# Migrado 1:1 desde mypy.ini (que queda eliminado -- mypy busca mypy.ini
+# ANTES que pyproject.toml, así que tenerlos a los dos deja este bloque
+# muerto: ver https://mypy.readthedocs.io/en/stable/config_file.html).
+[tool.mypy]
+python_version = "3.11"
+strict = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+warn_unused_configs = true
+explicit_package_bases = true
+namespace_packages = true
+mypy_path = "."
+exclude = ["\\.venv"]
+
+[[tool.mypy.overrides]]
+module = ["sentence_transformers", "faiss", "requests.*", "bs4.*", "readability.*", "pypdf.*", "langgraph.*"]
+ignore_missing_imports = true
+
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.coverage.run]
+source = ["src"]

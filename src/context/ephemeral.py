@@ -40,7 +40,7 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -87,9 +87,9 @@ class _ConversationStore:
 
     metadata: list[ChunkMetadata] = field(default_factory=list)
     vectors: np.ndarray | None = None
-    index: "FaissIndex | None" = None
+    index: FaissIndex | None = None
     files: dict[str, EphemeralFileInfo] = field(default_factory=dict)
-    last_used: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    last_used: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
 def _placeholder_paths(conversation_id: str) -> CollectionPaths:
@@ -110,7 +110,7 @@ def _placeholder_paths(conversation_id: str) -> CollectionPaths:
     )
 
 
-def _rebuild_index(vectors: np.ndarray) -> "FaissIndex":
+def _rebuild_index(vectors: np.ndarray) -> FaissIndex:
     dimension = vectors.shape[1]
     index = create_faiss_index(dimension)
     index.add(np.ascontiguousarray(vectors, dtype=np.float32))  # pyright: ignore[reportCallIssue]
@@ -181,10 +181,10 @@ class EphemeralStore:
             file_id=file_id,
             filename=filename,
             chunk_count=len(new_chunks),
-            uploaded_at=datetime.now(timezone.utc),
+            uploaded_at=datetime.now(UTC),
         )
         store.files[file_id] = info
-        store.last_used = datetime.now(timezone.utc)
+        store.last_used = datetime.now(UTC)
 
         logger.info(
             f"[ephemeral] archivo agregado | conversation={conversation_id} "
@@ -224,7 +224,7 @@ class EphemeralStore:
         store.vectors = store.vectors[keep]
         store.index = _rebuild_index(store.vectors)
         del store.files[file_id]
-        store.last_used = datetime.now(timezone.utc)
+        store.last_used = datetime.now(UTC)
 
         logger.info(
             f"[ephemeral] archivo borrado | conversation={conversation_id} "
@@ -254,7 +254,7 @@ class EphemeralStore:
         if store is None or store.index is None:
             return None
 
-        store.last_used = datetime.now(timezone.utc)
+        store.last_used = datetime.now(UTC)
         return LoadedCollection(
             index=store.index,
             metadata=store.metadata,
@@ -274,7 +274,7 @@ class EphemeralStore:
         proceso -- pensado para llamarse periódicamente (ver lifespan
         en src/api/app.py).
         """
-        cutoff = datetime.now(timezone.utc) - ttl
+        cutoff = datetime.now(UTC) - ttl
         expired = [cid for cid, s in self._conversations.items() if s.last_used < cutoff]
 
         for cid in expired:

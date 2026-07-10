@@ -17,51 +17,30 @@ dependencia opcional, no una obligación de todo el proyecto.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Literal, cast
+from typing import TYPE_CHECKING, Any
 
-from src.llm.backends.base import CompletionRequest
 from src.utils.logger import logger
 
 if TYPE_CHECKING:
-    import ollama
-
-_ThinkParam = bool | Literal["low", "medium", "high"] | None
+    pass
 
 
 class OllamaNativeClient:
+    """
+    Transporte puro, igual que OpenAICompatClient -- no decide qué
+    significa cada campo, solo desempaca `kwargs` (ya armado por
+    src.config.models.ollama.build_kwargs(), shape
+    {model, messages, think, options}) contra `ollama.Client().chat()`.
+    """
+
     def __init__(self, host: str) -> None:
         import ollama  # lazy: ver docstring del módulo
 
         self._client = ollama.Client(host=host)
 
-    def complete(self, request: CompletionRequest) -> str | None:
-        options: dict[str, float | int] = {}
-        if request.temperature is not None:
-            options["temperature"] = request.temperature
-        if request.max_tokens is not None:
-            options["num_predict"] = request.max_tokens
-
-        extra = dict(request.extra_fields or {})
-        # "think" es el único campo que el cliente nativo de Ollama
-        # entiende como kwarg propio (bool o nivel "low"/"medium"/"high")
-        # -- lo sacamos de extra_fields y lo pasamos posta, no como un
-        # passthrough genérico. Cualquier otra clave en extra_fields no
-        # tiene un lugar conocido en este cliente y se ignora con un
-        # warning en vez de fallar silenciosamente.
-        think = cast(_ThinkParam, extra.pop("think", None))
-        if extra:
-            logger.warning(
-                f"[ollama_native] Campos extra sin mapeo conocido, se ignoran: "
-                f"{sorted(extra)}"
-            )
-
+    def complete(self, kwargs: dict[str, Any]) -> str | None:
         try:
-            response = self._client.chat(
-                model=request.model,
-                messages=request.messages,
-                think=think,
-                options=options or None,
-            )
+            response = self._client.chat(**kwargs)
             content = response.message.content
             return content.strip() if content else None
         except Exception:

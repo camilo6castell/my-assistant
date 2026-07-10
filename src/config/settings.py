@@ -131,7 +131,6 @@ class Settings(BaseSettings):
     soft_top_k_final: int = Field(default=7, gt=0)
 
     max_turns: int = Field(default=4, gt=0)
-    llm_temperature: float = Field(default=0.2, ge=0.0, le=2.0)
     llm_timeout: int = Field(default=600, gt=0)
     # Diagnóstico opt-in: vuelca a ./debug_last_llm_request.json el
     # request EXACTO (mensajes + extra_fields aplanados) que se le manda
