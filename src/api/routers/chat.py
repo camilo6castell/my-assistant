@@ -143,9 +143,7 @@ def _resolve_top_k(request: QueryRequest) -> tuple[int | None, int | None]:
     return top_k_initial, top_k_final
 
 
-def _require_context_source(
-    collections: list[LoadedCollection], request: QueryRequest
-) -> None:
+def _require_context_source(collections: list[LoadedCollection], request: QueryRequest) -> None:
     """
     422 si no hay ninguna fuente de contexto posible: ni colecciones/
     archivos ni web_search=True. Compartido por /query y /query/agent --
@@ -210,7 +208,10 @@ def _validate_generation_options(request: QueryRequest) -> None:
 
 
 def _web_context_chunks(results: list[WebSearchResult]) -> list[str]:
-    """Mismo formato que los chunks locales (SOURCE/.../texto) para que build_prompt() sea idéntico en ambos casos."""
+    """
+    Mismo formato que los chunks locales (SOURCE/.../texto) para que build_prompt()
+    sea idéntico en ambos casos.
+    """
     return [f"SOURCE: {r.title}\nURL: {r.url}\n\n{r.content}" for r in results]
 
 

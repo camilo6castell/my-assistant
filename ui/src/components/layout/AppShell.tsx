@@ -1,6 +1,6 @@
-import { Outlet } from "react-router-dom"
-import { RightSidebar } from "./RightSidebar"
-import { Sidebar } from "./Sidebar"
+import { Outlet } from "react-router-dom";
+import { RightSidebar } from "./RightSidebar";
+import { Sidebar } from "./LeftSidebar";
 
 export function AppShell() {
   return (
@@ -23,5 +23,5 @@ export function AppShell() {
 
       <RightSidebar />
     </div>
-  )
+  );
 }

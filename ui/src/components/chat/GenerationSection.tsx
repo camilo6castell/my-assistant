@@ -109,9 +109,9 @@ export function GenerationSection({
   }
 
   return (
-    <div className="space-y-4 px-3">
+    <div className="flex flex-col justify-between space-y-3 px-3">
       {/* 1. SOFT / HARD */}
-      <div className="space-y-1.5">
+      <div className="flex items-center justify-between gap-2">
         <span className="block text-xs text-muted-foreground">
           Modo de búsqueda
         </span>
@@ -122,7 +122,7 @@ export function GenerationSection({
               type="button"
               onClick={() => setMode(conversation.id, m)}
               className={cn(
-                "flex-1 px-2.5 py-1.5 transition-colors",
+                "flex-1 px-2.5 py-1 transition-colors",
                 conversation.mode === m
                   ? "bg-white/10 text-foreground"
                   : "text-muted-foreground hover:bg-white/5",
@@ -139,7 +139,7 @@ export function GenerationSection({
         <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
           Mejoras
         </span>
-        <div className="flex items-center justify-center gap-3 flex-grow-1">
+        <div className="flex items-center justify-center gap-1">
           <button
             type="button"
             onClick={() =>
@@ -162,7 +162,7 @@ export function GenerationSection({
             )}
           >
             <Globe className="size-3.5" />
-            Búsqueda en la web
+            Web
           </button>
           <button
             type="button"
@@ -221,11 +221,11 @@ export function GenerationSection({
       )}
 
       {/* 3. Cantidad de turnos */}
-      <label className="block space-y-1.5">
-        <span className="flex items-center justify-between text-xs text-muted-foreground">
-          Turnos de historial
+      <label className="flex items-center justify-between gap-2">
+        <span className="grow-1 items-end justify-between text-xs text-muted-foreground">
+          <span className="block">Turnos de historial</span>
           <span className="text-muted-foreground/60">
-            {defaults ? `.env: ${defaults.max_turns}` : ""}
+            {defaults ? `Default: ${defaults.max_turns}` : ""}
           </span>
         </span>
         <input
@@ -234,22 +234,22 @@ export function GenerationSection({
           step={1}
           value={conversation.generation.maxTurns ?? defaults?.max_turns ?? ""}
           onChange={(e) => handleMaxTurnsChange(e.target.value)}
-          className="w-full rounded-md border border-white/10 bg-white/[0.04] px-2 py-1 text-xs text-foreground outline-none focus:border-primary/50"
+          className="w-15 rounded-md border border-white/10 bg-white/[0.04] px-2 py-1 text-xs text-foreground outline-none focus:border-primary/50"
         />
       </label>
 
       {/* 4. Top K inicial / final */}
-      <div className="space-y-1.5">
-        <span className="flex items-center justify-between text-xs text-muted-foreground">
-          Retrieval ({conversation.mode})
+      <div className="flex items-center justify-between gap-2">
+        <span className="fgrow-1 items-center justify-between text-xs text-muted-foreground">
+          <span className="block">Retrieval ({conversation.mode})</span>
           <span className="text-muted-foreground/60">
             {defaults
-              ? `.env: ${modeTopKDefaults.initial} / ${modeTopKDefaults.final}`
+              ? `Default: ${modeTopKDefaults.initial} / ${modeTopKDefaults.final}`
               : ""}
           </span>
         </span>
         <div className="flex items-center gap-2">
-          <label className="flex-1 space-y-1">
+          <label className="flex-1">
             <span className="block text-[11px] text-muted-foreground/70">
               Top K inicial
             </span>
@@ -259,10 +259,10 @@ export function GenerationSection({
               step={1}
               value={effectiveTopKInitial || ""}
               onChange={(e) => handleTopKInitialChange(e.target.value)}
-              className="w-full rounded-md border border-white/10 bg-white/[0.04] px-2 py-1 text-xs text-foreground outline-none focus:border-primary/50"
+              className="w-15 rounded-md border border-white/10 bg-white/[0.04] px-2 py-1 text-xs text-foreground outline-none focus:border-primary/50"
             />
           </label>
-          <label className="flex-1 space-y-1">
+          <label className="flex-1">
             <span className="block text-[11px] text-muted-foreground/70">
               Top K final
             </span>
@@ -273,15 +273,15 @@ export function GenerationSection({
               step={1}
               value={effectiveTopKFinal || ""}
               onChange={(e) => handleTopKFinalChange(e.target.value)}
-              className="w-full rounded-md border border-white/10 bg-white/[0.04] px-2 py-1 text-xs text-foreground outline-none focus:border-primary/50"
+              className="w-15 rounded-md border border-white/10 bg-white/[0.04] px-2 py-1 text-xs text-foreground outline-none focus:border-primary/50"
             />
           </label>
         </div>
-        <p className="text-[10.5px] text-muted-foreground/60">
-          Top K final no puede superar a Top K inicial -- se ajusta
-          automáticamente.
-        </p>
       </div>
+      <p className="text-[10.5px] text-muted-foreground/60 leading-[1]">
+        *Top K final no puede superar a Top K inicial (se ajusta
+        automáticamente).
+      </p>
 
       {!activeProvider && (
         <p className="text-xs text-muted-foreground">

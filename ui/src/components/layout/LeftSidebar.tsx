@@ -1,64 +1,77 @@
-import { formatDistanceToNow } from "date-fns"
-import { es } from "date-fns/locale"
-import { Check, Layers, MessageSquarePlus, MessagesSquare, Pencil, Trash2 } from "lucide-react"
-import { useState } from "react"
-import { useNavigate, useParams } from "react-router-dom"
-import { Button } from "@/components/ui/button"
-import { useCollections } from "@/hooks/useCollections"
-import { cn } from "@/lib/utils"
-import { useConversationsStore } from "@/stores/conversationsStore"
-import { useUiStore } from "@/stores/uiStore"
-import { CollectionsPicker } from "./CollectionsPicker"
-import { SidebarSectionHeader } from "./SidebarSectionHeader"
-import { SidebarShell } from "./SidebarShell"
+import { formatDistanceToNow } from "date-fns";
+import { es } from "date-fns/locale";
+import {
+  Check,
+  Layers,
+  MessageSquarePlus,
+  MessagesSquare,
+  Pencil,
+  Trash2,
+} from "lucide-react";
+import { useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
+import { Button } from "@/components/ui/button";
+import { useCollections } from "@/hooks/useCollections";
+import { cn } from "@/lib/utils";
+import { useConversationsStore } from "@/stores/conversationsStore";
+import { useUiStore } from "@/stores/uiStore";
+import { CollectionsPicker } from "./CollectionsPicker";
+import { SidebarSectionHeader } from "./SidebarSectionHeader";
+import { SidebarShell } from "./SidebarShell";
 
 export function Sidebar() {
-  const navigate = useNavigate()
-  const { conversationId } = useParams<{ conversationId: string }>()
-  const conversations = useConversationsStore((s) => s.conversations)
-  const createConversation = useConversationsStore((s) => s.createConversation)
-  const deleteConversation = useConversationsStore((s) => s.deleteConversation)
-  const renameConversation = useConversationsStore((s) => s.renameConversation)
-  const setActiveCollections = useConversationsStore((s) => s.setActiveCollections)
+  const navigate = useNavigate();
+  const { conversationId } = useParams<{ conversationId: string }>();
+  const conversations = useConversationsStore((s) => s.conversations);
+  const createConversation = useConversationsStore((s) => s.createConversation);
+  const deleteConversation = useConversationsStore((s) => s.deleteConversation);
+  const renameConversation = useConversationsStore((s) => s.renameConversation);
+  const setActiveCollections = useConversationsStore(
+    (s) => s.setActiveCollections,
+  );
   const activeConversation = useConversationsStore((s) =>
-    s.conversations.find((c) => c.id === conversationId)
-  )
+    s.conversations.find((c) => c.id === conversationId),
+  );
 
-  const [editingId, setEditingId] = useState<string | null>(null)
-  const [editValue, setEditValue] = useState("")
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState("");
 
-  const leftWidth = useUiStore((s) => s.leftWidth)
-  const leftCollapsed = useUiStore((s) => s.leftCollapsed)
-  const setLeftWidth = useUiStore((s) => s.setLeftWidth)
-  const toggleLeftCollapsed = useUiStore((s) => s.toggleLeftCollapsed)
+  const leftWidth = useUiStore((s) => s.leftWidth);
+  const leftCollapsed = useUiStore((s) => s.leftCollapsed);
+  const setLeftWidth = useUiStore((s) => s.setLeftWidth);
+  const toggleLeftCollapsed = useUiStore((s) => s.toggleLeftCollapsed);
 
-  const { data: collectionsData } = useCollections()
+  const { data: collectionsData } = useCollections();
 
   function handleNewConversation() {
-    const id = createConversation()
-    navigate(`/c/${id}`)
+    const id = createConversation();
+    navigate(`/c/${id}`);
   }
 
   function handleDelete(e: React.MouseEvent, id: string) {
-    e.stopPropagation()
-    e.preventDefault()
-    const remaining = conversations.filter((c) => c.id !== id)
-    deleteConversation(id)
+    e.stopPropagation();
+    e.preventDefault();
+    const remaining = conversations.filter((c) => c.id !== id);
+    deleteConversation(id);
     if (id === conversationId) {
-      navigate(remaining[0] ? `/c/${remaining[0].id}` : "/")
+      navigate(remaining[0] ? `/c/${remaining[0].id}` : "/");
     }
   }
 
-  function handleStartEdit(e: React.MouseEvent, id: string, currentTitle: string) {
-    e.stopPropagation()
-    e.preventDefault()
-    setEditingId(id)
-    setEditValue(currentTitle)
+  function handleStartEdit(
+    e: React.MouseEvent,
+    id: string,
+    currentTitle: string,
+  ) {
+    e.stopPropagation();
+    e.preventDefault();
+    setEditingId(id);
+    setEditValue(currentTitle);
   }
 
   function handleCommitEdit(id: string) {
-    renameConversation(id, editValue)
-    setEditingId(null)
+    renameConversation(id, editValue);
+    setEditingId(null);
   }
 
   const collapsedContent = (
@@ -88,7 +101,7 @@ export function Sidebar() {
         <Layers className="size-4" />
       </button>
     </>
-  )
+  );
 
   return (
     <SidebarShell
@@ -123,8 +136,8 @@ export function Sidebar() {
             </p>
           )}
           {conversations.map((conv) => {
-            const isActive = conv.id === conversationId
-            const isEditing = editingId === conv.id
+            const isActive = conv.id === conversationId;
+            const isEditing = editingId === conv.id;
             return (
               <div
                 key={conv.id}
@@ -133,14 +146,14 @@ export function Sidebar() {
                 onClick={() => !isEditing && navigate(`/c/${conv.id}`)}
                 onKeyDown={(e) => {
                   if (!isEditing && (e.key === "Enter" || e.key === " ")) {
-                    navigate(`/c/${conv.id}`)
+                    navigate(`/c/${conv.id}`);
                   }
                 }}
                 className={cn(
                   "group flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2.5 text-left text-sm transition-colors",
                   isActive
                     ? "bg-white/[0.08] text-foreground"
-                    : "text-muted-foreground hover:bg-white/[0.05] hover:text-foreground"
+                    : "text-muted-foreground hover:bg-white/[0.05] hover:text-foreground",
                 )}
               >
                 <span className="min-w-0 flex-1">
@@ -152,11 +165,11 @@ export function Sidebar() {
                       onChange={(e) => setEditValue(e.target.value)}
                       onKeyDown={(e) => {
                         if (e.key === "Enter") {
-                          e.preventDefault()
-                          handleCommitEdit(conv.id)
+                          e.preventDefault();
+                          handleCommitEdit(conv.id);
                         } else if (e.key === "Escape") {
-                          e.preventDefault()
-                          setEditingId(null)
+                          e.preventDefault();
+                          setEditingId(null);
                         }
                       }}
                       onBlur={() => handleCommitEdit(conv.id)}
@@ -166,7 +179,10 @@ export function Sidebar() {
                     <span className="block truncate">{conv.title}</span>
                   )}
                   <span className="block truncate text-[11px] text-muted-foreground/70">
-                    {formatDistanceToNow(conv.createdAt, { addSuffix: true, locale: es })}
+                    {formatDistanceToNow(conv.createdAt, {
+                      addSuffix: true,
+                      locale: es,
+                    })}
                   </span>
                 </span>
                 <span className="flex shrink-0 items-center gap-0.5">
@@ -175,9 +191,9 @@ export function Sidebar() {
                       role="button"
                       tabIndex={0}
                       onClick={(e) => {
-                        e.stopPropagation()
-                        e.preventDefault()
-                        handleCommitEdit(conv.id)
+                        e.stopPropagation();
+                        e.preventDefault();
+                        handleCommitEdit(conv.id);
                       }}
                       className="rounded-md p-1 text-muted-foreground hover:bg-white/10 hover:text-foreground"
                       aria-label="Guardar nombre"
@@ -201,7 +217,7 @@ export function Sidebar() {
                     onClick={(e) => handleDelete(e, conv.id)}
                     className={cn(
                       "rounded-md p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-white/10 hover:text-destructive group-hover:opacity-100",
-                      isEditing && "hidden"
+                      isEditing && "hidden",
                     )}
                     aria-label="Eliminar conversación"
                   >
@@ -209,7 +225,7 @@ export function Sidebar() {
                   </span>
                 </span>
               </div>
-            )
+            );
           })}
         </nav>
       </section>
@@ -227,12 +243,14 @@ export function Sidebar() {
             <CollectionsPicker
               collections={collectionsData?.collections ?? []}
               active={activeConversation.activeCollections}
-              onChange={(next) => setActiveCollections(activeConversation.id, next)}
+              onChange={(next) =>
+                setActiveCollections(activeConversation.id, next)
+              }
             />
           ) : (
             <>
               <p className="px-2 pb-2 text-center text-xs text-muted-foreground">
-                Elegí o creá una conversación para seleccionar colecciones.
+                Elige o creá una conversación para seleccionar colecciones.
               </p>
               <CollectionsPicker
                 collections={collectionsData?.collections ?? []}
@@ -245,5 +263,5 @@ export function Sidebar() {
         </div>
       </section>
     </SidebarShell>
-  )
+  );
 }

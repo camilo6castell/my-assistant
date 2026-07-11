@@ -170,9 +170,7 @@ class EphemeralStore:
         store = self._conversations.setdefault(conversation_id, _ConversationStore())
 
         store.vectors = (
-            np.vstack([store.vectors, embeddings])
-            if store.vectors is not None
-            else embeddings
+            np.vstack([store.vectors, embeddings]) if store.vectors is not None else embeddings
         )
         store.metadata.extend(new_metadata)
         store.index = _rebuild_index(store.vectors)
