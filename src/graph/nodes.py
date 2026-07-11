@@ -36,7 +36,9 @@ from src.llm.roles import LLMRole
 from src.prompts.builder import (
     build_correction_prompt,
     build_prompt,
+    build_reformulation_system_prompt,
     build_review_prompt,
+    build_review_system_prompt,
 )
 from src.retrieval.search import search
 from src.utils.logger import logger
@@ -53,10 +55,7 @@ MAX_REVIEW_ATTEMPTS = 1
 
 def retrieve_node(state: RAGState) -> RAGStateUpdate:
     """Recupera chunks relevantes desde las colecciones FAISS activas."""
-    logger.info(
-        f"[graph] retrieve_node | question={state['question']!r} "
-        f"| mode={state['mode']}"
-    )
+    logger.info(f"[graph] retrieve_node | question={state['question']!r} | mode={state['mode']}")
 
     results, confidence = search(
         question=state["question"],
@@ -66,10 +65,7 @@ def retrieve_node(state: RAGState) -> RAGStateUpdate:
         top_k_final=state.get("top_k_final"),
     )
 
-    logger.info(
-        f"[graph] retrieve_node | chunks={len(results)} "
-        f"| confidence={confidence:.4f}"
-    )
+    logger.info(f"[graph] retrieve_node | chunks={len(results)} | confidence={confidence:.4f}")
 
     return {"results": results, "confidence": confidence}
 
@@ -90,18 +86,15 @@ def evaluate_node(state: RAGState) -> RAGStateUpdate:
 
     if reformulated:
         logger.info(
-            f"[graph] evaluate_node | confidence={confidence:.4f} "
-            "| ya reformulado → generando"
+            f"[graph] evaluate_node | confidence={confidence:.4f} | ya reformulado → generando"
         )
     elif confidence < limit:
         logger.info(
-            f"[graph] evaluate_node | confidence={confidence:.4f} "
-            f"< limit={limit} → reformulando"
+            f"[graph] evaluate_node | confidence={confidence:.4f} < limit={limit} → reformulando"
         )
     else:
         logger.info(
-            f"[graph] evaluate_node | confidence={confidence:.4f} "
-            f">= limit={limit} → generando"
+            f"[graph] evaluate_node | confidence={confidence:.4f} >= limit={limit} → generando"
         )
 
     return {}
@@ -157,17 +150,17 @@ def reformulate_node(state: RAGState) -> RAGStateUpdate:
     )
 
     reformulated_question = ask_llm_internal(
+        system_prompt=build_reformulation_system_prompt(),
         prompt=reformulation_prompt,
         provider=settings.provider_for(LLMRole.REFORMULATE),
     )
 
     logger.info(
-        f"[graph] reformulate_node | original={original!r} "
-        f"| reformulada={reformulated_question!r}"
+        f"[graph] reformulate_node | original={original!r} | reformulada={reformulated_question!r}"
     )
 
     return {
-        "question": reformulated_question,
+        "question": reformulated_question if reformulated_question else original,
         "reformulated": True,
     }
 
@@ -197,8 +190,7 @@ def generate_node(state: RAGState) -> RAGStateUpdate:
     )
 
     logger.info(
-        f"[graph] generate_node | chunks={len(results)} "
-        f"| confidence={state['confidence']:.4f}"
+        f"[graph] generate_node | chunks={len(results)} | confidence={state['confidence']:.4f}"
     )
 
     answer = ask_llm(
@@ -261,38 +253,31 @@ def review_node(state: RAGState) -> RAGStateUpdate:
     )
 
     raw = ask_llm_internal(
+        system_prompt=build_review_system_prompt(),
         prompt=review_prompt,
         provider=settings.provider_for(LLMRole.REVIEW),
     )
+
+    temp: str = raw if raw is not None else '{"passed": true, "feedback": ""}'
 
     logger.info(f"[graph] review_node | respuesta raw del reviewer: {raw!r}")
 
     try:
         # Gemini a veces envuelve el JSON en ```json ... ``` aunque se le pide
         # que no lo haga. Limpieza defensiva antes de parsear.
-        clean = (
-            raw.strip()
-            .removeprefix("```json")
-            .removeprefix("```")
-            .removesuffix("```")
-            .strip()
-        )
+        clean = temp.strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
         result = json.loads(clean)
         passed: bool = bool(result.get("passed", True))
         feedback: str = str(result.get("feedback", ""))
     except (json.JSONDecodeError, AttributeError):
-        logger.warning(
-            "[graph] review_node | no se pudo parsear JSON → aprobando por defecto"
-        )
+        logger.warning("[graph] review_node | no se pudo parsear JSON → aprobando por defecto")
         passed = True
         feedback = ""
 
     if passed:
         logger.info("[graph] review_node | ✓ respuesta aprobada")
     else:
-        logger.info(
-            f"[graph] review_node | ✗ respuesta rechazada | feedback={feedback!r}"
-        )
+        logger.info(f"[graph] review_node | ✗ respuesta rechazada | feedback={feedback!r}")
 
     return {
         "review_passed": passed,

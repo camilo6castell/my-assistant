@@ -30,11 +30,10 @@ from src.config.settings import settings
 from src.context.ephemeral import EphemeralStore
 from src.context.manager import ContextManager, LoadedCollection
 from src.graph.state import RAGState
-from src.llm.generate import ask_llm, ask_llm_supplement
+from src.llm.generate import ask_llm, ask_llm_internal
 from src.llm.providers import get_provider
 from src.llm.roles import LLMRole
 from src.prompts.builder import (
-    WEB_SUPPLEMENT_SENTINEL,
     build_prompt,
     build_web_supplement_prompt,
     build_web_supplement_system_prompt,
@@ -304,6 +303,7 @@ def _supplement_with_web(
     """
     try:
         outcome = search_web(question)
+        print(outcome)
         if outcome.status == WebSearchStatus.QUOTA_EXCEEDED:
             return answer, [], True
         if not outcome.results:
@@ -315,7 +315,7 @@ def _supplement_with_web(
             web_chunks=_web_context_chunks(outcome.results),
         )
         gen_kwargs = _generation_kwargs(generation)
-        supplement = ask_llm_supplement(
+        supplement = ask_llm_internal(
             prompt=supplement_prompt,
             system_prompt=build_web_supplement_system_prompt(),
             provider=settings.provider_for(LLMRole.WEB_SUPPLEMENT),
@@ -325,9 +325,9 @@ def _supplement_with_web(
         if supplement is None:
             return answer, [], False
 
-        supplement = supplement.strip()
-        if not supplement or supplement == WEB_SUPPLEMENT_SENTINEL:
-            return answer, [], False
+        # supplement = supplement.strip()
+        # if not supplement or supplement == WEB_SUPPLEMENT_SENTINEL:
+        #     return answer, [], False
 
         return (
             f"{answer}\n\n{supplement}",

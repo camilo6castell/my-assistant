@@ -48,7 +48,7 @@ from src.config.models import build_kwargs, get_supports
 from src.config.settings import settings
 from src.llm.backends.base import ChatTurn
 from src.llm.providers import ProviderConfig, get_client
-from src.prompts.builder import build_reformulation_system_prompt, build_system_prompt
+from src.prompts.builder import build_system_prompt
 from src.utils.logger import logger
 
 ExtraFields = dict[str, bool | str | int | float]
@@ -148,16 +148,12 @@ def _dump_request_for_debug(kwargs: dict[str, Any]) -> None:
     # se narrowea acá con isinstance en vez de asumirlo, así el cálculo
     # de tamaño nunca revienta si algún backend nuevo cambia el shape.
     raw_messages = kwargs.get("messages", [])
-    messages: list[dict[str, Any]] = (
-        raw_messages if isinstance(raw_messages, list) else []
-    )
+    messages: list[dict[str, Any]] = raw_messages if isinstance(raw_messages, list) else []
 
     try:
         with open("debug_last_llm_request.json", "w", encoding="utf-8") as f:
             json.dump(kwargs, f, ensure_ascii=False, indent=2)
-        chars = sum(
-            len(m["content"]) for m in messages if isinstance(m, dict) and "content" in m
-        )
+        chars = sum(len(m["content"]) for m in messages if isinstance(m, dict) and "content" in m)
         logger.info(
             "[debug] Request volcado a ./debug_last_llm_request.json "
             f"({chars} caracteres de mensajes)"
@@ -236,10 +232,7 @@ def _complete(
     # el contenido llega completo hasta acá pero el frontend lo muestra
     # incompleto, el problema está en el tramo API->navegador (red,
     # proxy, o el estado de React), no en la generación.
-    logger.info(
-        f"{log_prefix}Respuesta del LLM | len={len(content)} "
-        f"| preview={content[:40]!r}"
-    )
+    logger.info(f"{log_prefix}Respuesta del LLM | len={len(content)} | preview={content[:40]!r}")
     return content
 
 
@@ -259,9 +252,7 @@ def ask_llm(
     decide "qué modelo genera la respuesta" es Settings.provider_for(),
     para que no haya una segunda fuente de verdad silenciosa.
     """
-    messages = build_messages(
-        prompt=prompt, chat_memory=chat_memory, max_turns=max_turns
-    )
+    messages = build_messages(prompt=prompt, chat_memory=chat_memory, max_turns=max_turns)
 
     content = _complete(
         messages=messages,
@@ -276,39 +267,15 @@ def ask_llm(
 
 
 def ask_llm_internal(
+    system_prompt: str,
     prompt: str,
     provider: str,
     max_tokens: int | None = None,
-) -> str:
+) -> str | None:
     """
     Llamada al LLM para operaciones internas del grafo (ej: reformulación de queries).
-
-    Diferencias respecto a ask_llm():
-      - Usa el system prompt de reformulación en lugar del de RAG.
-      - No acepta chat_memory: las operaciones internas no son turnos del usuario.
-      - El log distingue la llamada como "[internal]" para facilitar el debug.
-      - No acepta think_mode/extra: las tareas internas (reformular,
-        revisar) son de una sola pasada sobre texto corto, no se
-        benefician de razonamiento extendido ni de parámetros avanzados.
-
-    provider es obligatorio -- debe venir de settings.provider_for(role)
-    con el LLMRole que corresponda a la tarea del caller (REFORMULATE o
-    REVIEW, ver src/llm/roles.py). Antes tenía un default implícito a
-    settings.reformulate_provider que reformular Y revisar compartían
-    sin ninguna razón real; ahora cada caller decide su propio rol
-    explícitamente.
-
-    El fallback en caso de fallo es devolver `prompt` sin cambios --
-    seguro específicamente para reformulación (equivale a "no
-    reformular", la pregunta original sigue siendo una query válida).
-    NO uses esta función para tareas donde el prompt es scaffolding
-    interno que no debería mostrarse al usuario tal cual -- para eso
-    existe ask_llm_supplement(), que devuelve None en vez de ecoar el
-    prompt.
     """
-    messages = build_messages(
-        prompt=prompt, chat_memory=[], system_prompt=build_reformulation_system_prompt()
-    )
+    messages = build_messages(prompt=prompt, chat_memory=[], system_prompt=system_prompt)
 
     content = _complete(
         messages=messages,
@@ -319,45 +286,50 @@ def ask_llm_internal(
         extra=None,
     )
 
-    # Fallback: devuelve el prompt original sin cambios si el modelo
-    # falló o respondió vacío -- mejor no reformular que romper el flujo.
-    return content if content is not None else prompt
+    return content
+
+    # if content is not None:
+    #     return content
+    # if content is None and could_be_none:
+    #     return None
+    # if content is None and not could_be_none:
+    #     return prompt
 
 
-def ask_llm_supplement(
-    prompt: str,
-    system_prompt: str,
-    provider: str,
-    max_tokens: int | None = None,
-) -> str | None:
-    """
-    Variante de ask_llm_internal() para tareas internas de una sola
-    pasada donde un fallo NO debe hacer eco del prompt como fallback.
+# def ask_llm_supplement(
+#     prompt: str,
+#     system_prompt: str,
+#     provider: str,
+#     max_tokens: int | None = None,
+# ) -> str | None:
+#     """
+#     Variante de ask_llm_internal() para tareas internas de una sola
+#     pasada donde un fallo NO debe hacer eco del prompt como fallback.
 
-    Por qué esto necesita existir aparte de ask_llm_internal(): ahí el
-    fallback "devolver el prompt sin cambios" es seguro porque el prompt
-    ES la pregunta del usuario (reformular query). Acá el prompt es
-    scaffolding interno arbitrario (ej. la respuesta ya generada +
-    fragmentos de una búsqueda web, ver build_web_supplement_prompt() en
-    src/prompts/builder.py) -- si el modelo falla y este caller hiciera
-    el mismo fallback, ese scaffolding completo terminaría pegado en la
-    respuesta que ve el usuario. Por eso devuelve None en vez de prompt:
-    fuerza al caller a decidir explícitamente qué hacer ante un fallo
-    (típicamente: omitir el complemento en silencio, ver
-    src/api/routers/chat.py).
+#     Por qué esto necesita existir aparte de ask_llm_internal(): ahí el
+#     fallback "devolver el prompt sin cambios" es seguro porque el prompt
+#     ES la pregunta del usuario (reformular query). Acá el prompt es
+#     scaffolding interno arbitrario (ej. la respuesta ya generada +
+#     fragmentos de una búsqueda web, ver build_web_supplement_prompt() en
+#     src/prompts/builder.py) -- si el modelo falla y este caller hiciera
+#     el mismo fallback, ese scaffolding completo terminaría pegado en la
+#     respuesta que ve el usuario. Por eso devuelve None en vez de prompt:
+#     fuerza al caller a decidir explícitamente qué hacer ante un fallo
+#     (típicamente: omitir el complemento en silencio, ver
+#     src/api/routers/chat.py).
 
-    provider es obligatorio -- debe venir de
-    settings.provider_for(LLMRole.WEB_SUPPLEMENT).
-    """
-    messages = build_messages(
-        prompt=prompt, chat_memory=[], system_prompt=system_prompt
-    )
+#     provider es obligatorio -- debe venir de
+#     settings.provider_for(LLMRole.WEB_SUPPLEMENT).
+#     """
+#     messages = build_messages(
+#         prompt=prompt, chat_memory=[], system_prompt=system_prompt
+#     )
 
-    return _complete(
-        messages=messages,
-        provider_name=provider,
-        log_prefix="[internal:web_supplement] ",
-        max_tokens=max_tokens,
-        think_mode=None,
-        extra=None,
-    )
+#     return _complete(
+#         messages=messages,
+#         provider_name=provider,
+#         log_prefix="[internal:web_supplement] ",
+#         max_tokens=max_tokens,
+#         think_mode=None,
+#         extra=None,
+#     )
