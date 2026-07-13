@@ -30,11 +30,13 @@ from src.config.settings import settings
 from src.context.ephemeral import EphemeralStore
 from src.context.manager import ContextManager, LoadedCollection
 from src.graph.state import RAGState
+from src.llm.context_guard import ContextLimitExceeded, check_context_fit
 from src.llm.generate import ask_llm, ask_llm_internal
 from src.llm.providers import get_provider
 from src.llm.roles import LLMRole
 from src.prompts.builder import (
     build_prompt,
+    build_system_prompt,
     build_web_supplement_prompt,
     build_web_supplement_system_prompt,
 )
@@ -325,6 +327,11 @@ def _supplement_with_web(
         if supplement is None:
             return answer, [], False
 
+        # DECISIÓN (dejar comentado, no borrar): se decidió no filtrar el
+        # supplement por el sentinel WEB_SUPPLEMENT_SENTINEL en el flujo
+        # actual -- ver el comentario extenso junto a su definición en
+        # src/prompts/builder.py para el porqué se conserva como
+        # referencia en vez de borrarse.
         # supplement = supplement.strip()
         # if not supplement or supplement == WEB_SUPPLEMENT_SENTINEL:
         #     return answer, [], False
@@ -462,11 +469,23 @@ async def query(
             mode=request.mode,
         )
 
+        generation_kwargs = _generation_kwargs(request.generation)
+        try:
+            check_context_fit(
+                system_prompt=build_system_prompt(),
+                prompt=prompt,
+                chat_memory=chat_memory,
+                provider=settings.provider_for(LLMRole.GENERATE),
+                max_tokens=generation_kwargs["max_tokens"],
+            )
+        except ContextLimitExceeded as e:
+            raise HTTPException(status_code=413, detail=e.as_detail()) from e
+
         answer = ask_llm(
             prompt=prompt,
             chat_memory=chat_memory,
             provider=settings.provider_for(LLMRole.GENERATE),
-            **_generation_kwargs(request.generation),
+            **generation_kwargs,
         )
 
         # Caso B: la respuesta principal ya está completa arriba; esto
@@ -583,7 +602,14 @@ async def query_agent(
         # cast explícito es más honesto acá que ignorar el error a ciegas:
         # documenta justo el punto donde termina la precisión de LangGraph
         # y empieza la nuestra.
-        final_state = cast(RAGState, rag_graph.invoke(initial_state))
+        #
+        # ContextLimitExceeded puede escapar desde generate_node (ver su
+        # docstring en src/graph/nodes.py) -- se traduce a 413 acá igual
+        # que en /query.
+        try:
+            final_state = cast(RAGState, rag_graph.invoke(initial_state))
+        except ContextLimitExceeded as e:
+            raise HTTPException(status_code=413, detail=e.as_detail()) from e
 
         answer = final_state["answer"]
 

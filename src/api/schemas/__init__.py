@@ -20,6 +20,12 @@ from src.api.schemas.files import (
     EphemeralFilesResponse,
     FileUploadResponse,
 )
+from src.api.schemas.task import (
+    TaskFileInfo,
+    TaskFilesResponse,
+    TaskRequest,
+    TaskResponse,
+)
 
 __all__ = [
     "CollectionsResponse",
@@ -32,4 +38,8 @@ __all__ = [
     "EphemeralFileInfo",
     "EphemeralFilesResponse",
     "FileUploadResponse",
+    "TaskFileInfo",
+    "TaskFilesResponse",
+    "TaskRequest",
+    "TaskResponse",
 ]

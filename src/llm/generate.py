@@ -57,7 +57,7 @@ ExtraFields = dict[str, bool | str | int | float]
 def build_messages(
     prompt: str,
     chat_memory: list[TurnMemory],
-    system_prompt: str = build_system_prompt(),
+    system_prompt: str | None = None,
     max_turns: int | None = None,
 ) -> list[ChatTurn]:
     """
@@ -71,14 +71,27 @@ def build_messages(
     chat_memory vacío (caso de ask_llm_internal, que no tiene turnos de
     usuario) simplemente no agrega nada entre system y el prompt actual.
 
+    system_prompt: None resuelve a build_system_prompt() (comportamiento
+    RAG por defecto) en el momento de la llamada, no al importar el
+    módulo -- antes este parámetro tenía build_system_prompt() como
+    default posicional, evaluado una sola vez al cargar generate.py.
+    Era inofensivo porque build_system_prompt() es puro/determinístico,
+    pero es el antipattern clásico de default mutable/evaluado-al-
+    importar en Python, y además impedía pasar un system prompt
+    distinto sin tocar la firma. ask_llm() ahora expone ese override
+    (ver su propio docstring) para el modo Task
+    (src/api/routers/task.py), que usa build_task_system_prompt() en
+    vez del prompt de RAG.
+
     max_turns: override por-request (ver GenerationOptions en
     src/api/schemas/chat.py). None usa settings.max_turns -- mismo
     contrato que max_tokens, nunca muta settings.
     """
     effective_max_turns = settings.max_turns if max_turns is None else max_turns
+    effective_system_prompt = system_prompt if system_prompt is not None else build_system_prompt()
 
     messages: list[ChatTurn] = [
-        {"role": "system", "content": system_prompt},
+        {"role": "system", "content": effective_system_prompt},
     ]
 
     # TurnMemory es BaseModel: acceso por atributo (.user, .assistant)
@@ -244,6 +257,7 @@ def ask_llm(
     think_mode: bool | None = None,
     extra: ExtraFields | None = None,
     max_turns: int | None = None,
+    system_prompt: str | None = None,
 ) -> str:
     """
     provider es obligatorio y siempre debe venir de
@@ -251,8 +265,21 @@ def ask_llm(
     módulo ya no elige un default por su cuenta: el único lugar donde se
     decide "qué modelo genera la respuesta" es Settings.provider_for(),
     para que no haya una segunda fuente de verdad silenciosa.
+
+    system_prompt: override opcional del system prompt -- None usa
+    build_system_prompt() (comportamiento RAG por defecto, con
+    grounding/citación contra contexto recuperado). El modo Task
+    (src/api/routers/task.py) pasa build_task_system_prompt() acá en vez
+    de bifurcar el pipeline del grafo RAG con un parámetro de modo: es
+    la misma llamada al LLM, con distinto system prompt y sin contexto
+    recuperado en `prompt`.
     """
-    messages = build_messages(prompt=prompt, chat_memory=chat_memory, max_turns=max_turns)
+    messages = build_messages(
+        prompt=prompt,
+        chat_memory=chat_memory,
+        system_prompt=system_prompt,
+        max_turns=max_turns,
+    )
 
     content = _complete(
         messages=messages,
@@ -288,6 +315,12 @@ def ask_llm_internal(
 
     return content
 
+    # DECISIÓN (dejar comentado, no borrar): variante descartada de
+    # ask_llm_internal con un parámetro could_be_none explícito en vez
+    # del fallback fijo "devolver el prompt sin cambios". Se conserva
+    # como referencia del patrón (fallback configurable por caller) por
+    # si hace falta en otro internal call que no pueda usar el mismo
+    # fallback que reformular query.
     # if content is not None:
     #     return content
     # if content is None and could_be_none:
@@ -296,6 +329,13 @@ def ask_llm_internal(
     #     return prompt
 
 
+# DECISIÓN (dejar comentado, no borrar): se decidió no usar esta
+# variante de ask_llm_internal en el flujo actual de web-supplement (ver
+# WEB_SUPPLEMENT_SENTINEL en src/prompts/builder.py para el contexto
+# completo), pero el patrón -- devolver None en un fallo en vez de hacer
+# eco del prompt, para callers donde el prompt es scaffolding interno y
+# no algo seguro de mostrarle al usuario -- es reutilizable. Se conserva
+# como referencia de implementación en vez de borrarla.
 # def ask_llm_supplement(
 #     prompt: str,
 #     system_prompt: str,

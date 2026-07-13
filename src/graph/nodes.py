@@ -31,6 +31,7 @@ import json
 from src.config.settings import settings
 from src.context.manager import LoadedCollection
 from src.graph.state import RAGState, RAGStateUpdate
+from src.llm.context_guard import ContextLimitExceeded, check_context_fit
 from src.llm.generate import ask_llm, ask_llm_internal
 from src.llm.roles import LLMRole
 from src.prompts.builder import (
@@ -39,6 +40,7 @@ from src.prompts.builder import (
     build_reformulation_system_prompt,
     build_review_prompt,
     build_review_system_prompt,
+    build_system_prompt,
 )
 from src.retrieval.search import search
 from src.utils.logger import logger
@@ -191,6 +193,20 @@ def generate_node(state: RAGState) -> RAGStateUpdate:
 
     logger.info(
         f"[graph] generate_node | chunks={len(results)} | confidence={state['confidence']:.4f}"
+    )
+
+    # Guard preventivo de contexto (src/llm/context_guard.py). Vive acá
+    # y no en el router de /query/agent porque el prompt con los chunks
+    # recuperados recién existe en este punto -- antes de invocar el
+    # grafo, el router todavía no sabe qué se va a recuperar.
+    # ContextLimitExceeded se propaga tal cual hasta el router
+    # (src/api/routers/chat.py), que la traduce a un 413.
+    check_context_fit(
+        system_prompt=build_system_prompt(),
+        prompt=prompt,
+        chat_memory=state["chat_memory"],
+        provider=settings.provider_for(LLMRole.GENERATE),
+        max_tokens=state.get("max_tokens"),
     )
 
     answer = ask_llm(

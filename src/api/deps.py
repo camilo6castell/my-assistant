@@ -19,15 +19,18 @@ from langgraph.graph.state import CompiledStateGraph
 
 from src.context.ephemeral import EphemeralStore
 from src.context.manager import ContextManager
+from src.context.task_files import TaskFileStore
 from src.graph.state import RAGState
 
-# TTL de inactividad para colecciones efímeras (ver EphemeralStore.sweep_expired).
-# Una conversación sin queries ni uploads durante este tiempo se limpia sola.
+# TTL de inactividad para colecciones efímeras (ver EphemeralStore.sweep_expired)
+# y para archivos de Task (ver TaskFileStore.sweep_expired) -- mismo valor,
+# misma semántica de "contexto de una sola conversación sin actividad".
 EPHEMERAL_TTL = timedelta(hours=6)
 
 _rag_graph: CompiledStateGraph[RAGState] | None = None
 _context_manager: ContextManager = ContextManager()
 _ephemeral_store: EphemeralStore = EphemeralStore()
+_task_file_store: TaskFileStore = TaskFileStore()
 
 
 def set_rag_graph(graph: CompiledStateGraph[RAGState]) -> None:
@@ -49,3 +52,7 @@ def get_context_manager() -> ContextManager:
 
 def get_ephemeral_store() -> EphemeralStore:
     return _ephemeral_store
+
+
+def get_task_file_store() -> TaskFileStore:
+    return _task_file_store

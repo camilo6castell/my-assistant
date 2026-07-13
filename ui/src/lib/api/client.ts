@@ -1,12 +1,16 @@
 import axios from "axios"
 import type {
   CollectionsResponse,
+  ContextLimitExceededDetail,
   DeleteResponse,
   EphemeralFilesResponse,
   FileUploadResponse,
   ProvidersResponse,
   QueryRequest,
   QueryResponse,
+  TaskFilesResponse,
+  TaskRequest,
+  TaskResponse,
 } from "@/types/api"
 
 export const api = axios.create({
@@ -20,8 +24,13 @@ export const api = axios.create({
  * genérico por si aparece otra señal estructurada más adelante.
  */
 interface StructuredErrorDetail {
-  message: string
+  message?: string
   web_search_quota_exceeded?: boolean
+  /** Ver ContextLimitExceededDetail en types/api.ts -- mismo `detail`, forma más específica. */
+  error?: string
+  estimated_tokens?: number
+  limit?: number
+  model?: string
 }
 
 function getDetail(error: unknown): string | StructuredErrorDetail | undefined {
@@ -38,7 +47,16 @@ function getDetail(error: unknown): string | StructuredErrorDetail | undefined {
 export function apiErrorMessage(error: unknown): string {
   const detail = getDetail(error)
   if (typeof detail === "string") return detail
-  if (detail && typeof detail === "object") return detail.message
+  if (detail && typeof detail === "object") {
+    if (detail.message) return detail.message
+    if (detail.error === "context_limit_exceeded") {
+      return (
+        `El mensaje es demasiado largo para el modelo activo ` +
+        `(${detail.estimated_tokens} tokens estimados, límite ${detail.limit}). ` +
+        `Acortá el mensaje o quitá algún archivo adjunto.`
+      )
+    }
+  }
 
   if (axios.isAxiosError(error)) {
     if (error.code === "ERR_NETWORK") {
@@ -61,6 +79,25 @@ export function apiErrorMessage(error: unknown): string {
 export function isWebSearchQuotaExceededError(error: unknown): boolean {
   const detail = getDetail(error)
   return typeof detail === "object" && detail?.web_search_quota_exceeded === true
+}
+
+/**
+ * Detalle del 413 cuando el request no entra en la ventana de contexto
+ * del modelo activo (ver check_context_fit en src/llm/context_guard.py).
+ * undefined si el error no es de este tipo. Usado en ChatView.tsx para
+ * mostrar un banner específico en vez del mensaje genérico de axios.
+ */
+export function getContextLimitDetail(error: unknown): ContextLimitExceededDetail | undefined {
+  const detail = getDetail(error)
+  if (
+    typeof detail === "object" &&
+    detail !== null &&
+    "error" in detail &&
+    (detail as { error?: string }).error === "context_limit_exceeded"
+  ) {
+    return detail as unknown as ContextLimitExceededDetail
+  }
+  return undefined
 }
 
 export async function getCollections(): Promise<CollectionsResponse> {
@@ -123,5 +160,50 @@ export async function deleteEphemeralConversation(
   conversationId: string
 ): Promise<DeleteResponse> {
   const { data } = await api.delete<DeleteResponse>(`/files/${conversationId}`)
+  return data
+}
+
+// ---------------------------------------------------------------
+// Modo Task -- ver src/api/routers/task.py
+// ---------------------------------------------------------------
+
+export async function postTaskQuery(payload: TaskRequest): Promise<TaskResponse> {
+  const { data } = await api.post<TaskResponse>("/task/query", payload)
+  return data
+}
+
+export async function uploadTaskFile(params: {
+  file: File
+  conversationId: string
+}): Promise<TaskFilesResponse["files"][number]> {
+  const form = new FormData()
+  form.append("file", params.file)
+  form.append("conversation_id", params.conversationId)
+
+  const { data } = await api.post<TaskFilesResponse["files"][number]>(
+    "/task/files",
+    form,
+    { headers: { "Content-Type": "multipart/form-data" } }
+  )
+  return data
+}
+
+export async function listTaskFiles(conversationId: string): Promise<TaskFilesResponse> {
+  const { data } = await api.get<TaskFilesResponse>(`/task/files/${conversationId}`)
+  return data
+}
+
+export async function deleteTaskFile(
+  conversationId: string,
+  fileId: string
+): Promise<DeleteResponse> {
+  const { data } = await api.delete<DeleteResponse>(
+    `/task/files/${conversationId}/${fileId}`
+  )
+  return data
+}
+
+export async function deleteTaskConversation(conversationId: string): Promise<DeleteResponse> {
+  const { data } = await api.delete<DeleteResponse>(`/task/files/${conversationId}`)
   return data
 }

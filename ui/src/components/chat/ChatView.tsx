@@ -5,9 +5,11 @@ import {
   apiErrorMessage,
   isWebSearchQuotaExceededError,
   postQuery,
+  postTaskQuery,
 } from "@/lib/api/client";
 import { useConversationsStore } from "@/stores/conversationsStore";
 import type { ChatMessage } from "@/types/chat";
+import type { QueryResponse, TaskResponse } from "@/types/api";
 import { ChatToolbar } from "./ChatToolbar";
 import { MessageInput } from "./MessageInput";
 import { MessageList } from "./MessageList";
@@ -42,9 +44,27 @@ export function ChatView() {
     (s) => s.setWebSearchQuotaExceeded,
   );
 
-  const sendMutation = useMutation({
+  const sendMutation = useMutation<QueryResponse | TaskResponse, Error, string>({
     mutationFn: (text: string) => {
       if (!conversation) throw new Error("Conversación no encontrada");
+
+      if (conversation.taskModeActive) {
+        // Modo Task: sin colecciones, sin modo SOFT/HARD, sin web search --
+        // ver build_task_system_prompt() en el backend. Los archivos de
+        // contexto no van en el body: el backend los lee del
+        // TaskFileStore usando conversation_id (ver TaskFilesSection.tsx).
+        return postTaskQuery({
+          question: text,
+          chat_history: toHistory(conversation.messages),
+          conversation_id: conversation.id,
+          generation: {
+            max_tokens: conversation.generation.maxTokens,
+            think_mode: conversation.generation.thinkMode,
+            max_turns: conversation.generation.maxTurns,
+          },
+        });
+      }
+
       return postQuery(
         {
           question: text,
@@ -87,9 +107,10 @@ export function ChatView() {
       content: "",
       createdAt: Date.now(),
       isPending: true,
-      pendingLabel: conversation.useWebSearch
-        ? "Revisando la web..."
-        : undefined,
+      pendingLabel:
+        !conversation.taskModeActive && conversation.useWebSearch
+          ? "Revisando la web..."
+          : undefined,
     };
 
     addMessage(conversation.id, userMsg);
@@ -97,21 +118,32 @@ export function ChatView() {
 
     sendMutation.mutate(text, {
       onSuccess: (data) => {
-        updateMessage(conversation.id, assistantId, {
-          content: data.answer,
-          confidence: data.confidence,
-          collectionsUsed: data.collections_used,
-          reformulated: data.reformulated,
-          usedWebSearch: data.used_web_search,
-          webSources: data.web_sources ?? undefined,
-          isPending: false,
-        });
-        // Caso B silencioso (ver _supplement_with_web en el backend): la
-        // respuesta principal se generó igual, pero el complemento web
-        // se omitió por cuota agotada -- el mensaje no lo refleja, así
-        // que esta es la única señal.
-        if (data.web_search_quota_exceeded) {
-          setWebSearchQuotaExceeded(true);
+        // postTaskQuery devuelve TaskResponse (solo answer/files_used);
+        // postQuery devuelve QueryResponse (con confidence/collections_used/
+        // etc). "collections_used" discrimina entre las dos formas sin
+        // necesitar un flag aparte.
+        if ("collections_used" in data) {
+          updateMessage(conversation.id, assistantId, {
+            content: data.answer,
+            confidence: data.confidence,
+            collectionsUsed: data.collections_used,
+            reformulated: data.reformulated,
+            usedWebSearch: data.used_web_search,
+            webSources: data.web_sources ?? undefined,
+            isPending: false,
+          });
+          // Caso B silencioso (ver _supplement_with_web en el backend): la
+          // respuesta principal se generó igual, pero el complemento web
+          // se omitió por cuota agotada -- el mensaje no lo refleja, así
+          // que esta es la única señal.
+          if (data.web_search_quota_exceeded) {
+            setWebSearchQuotaExceeded(true);
+          }
+        } else {
+          updateMessage(conversation.id, assistantId, {
+            content: data.answer,
+            isPending: false,
+          });
         }
       },
       onError: (error) => {
@@ -126,6 +158,10 @@ export function ChatView() {
         if (isWebSearchQuotaExceededError(error)) {
           setWebSearchQuotaExceeded(true);
         }
+        // 413 del guard de contexto (src/llm/context_guard.py, tanto en
+        // /query como en /task/query) llega acá también: apiErrorMessage()
+        // ya arma el mensaje legible (tokens estimados/límite) a partir
+        // del detail estructurado, así que no necesita un caso aparte.
       },
     });
   }

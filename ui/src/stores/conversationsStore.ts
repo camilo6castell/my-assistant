@@ -22,6 +22,7 @@ function makeConversation(): Conversation {
     useAgent: false,
     useWebSearch: false,
     generation: { ...emptyGeneration },
+    taskModeActive: false,
   }
 }
 
@@ -55,6 +56,7 @@ interface ConversationsState {
   setMode: (id: string, mode: ChatMode) => void
   setUseAgent: (id: string, useAgent: boolean) => void
   setUseWebSearch: (id: string, useWebSearch: boolean) => void
+  setTaskModeActive: (id: string, taskModeActive: boolean) => void
   setGeneration: (id: string, patch: Partial<Conversation["generation"]>) => void
   setWebSearchQuotaExceeded: (value: boolean) => void
 
@@ -117,6 +119,13 @@ export const useConversationsStore = create<ConversationsState>()(
           conversations: s.conversations.map((c) => (c.id === id ? { ...c, useWebSearch } : c)),
         })),
 
+      setTaskModeActive: (id, taskModeActive) =>
+        set((s) => ({
+          conversations: s.conversations.map((c) =>
+            c.id === id ? { ...c, taskModeActive } : c
+          ),
+        })),
+
       setGeneration: (id, patch) =>
         set((s) => ({
           conversations: s.conversations.map((c) =>
@@ -170,6 +179,7 @@ export const useConversationsStore = create<ConversationsState>()(
           conversations: persisted.conversations.map((c) => ({
             ...c,
             useWebSearch: c.useWebSearch ?? false,
+            taskModeActive: c.taskModeActive ?? false,
           })),
         }
       },

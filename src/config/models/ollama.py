@@ -30,11 +30,27 @@ _MODELS: dict[str, dict[str, Any]] = {
 }
 
 
+# Ver el comentario extenso en src/config/models/fastflowlm.py --
+# mismo motivo para mantener esto separado de _MODELS.
+#
+# TODO(Alejandro): depende del modelo que tengas pulleado y su num_ctx
+# real en Ollama (`ollama show deepseek-r1 --modelfile`).
+_CONTEXT_WINDOWS: dict[str, int] = {
+    "deepseek-r1": 32_768,
+}
+
+
 def _lookup(model_name: str) -> dict[str, Any]:
     try:
         return _MODELS[model_name]
     except KeyError:
         raise ValueError(f"Modelo Ollama no soportado: {model_name!r}") from None
+
+
+def context_window(model_name: str) -> int | None:
+    """Ventana de contexto en tokens, o None si no está documentada (ver _CONTEXT_WINDOWS)."""
+    _lookup(model_name)
+    return _CONTEXT_WINDOWS.get(model_name)
 
 
 def supports_thinking(model_name: str) -> bool:

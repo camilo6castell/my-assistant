@@ -104,3 +104,44 @@ export interface EphemeralFilesResponse {
 export interface DeleteResponse {
   deleted: boolean
 }
+
+// ---------------------------------------------------------------
+// Modo Task -- espejo de src/api/schemas/task.py (ver también
+// src/context/task_files.py, de donde TaskFileInfo se re-exporta en
+// el backend).
+// ---------------------------------------------------------------
+
+export interface TaskFileInfo {
+  file_id: string
+  filename: string
+  size_bytes: number
+  uploaded_at: string
+}
+
+export interface TaskFilesResponse {
+  files: TaskFileInfo[]
+}
+
+export interface TaskRequest {
+  question: string
+  chat_history: { user: string; assistant: string }[]
+  conversation_id?: string | null
+  generation?: GenerationOptions | null
+}
+
+export interface TaskResponse {
+  answer: string
+  files_used: string[]
+}
+
+/**
+ * Forma del `detail` de un 413 -- ver ContextLimitExceeded.as_detail()
+ * en src/llm/context_guard.py. Devuelto tanto por /query, /query/agent
+ * como por /task/query (mismo guard reutilizado en los tres).
+ */
+export interface ContextLimitExceededDetail {
+  error: "context_limit_exceeded"
+  estimated_tokens: number
+  limit: number
+  model: string
+}

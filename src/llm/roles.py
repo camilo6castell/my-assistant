@@ -17,10 +17,10 @@ riesgo de import circular -- settings.py es de las cosas más
 tempranamente importadas del proyecto.
 """
 
-from enum import Enum
+from enum import StrEnum
 
 
-class LLMRole(str, Enum):
+class LLMRole(StrEnum):
     """Un punto del pipeline que necesita un LLM."""
 
     # Genera la respuesta final de RAG -- generate_node/correct_node en

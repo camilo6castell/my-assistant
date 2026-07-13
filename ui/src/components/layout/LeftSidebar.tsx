@@ -246,6 +246,7 @@ export function Sidebar() {
               onChange={(next) =>
                 setActiveCollections(activeConversation.id, next)
               }
+              disabled={activeConversation.taskModeActive}
             />
           ) : (
             <>

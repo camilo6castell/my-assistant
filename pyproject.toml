@@ -23,6 +23,10 @@ dependencies = [
     "requests>=2.32.0",
     "pypdf>=4.0.0",
     "readability-lxml>=0.8.0",
+    # Estimación de tokens para el guard de límite de contexto (ver
+    # src/utils/tokens.py). Aproximación vía cl100k_base, no un
+    # tokenizador exacto por backend -- ver docstring del módulo.
+    "tiktoken>=0.7.0",
 ]
 
 [project.optional-dependencies]

@@ -34,9 +34,17 @@ function parsePositiveInt(raw: string): number | undefined {
 export function GenerationSection({
   conversation,
   providers,
+  disabled = false,
 }: {
   conversation: Conversation;
   providers: ProvidersResponse | undefined;
+  /**
+   * true mientras el modo Task está activo (ver RightSidebar.tsx):
+   * Task no tiene retrieval ni distingue SOFT/HARD, así que estos
+   * controles no aplican y se deshabilitan enteros vía <fieldset>, en
+   * vez de bifurcar cada botón/input individualmente.
+   */
+  disabled?: boolean;
 }) {
   const setGeneration = useConversationsStore((s) => s.setGeneration);
   const setMode = useConversationsStore((s) => s.setMode);
@@ -109,7 +117,13 @@ export function GenerationSection({
   }
 
   return (
-    <div className="flex flex-col justify-between space-y-3 px-3">
+    <fieldset
+      disabled={disabled}
+      className={cn(
+        "flex flex-col justify-between space-y-3 px-3 border-0 p-0 m-0 min-w-0",
+        disabled && "pointer-events-none opacity-40",
+      )}
+    >
       {/* 1. SOFT / HARD */}
       <div className="flex items-center justify-between gap-2">
         <span className="block text-xs text-muted-foreground">
@@ -288,6 +302,6 @@ export function GenerationSection({
           No se pudo determinar el provider activo.
         </p>
       )}
-    </div>
+    </fieldset>
   );
 }

@@ -24,11 +24,27 @@ _MODELS: dict[str, dict[str, Any]] = {
 }
 
 
+# Ver el comentario extenso en src/config/models/fastflowlm.py --
+# mismo motivo para mantener esto separado de _MODELS.
+#
+# TODO(Alejandro): confirmar contra la doc oficial del modelo que
+# efectivamente uses vía el endpoint OpenAI-compatible.
+_CONTEXT_WINDOWS: dict[str, int] = {
+    "gemini-2.5-flash-lite": 1_000_000,
+}
+
+
 def _lookup(model_name: str) -> dict[str, Any]:
     try:
         return _MODELS[model_name]
     except KeyError:
         raise ValueError(f"Modelo Gemini no soportado: {model_name!r}") from None
+
+
+def context_window(model_name: str) -> int | None:
+    """Ventana de contexto en tokens, o None si no está documentada (ver _CONTEXT_WINDOWS)."""
+    _lookup(model_name)
+    return _CONTEXT_WINDOWS.get(model_name)
 
 
 def supports_thinking(model_name: str) -> bool:

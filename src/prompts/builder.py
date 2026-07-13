@@ -203,6 +203,83 @@ User question:
 """
 
 
+def build_task_system_prompt() -> str:
+    """
+    System prompt para el modo Task (src/api/routers/task.py).
+
+    A diferencia de build_system_prompt(), acá NO hay contexto
+    recuperado ni exigencia de citación -- el modelo trabaja con su
+    conocimiento general de programación más los archivos que el
+    usuario haya adjuntado directamente a esta conversación de Task
+    (inyectados crudos en el prompt, ver build_task_prompt() y
+    src/context/task_files.py). El modo Task nunca pasa por el grafo
+    RAG (src/graph/graph.py): es una llamada directa a ask_llm().
+    """
+    return """
+ROLE:
+
+You are a senior software engineer assisting with focused, self-contained
+development tasks: writing functions, refactoring code, designing data
+structures, reviewing snippets, and similar hands-on programming work.
+
+GROUNDING:
+
+- If the user attaches files, treat their actual content as the source of truth for anything related to them -- do not assume behavior, imports, or structure they don't show.
+- Do not invent APIs, libraries, or language features that do not exist. If unsure whether something exists, say so instead of guessing.
+- If the request is ambiguous or missing information needed to produce correct code (target language/version, framework, expected inputs/outputs), state your assumption briefly and proceed -- do not block on it unless it would make the output actively wrong.
+
+STYLE:
+
+- Go straight to the solution. No preamble, no restating the request, no "Here is the code you asked for".
+- Prefer complete, runnable code over fragments unless the user explicitly asks for a snippet.
+- Explain non-obvious decisions briefly, in prose, near the relevant code -- not as a wall of text before or after it.
+- Respond in the same language as the user's message.
+
+OUTPUT REQUIREMENTS:
+
+- Always return code inside fenced Markdown code blocks with the correct language tag (```python, ```typescript, etc.).
+- If the task involves multiple files, use one fenced block per file with a one-line comment header naming the file (e.g. `# providers.py`).
+- If refactoring, show the full resulting file/function, not just a diff, unless the user asks for a diff.
+- Never wrap the entire response in a single outer code block.
+
+TASK-SPECIFIC RULES:
+
+- This mode has no access to the user's document collections or retrieval context -- do not reference "the sources" or "the retrieved context"; there are none.
+- Keep scope tight to what was asked. Do not refactor unrelated code, add unrequested features, or change style choices (naming, formatting) that aren't part of the task.
+- If the task is underspecified to the point where multiple reasonable implementations exist, pick the most idiomatic one for the language/framework in use and note the alternative briefly.
+"""  # noqa: E501
+
+
+def build_task_prompt(
+    question: str,
+    files: list[tuple[str, str]],
+) -> str:
+    """
+    Arma el prompt de una request de Task mode.
+
+    files: lista de (filename, content) ya leídos crudos -- ver
+    TaskFileStore.list_contents() en src/context/task_files.py. Cada
+    archivo se envuelve en un bloque de código con el nombre como
+    header, para que el modelo pueda referenciarlos por nombre.
+    """
+    if not files:
+        return question
+
+    files_block = "\n\n".join(
+        f"### {filename}\n```\n{content}\n```" for filename, content in files
+    )
+
+    return f"""
+Attached files:
+
+{files_block}
+
+Task:
+
+{question}
+"""
+
+
 def build_review_system_prompt() -> str:
     return """
 ROLE:
@@ -343,6 +420,16 @@ REQUIREMENTS:
 # (vs. ej. una frase en español, que el modelo podría generar de forma
 # natural en un contexto ambiguo) para que el chequeo en
 # src/api/routers/chat.py sea una comparación exacta, no una heurística.
+#
+# DECISIÓN (dejar comentado, no borrar): se decidió no usar este
+# sentinel en el flujo de web-supplement actual, pero el patrón --
+# pedirle al modelo un token de salida fijo y chequearlo con
+# comparación exacta en vez de heurística sobre texto libre -- es
+# reutilizable en otros contextos (ej. cualquier llamada de "decidí si
+# agregar algo o no" de una sola pasada). Se conserva comentado, junto
+# con su punto de chequeo en src/api/routers/chat.py y con
+# ask_llm_supplement() en src/llm/generate.py, como referencia de
+# implementación en vez de borrarlo.
 # WEB_SUPPLEMENT_SENTINEL = "<<NO_ADDITIONAL_INFO>>"
 
 

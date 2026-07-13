@@ -67,6 +67,7 @@ class _ModelBackend(Protocol):
     def supports_thinking(self, model_name: str) -> bool: ...
     def default_think(self, model_name: str) -> bool | None: ...
     def supports_max_tokens(self, model_name: str) -> bool: ...
+    def context_window(self, model_name: str) -> int | None: ...
 
 
 def _registry() -> dict[str, _ModelBackend]:
@@ -149,6 +150,17 @@ def get_supports(capabilities_key: str, model_name: str) -> frozenset[str]:
     # ollama lo ignora con warning, ver build_kwargs de cada uno).
     names.add("extra")
     return frozenset(names)
+
+
+def get_context_window(capabilities_key: str, model_name: str) -> int | None:
+    """
+    Ventana de contexto (en tokens) del modelo activo, o None si no está
+    documentada en su archivo de backend -- en ese caso
+    check_context_fit() (src/llm/context_guard.py) no bloquea el
+    request, solo lo deja pasar sin verificar (fail-open: preferible a
+    romper la app por un modelo sin ese dato completado todavía).
+    """
+    return _module(capabilities_key).context_window(model_name)
 
 
 def get_default_think(capabilities_key: str, model_name: str) -> bool | None:

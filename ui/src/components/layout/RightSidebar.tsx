@@ -1,13 +1,23 @@
-import { Paperclip, Settings2 } from "lucide-react";
+import { Paperclip, Settings2, Wrench } from "lucide-react";
 import { useParams } from "react-router-dom";
 import { FilesSection } from "@/components/chat/FilesSection";
 import { GenerationSection } from "@/components/chat/GenerationSection";
+import { TaskFilesSection } from "@/components/chat/TaskFilesSection";
+import { cn } from "@/lib/utils";
 import { useEphemeralFiles } from "@/hooks/useEphemeralFiles";
 import { useProviders } from "@/hooks/useProviders";
+import { useTaskFiles } from "@/hooks/useTaskFiles";
 import { useConversationsStore } from "@/stores/conversationsStore";
 import { useUiStore } from "@/stores/uiStore";
 import { SidebarSectionHeader } from "./SidebarSectionHeader";
 import { SidebarShell } from "./SidebarShell";
+
+const TASK_MODE_EXPLANATION =
+  "Modo Task: tareas de desarrollo puntuales (funciones, refactors, " +
+  "estructuras de datos) sin usar tus colecciones -- el modelo solo ve " +
+  "los archivos que adjuntes acá. Mientras está activo, las colecciones " +
+  "y las opciones de generación quedan deshabilitadas: son dos flujos " +
+  "independientes.";
 
 export function RightSidebar() {
   const { conversationId } = useParams<{ conversationId: string }>();
@@ -21,9 +31,14 @@ export function RightSidebar() {
   const toggleRightCollapsed = useUiStore((s) => s.toggleRightCollapsed);
 
   const ephemeralFiles = useEphemeralFiles(conversationId ?? null);
+  const taskFiles = useTaskFiles(conversationId ?? null);
+  const setTaskModeActive = useConversationsStore((s) => s.setTaskModeActive);
   const { data: providersData } = useProviders();
 
-  const fileCount = ephemeralFiles.data?.files.length ?? 0;
+  const taskModeActive = conversation?.taskModeActive ?? false;
+  const fileCount = taskModeActive
+    ? (taskFiles.data?.files.length ?? 0)
+    : (ephemeralFiles.data?.files.length ?? 0);
 
   const collapsedContent = (
     <>
@@ -82,14 +97,36 @@ export function RightSidebar() {
       onResize={setRightWidth}
       collapsedContent={collapsedContent}
     >
+      <div className="px-3 pt-2">
+        <button
+          type="button"
+          onClick={() => setTaskModeActive(conversation.id, !taskModeActive)}
+          title={TASK_MODE_EXPLANATION}
+          aria-pressed={taskModeActive}
+          className={cn(
+            "flex w-full items-center justify-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition-colors",
+            taskModeActive
+              ? "border-primary/40 bg-primary/15 text-primary"
+              : "border-white/10 text-muted-foreground hover:bg-white/5 hover:text-foreground",
+          )}
+        >
+          <Wrench className="size-4" />
+          Task
+        </button>
+      </div>
+
       <section className="flex min-h-0 flex-grow-1 flex-col pt-1">
         <SidebarSectionHeader
           icon={Paperclip}
-          label="Archivos"
+          label={taskModeActive ? "Archivos de la tarea" : "Archivos"}
           count={fileCount}
         />
         <div className="min-h-0 flex-1 overflow-y-auto pb-3">
-          <FilesSection files={ephemeralFiles} />
+          {taskModeActive ? (
+            <TaskFilesSection files={taskFiles} />
+          ) : (
+            <FilesSection files={ephemeralFiles} />
+          )}
         </div>
       </section>
 
@@ -105,6 +142,7 @@ export function RightSidebar() {
           <GenerationSection
             conversation={conversation}
             providers={providersData}
+            disabled={taskModeActive}
           />
         </div>
       </section>

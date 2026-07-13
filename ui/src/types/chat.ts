@@ -49,4 +49,11 @@ export interface Conversation {
   /** Complementar (o reemplazar, sin colecciones) la respuesta con búsqueda web -- ver GenerationSection.tsx. */
   useWebSearch: boolean
   generation: GenerationOptionsState
+  /**
+   * Modo Task activo -- sin RAG, sin colecciones, llama a /api/v1/task/query
+   * en vez de /api/v1/query (ver ChatView.tsx). Deshabilita
+   * GenerationSection/CollectionsPicker mientras está activo (opera de
+   * forma independiente, ver RightSidebar.tsx).
+   */
+  taskModeActive: boolean
 }

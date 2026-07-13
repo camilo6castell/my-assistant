@@ -95,12 +95,7 @@ class Settings(BaseSettings):
         en subdirectorios separados en vez de mezclarlos.
         Las carpetas se crean automáticamente al primer uso en get_collection_paths().
         """
-        return (
-            self.ai_home
-            / "vector_stores"
-            / self.embedding_backend
-            / self.embedding_model_safe
-        )
+        return self.ai_home / "vector_stores" / self.embedding_backend / self.embedding_model_safe
 
     # Chunking
     chunk_size: int = Field(default=500, gt=0)
@@ -115,8 +110,7 @@ class Settings(BaseSettings):
         """
         if "chunk_size" in info.data and v >= info.data["chunk_size"]:
             raise ValueError(
-                f"chunk_overlap ({v}) debe ser menor que "
-                f"chunk_size ({info.data['chunk_size']})"
+                f"chunk_overlap ({v}) debe ser menor que chunk_size ({info.data['chunk_size']})"
             )
         return v
 
