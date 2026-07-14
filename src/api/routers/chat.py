@@ -107,45 +107,6 @@ def _build_chat_memory(history: list[dict[str, str]]) -> list[TurnMemory]:
     return memory
 
 
-def _resolve_top_k(request: QueryRequest) -> tuple[int | None, int | None]:
-    """
-    Resuelve (top_k_initial, top_k_final) del request contra los defaults
-    de settings para request.mode, y valida que final <= initial -- sin
-    esto, search() (src/retrieval/search.py) devolvería un slice
-    resultados[:top_k_final] más ancho que lo que realmente se recuperó
-    en el índice, silenciosamente inútil en vez de un error claro.
-
-    Devuelve los overrides tal cual vinieron (posiblemente None) para
-    pasarlos directo a search()/RAGState -- la resolución final contra
-    settings ya la hace search() internamente; acá solo se valida la
-    combinación antes de llegar ahí.
-    """
-    generation = request.generation
-    top_k_initial = generation.top_k_initial if generation else None
-    top_k_final = generation.top_k_final if generation else None
-
-    if request.mode == "SOFT":
-        default_initial = settings.soft_top_k_initial
-        default_final = settings.soft_top_k_final
-    else:
-        default_initial = settings.hard_top_k_initial
-        default_final = settings.hard_top_k_final
-
-    effective_initial = default_initial if top_k_initial is None else top_k_initial
-    effective_final = default_final if top_k_final is None else top_k_final
-
-    if effective_final > effective_initial:
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                f"top_k_final ({effective_final}) no puede ser mayor que "
-                f"top_k_initial ({effective_initial}) para el modo {request.mode}."
-            ),
-        )
-
-    return top_k_initial, top_k_final
-
-
 def _fetch_attachments(
     conversation_id: str | None, store: AttachmentStore
 ) -> list[tuple[str, str]]:
@@ -411,7 +372,6 @@ class _GenerationKwargs(TypedDict):
     max_tokens: int | None
     think_mode: bool | None
     extra: dict[str, Any] | None
-    max_turns: int | None
 
 
 def _generation_kwargs(generation: GenerationOptions | None) -> _GenerationKwargs:
@@ -421,23 +381,22 @@ def _generation_kwargs(generation: GenerationOptions | None) -> _GenerationKwarg
     None" varias veces en cada endpoint. El TypedDict de retorno permite
     que `ask_llm(**_generation_kwargs(...))` se valide contra la firma
     real de ask_llm en vez de perder precisión con dict[str, object].
-    top_k_initial/top_k_final no viven acá porque no son parámetros de
-    ask_llm -- se resuelven aparte con _resolve_top_k() y van a search()
-    /RAGState. `temperature` tampoco: no es un parámetro de ask_llm, es
-    una propiedad fija de cada modelo (ver src/config/models/).
+    `temperature` no vive acá: no es un parámetro de ask_llm, es una
+    propiedad fija de cada modelo (ver src/config/models/). `max_turns`
+    tampoco: dejó de ser un override por-request (ver GenerationOptions
+    en src/api/schemas/chat.py) -- ask_llm() sin ese kwarg usa
+    settings.max_turns siempre, vía su propio default interno.
     """
     if generation is None:
         return {
             "max_tokens": None,
             "think_mode": None,
             "extra": None,
-            "max_turns": None,
         }
     return {
         "max_tokens": generation.max_tokens,
         "think_mode": generation.think_mode,
         "extra": generation.extra,
-        "max_turns": generation.max_turns,
     }
 
 
@@ -489,7 +448,6 @@ async def query(
 
     _validate_web_search(request)
     _validate_generation_options(request)
-    top_k_initial, top_k_final = _resolve_top_k(request)
 
     collections = _resolve_collections(request.collections)
     ephemeral = _resolve_ephemeral(request.conversation_id, ephemeral_store)
@@ -516,12 +474,14 @@ async def query(
 
     else:
         # Caso normal (idéntico al comportamiento previo a esta feature).
+        # top_k_initial/top_k_final ya no son overrides por-request (ver
+        # GenerationOptions en src/api/schemas/chat.py) -- search()
+        # resuelve ambos internamente contra settings.soft_top_k_*/
+        # hard_top_k_* según request.mode.
         results, confidence = search(
             question=request.question,
             mode=request.mode,
             collections=collections,
-            top_k_initial=top_k_initial,
-            top_k_final=top_k_final,
         )
 
         if not results:
@@ -634,7 +594,6 @@ async def query_agent(
 
     _validate_web_search(request)
     _validate_generation_options(request)
-    top_k_initial, top_k_final = _resolve_top_k(request)
 
     collections = _resolve_collections(request.collections)
     ephemeral = _resolve_ephemeral(request.conversation_id, ephemeral_store)
@@ -665,7 +624,10 @@ async def query_agent(
         # Caso normal: el grafo corre exactamente igual que antes de
         # esta feature -- ni graph/state.py (salvo el nuevo campo
         # attachments) ni graph/nodes.py cambiaron su lógica de
-        # retrieval/review.
+        # retrieval/review. top_k_initial/top_k_final/max_turns ya no
+        # viven en RAGState (ver su docstring en src/graph/state.py):
+        # retrieve_node y generate_node los resuelven internamente
+        # contra settings, sin override por-request.
         gen_kwargs = _generation_kwargs(request.generation)
 
         initial_state: RAGState = {
@@ -683,9 +645,6 @@ async def query_agent(
             "max_tokens": gen_kwargs["max_tokens"],
             "think_mode": gen_kwargs["think_mode"],
             "extra": gen_kwargs["extra"],
-            "max_turns": gen_kwargs["max_turns"],
-            "top_k_initial": top_k_initial,
-            "top_k_final": top_k_final,
             "attachments": attachments,
         }
 

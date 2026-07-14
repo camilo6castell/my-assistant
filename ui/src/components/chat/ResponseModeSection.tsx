@@ -42,8 +42,10 @@ type Enhancement = {
  * estaba el picker de colecciones (que se movió al sidebar derecho,
  * ver RightSidebar.tsx -- ahora agrupa todo lo relacionado con
  * conocimiento: adjuntos, colecciones efímeras, colecciones de
- * sistema). Los ajustes de retrieval (Turnos de historial, Top K) se
- * movieron con las colecciones -- ver AdvancedRetrievalSection.tsx.
+ * sistema). Los ajustes de retrieval (Turnos de historial, Top K) ya no
+ * son overrides por-conversación en absoluto -- pasaron a ser
+ * exclusivamente configuración de servidor (.env), sin ninguna UI (ver
+ * GenerationOptions en src/api/schemas/chat.py).
  */
 export function ResponseModeSection({
   conversation,

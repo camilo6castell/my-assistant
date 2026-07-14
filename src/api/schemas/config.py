@@ -33,30 +33,6 @@ class ProviderInfo(BaseModel):
     default_think: bool | None
 
 
-class GenerationDefaults(BaseModel):
-    """
-    Valores actuales de .env/settings para los parámetros de generación y
-    retrieval que la UI permite overridear por-conversación (ver
-    GenerationOptions en src/api/schemas/chat.py).
-
-    Son solo de lectura -- la UI los usa para mostrar "valor actual" antes
-    de que el usuario decida modificarlo, y como fallback cuando el
-    override de la conversación es None. No hay forma de cambiarlos vía
-    API (ver docstring del módulo): cambiar esto significa editar .env.
-
-    No incluye `temperature`: no es un default de settings/.env ni un
-    override por-conversación -- es una propiedad fija de cada modelo
-    (ver src/config/models/<backend>.py). No hay "valor actual" único
-    que mostrar acá porque cada modelo puede tener el suyo.
-    """
-
-    max_turns: int
-    hard_top_k_initial: int
-    hard_top_k_final: int
-    soft_top_k_initial: int
-    soft_top_k_final: int
-
-
 class ProvidersResponse(BaseModel):
     """Respuesta de GET /api/v1/config/providers."""
 
@@ -74,4 +50,3 @@ class ProvidersResponse(BaseModel):
     # este endpoint; pensado para poder inspeccionar de un vistazo qué
     # modelo atiende cada punto del pipeline sin tener que leer .env.
     provider_roles: dict[str, str]
-    defaults: GenerationDefaults

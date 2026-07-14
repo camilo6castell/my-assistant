@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
-from src.api.schemas.config import GenerationDefaults, ProviderInfo, ProvidersResponse
+from src.api.schemas.config import ProviderInfo, ProvidersResponse
 from src.config.models import get_default_think, get_supports
 from src.config.settings import settings
 from src.llm.providers import list_provider_configs
@@ -33,6 +33,11 @@ async def list_providers() -> ProvidersResponse:
     `supports`/`default_think` salen de src/config/models/, no de un
     campo configurado a mano -- no pueden desincronizarse del
     comportamiento real (ver docstring de src/config/models/__init__.py).
+
+    No incluye retrieval/max_turns (ver GenerationDefaults, eliminado):
+    esos parámetros pasaron a ser exclusivamente de .env, sin ningún
+    override ni valor "actual" que mostrarle al cliente -- ver
+    GenerationOptions en src/api/schemas/chat.py.
     """
     table = list_provider_configs()
     return ProvidersResponse(
@@ -47,11 +52,4 @@ async def list_providers() -> ProvidersResponse:
         },
         active_generation_provider=settings.provider_for(LLMRole.GENERATE),
         provider_roles={role.value: settings.provider_for(role) for role in LLMRole},
-        defaults=GenerationDefaults(
-            max_turns=settings.max_turns,
-            hard_top_k_initial=settings.hard_top_k_initial,
-            hard_top_k_final=settings.hard_top_k_final,
-            soft_top_k_initial=settings.soft_top_k_initial,
-            soft_top_k_final=settings.soft_top_k_final,
-        ),
     )

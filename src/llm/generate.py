@@ -83,9 +83,15 @@ def build_messages(
     contexto (_answer_raw() en src/api/routers/chat.py), que llama con
     system_prompt="" para omitir el system prompt de RAG por completo.
 
-    max_turns: override por-request (ver GenerationOptions en
-    src/api/schemas/chat.py). None usa settings.max_turns -- mismo
-    contrato que max_tokens, nunca muta settings.
+    max_turns: parámetro interno, ya sin ningún caller que lo
+    override -- ver GenerationOptions en src/api/schemas/chat.py, que
+    dejó de tener este campo (pasó a ser exclusivamente configuración de
+    servidor). None (el único valor que llega hoy) usa settings.max_turns.
+    Se mantiene como parámetro de la función en vez de eliminarlo del
+    todo porque sigue siendo una pieza interna razonable (ventana
+    deslizante de historial) que otro caller interno podría necesitar
+    ajustar sin tocar la firma; lo que se eliminó fue el camino que lo
+    exponía como override por-request desde la API.
     """
     effective_max_turns = settings.max_turns if max_turns is None else max_turns
     effective_system_prompt = system_prompt if system_prompt is not None else build_system_prompt()

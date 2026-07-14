@@ -60,12 +60,14 @@ def retrieve_node(state: RAGState) -> RAGStateUpdate:
     """Recupera chunks relevantes desde las colecciones FAISS activas."""
     logger.info(f"[graph] retrieve_node | question={state['question']!r} | mode={state['mode']}")
 
+    # top_k_initial/top_k_final ya no son overrides por-request (ver
+    # GenerationOptions en src/api/schemas/chat.py) -- search() resuelve
+    # ambos internamente contra settings.soft_top_k_*/hard_top_k_* según
+    # state["mode"].
     results, confidence = search(
         question=state["question"],
         mode=state["mode"],
         collections=state["collections"],
-        top_k_initial=state.get("top_k_initial"),
-        top_k_final=state.get("top_k_final"),
     )
 
     logger.info(f"[graph] retrieve_node | chunks={len(results)} | confidence={confidence:.4f}")
@@ -217,7 +219,6 @@ def generate_node(state: RAGState) -> RAGStateUpdate:
         max_tokens=state.get("max_tokens"),
         think_mode=state.get("think_mode"),
         extra=state.get("extra"),
-        max_turns=state.get("max_turns"),
     )
 
     return {"answer": answer}
@@ -338,7 +339,6 @@ def correct_node(state: RAGState) -> RAGStateUpdate:
         max_tokens=state.get("max_tokens"),
         think_mode=state.get("think_mode"),
         extra=state.get("extra"),
-        max_turns=state.get("max_turns"),
     )
 
     return {"answer": corrected, "review_passed": False}

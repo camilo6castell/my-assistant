@@ -6,9 +6,6 @@ import type { ChatMessage, ChatMode, Conversation } from "@/types/chat"
 const emptyGeneration = {
   maxTokens: null,
   thinkMode: null,
-  maxTurns: null,
-  topKInitial: null,
-  topKFinal: null,
 }
 
 function makeConversation(): Conversation {

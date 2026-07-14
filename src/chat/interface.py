@@ -178,7 +178,9 @@ def _handle_remove(session: ChatSession, raw_tokens: str) -> None:
 
 
 def _handle_question(session: ChatSession, question: str) -> None:
-    collections: list[LoadedCollection] = session.context_manager.get_loaded_collections()
+    collections: list[LoadedCollection] = (
+        session.context_manager.get_loaded_collections()
+    )
 
     if not collections:
         print("\n  Load a context first.  E.g., /context sociologia\n")
@@ -244,7 +246,9 @@ def _handle_agent_question(session: ChatSession, question: str) -> None:
     posteriores dentro de la misma sesión (build_rag_graph está cacheado
     en el atributo _graph del ChatSession extendido por start_chat).
     """
-    collections: list[LoadedCollection] = session.context_manager.get_loaded_collections()
+    collections: list[LoadedCollection] = (
+        session.context_manager.get_loaded_collections()
+    )
 
     if not collections:
         print("\n  Load a context first.  E.g., /context liberty\n")
@@ -271,14 +275,12 @@ def _handle_agent_question(session: ChatSession, question: str) -> None:
         "max_tokens": None,
         "think_mode": None,
         "extra": None,
-        # El CLI no tiene overrides de sesión para estos (a diferencia de
-        # GenerationOptions en la API) -- None usa siempre los defaults
-        # de settings, mismo comportamiento que antes de agregar estas
-        # claves a RAGState (ver src/api/routers/chat.py para el caso
-        # con overrides reales, vía _resolve_top_k y GenerationOptions.max_turns).
-        "top_k_initial": None,
-        "top_k_final": None,
-        "max_turns": None,
+        # El CLI no tiene archivos adjuntos ad-hoc (eso es una feature de
+        # la API web -- ver src/context/attachments.py y
+        # src/api/routers/chat.py); lista vacía = generate_node no
+        # inyecta nada extra en el prompt (ver inject_attachments() en
+        # src/prompts/builder.py, que devuelve `question` sin modificar
+        # si `attachments` está vacío).
         "attachments": [],
     }
 
@@ -298,7 +300,10 @@ def _handle_agent_question(session: ChatSession, question: str) -> None:
         return
 
     if reformulated:
-        print("  [agent] Low confidence in initial search → query reformulated automatically.\n")
+        print(
+            "  [agent] Low confidence in initial search → "
+            "query reformulated automatically.\n"
+        )
 
     print("  Answer:\n")
     print(answer)

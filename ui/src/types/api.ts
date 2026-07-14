@@ -6,16 +6,15 @@ export interface GenerationOptions {
    * La temperatura NO vive acá: es una propiedad fija de cada modelo,
    * definida en src/config/models/<backend>.py -- no hay override
    * por-request ni por-UI para eso (ver docstring del backend).
+   *
+   * Tampoco viven acá max_turns/top_k_initial/top_k_final: pasaron a
+   * ser exclusivamente configuración de servidor (.env) -- ver
+   * GenerationOptions en src/api/schemas/chat.py.
    */
   max_tokens?: number | null
   think_mode?: boolean | null
   /** Passthrough genérico sin validar en el cliente -- ver GenerationOptions.extra en el backend. */
   extra?: Record<string, unknown> | null
-  /** Ventana de historial (turnos) enviada al LLM. null = settings.max_turns. */
-  max_turns?: number | null
-  /** Overrides de retrieval, dependientes del modo SOFT/HARD del request. */
-  top_k_initial?: number | null
-  top_k_final?: number | null
 }
 
 export type ChatMode = "SOFT" | "HARD"
@@ -65,20 +64,11 @@ export interface ProviderInfo {
   default_think: boolean | null
 }
 
-export interface GenerationDefaults {
-  max_turns: number
-  hard_top_k_initial: number
-  hard_top_k_final: number
-  soft_top_k_initial: number
-  soft_top_k_final: number
-}
-
 export interface ProvidersResponse {
   providers: Record<string, ProviderInfo>
   active_generation_provider: string
   /** Mapa completo rol -> provider (ver LLMRole en el backend). */
   provider_roles: Record<string, string>
-  defaults: GenerationDefaults
 }
 
 export interface EphemeralFileInfo {

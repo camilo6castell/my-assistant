@@ -18,19 +18,34 @@ eso HEURISTIC_CHARS_PER_TOKEN queda en 3.5, no 4, para compensar).
 
 from __future__ import annotations
 
+import tiktoken
+
 from src.utils.logger import logger
 
 HEURISTIC_CHARS_PER_TOKEN = 3.5
 
-try:
-    import tiktoken
+# Anotación sin asignar: le da a mypy el tipo de _encoder de entrada
+# (Encoding | None) sin forzar una asignación inicial redundante --
+# ambas ramas del try/except de abajo asignan un valor compatible con
+# ese tipo. Sin esto, mypy infiere el tipo a partir de la primera
+# asignación (tiktoken.get_encoding(...) -> Encoding) y se queja al
+# asignar None en el except (error: typeddict/assignment).
+_encoder: tiktoken.Encoding | None
 
-    _encoder: tiktoken.Encoding | None = tiktoken.get_encoding("cl100k_base")
-except Exception:  # pragma: no cover -- tiktoken no instalado o falla al cargar
+try:
+    # tiktoken es dependencia dura (ver pyproject.toml), así que el
+    # import en sí no falla -- lo que puede fallar es get_encoding():
+    # la primera vez que corre, descarga el archivo de encoding desde
+    # una URL externa (no vendorizado), lo cual falla sin acceso de red
+    # a ese host puntual. Por eso el try/except envuelve la llamada, no
+    # el import.
+    _encoder = tiktoken.get_encoding("cl100k_base")
+except Exception:  # pragma: no cover -- típicamente sin red hacia el host de descarga
     _encoder = None
     logger.warning(
-        "[tokens] tiktoken no disponible -- usando heurística de caracteres "
-        "para estimar tokens (menos precisa, ver docstring del módulo)."
+        "[tokens] tiktoken no pudo cargar su encoding (sin red hacia el host "
+        "de descarga) -- usando heurística de caracteres para estimar tokens "
+        "(menos precisa, ver docstring del módulo)."
     )
 
 

@@ -131,10 +131,15 @@ def search(
     top_k_final: int | None = None,
 ) -> tuple[list[SearchResult], float]:
     """
-    top_k_initial/top_k_final: overrides por-request (ver GenerationOptions
-    en src/api/schemas/chat.py). None en cualquiera de los dos usa el
-    default de settings para el modo (SOFT/HARD) -- igual que max_tokens
-    en src/llm/generate.py, nunca mutan settings.
+    top_k_initial/top_k_final: parámetros internos, ya sin ningún caller
+    que los override -- ver GenerationOptions en src/api/schemas/chat.py,
+    que dejó de tener estos campos (retrieval pasó a ser exclusivamente
+    configuración de servidor, .env). None (el único valor que llega
+    hoy desde retrieve_node/chat.py) usa el default de settings para el
+    modo (SOFT/HARD). Se mantienen como parámetros de la función porque
+    siguen siendo una pieza interna razonable (ej. tests, o un futuro
+    caller interno que necesite un top_k puntual) -- lo que se eliminó
+    fue el camino que los exponía como override por-request desde la API.
     """
 
     if mode == ChatMode.SOFT:

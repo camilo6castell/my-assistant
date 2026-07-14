@@ -31,10 +31,12 @@ export interface GenerationOptionsState {
    * conversación desde el botón "Pensar".
    */
   thinkMode: boolean | null
-  /** Overrides solo para esta conversación -- null = usar el default de .env/settings. */
-  maxTurns: number | null
-  topKInitial: number | null
-  topKFinal: number | null
+  /**
+   * No hay maxTurns/topKInitial/topKFinal acá: pasaron a ser
+   * exclusivamente configuración de servidor (.env) -- ver
+   * GenerationOptions en src/api/schemas/chat.py. Ningún dato de
+   * conversación los necesita.
+   */
 }
 
 export interface Conversation {

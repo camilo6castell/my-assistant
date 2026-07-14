@@ -64,9 +64,6 @@ export function ChatView() {
           generation: {
             max_tokens: conversation.generation.maxTokens,
             think_mode: conversation.generation.thinkMode,
-            max_turns: conversation.generation.maxTurns,
-            top_k_initial: conversation.generation.topKInitial,
-            top_k_final: conversation.generation.topKFinal,
           },
           web_search: conversation.useWebSearch,
         },

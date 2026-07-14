@@ -1,13 +1,11 @@
-import { Layers, Paperclip, Sparkles, SlidersHorizontal } from "lucide-react";
+import { Layers, Paperclip, Sparkles } from "lucide-react";
 import { useParams } from "react-router-dom";
 import { AttachmentsSection } from "@/components/chat/AttachmentsSection";
 import { FilesSection } from "@/components/chat/FilesSection";
-import { AdvancedRetrievalSection } from "@/components/chat/AdvancedRetrievalSection";
 import { CollectionsPicker } from "@/components/layout/CollectionsPicker";
 import { useAttachments } from "@/hooks/useAttachments";
 import { useCollections } from "@/hooks/useCollections";
 import { useEphemeralFiles } from "@/hooks/useEphemeralFiles";
-import { useProviders } from "@/hooks/useProviders";
 import { useConversationsStore } from "@/stores/conversationsStore";
 import { useUiStore } from "@/stores/uiStore";
 import { SidebarSectionHeader } from "./SidebarSectionHeader";
@@ -26,6 +24,12 @@ import { SidebarShell } from "./SidebarShell";
  *
  * El sidebar izquierdo (ver LeftSidebar.tsx) es todo lo relacionado con
  * la CONVERSACIÓN en sí: historial de chats y modo de respuesta.
+ *
+ * No hay una sección de "ajustes avanzados" (Turnos de historial / Top
+ * K): esos parámetros pasaron a ser exclusivamente de .env (ver
+ * GenerationOptions en src/api/schemas/chat.py) -- sin override por
+ * conversación, así que no hay nada que la UI necesite mostrar o dejar
+ * tocar acá.
  */
 export function RightSidebar() {
   const { conversationId } = useParams<{ conversationId: string }>();
@@ -42,7 +46,6 @@ export function RightSidebar() {
   const attachments = useAttachments(conversationId ?? null);
   const ephemeralFiles = useEphemeralFiles(conversationId ?? null);
   const { data: collectionsData } = useCollections();
-  const { data: providersData } = useProviders();
 
   const attachmentCount = attachments.data?.files.length ?? 0;
   const ephemeralCount = ephemeralFiles.data?.files.length ?? 0;
@@ -138,7 +141,7 @@ export function RightSidebar() {
         <div className="mx-3 border-t border-white/10" />
 
         {/* 3. Colecciones de sistema -- indexadas con `python -m src.ingest`, permanentes */}
-        <section className="flex shrink-0 flex-col pt-3">
+        <section className="flex shrink-0 flex-col pt-3 pb-3">
           <SidebarSectionHeader
             icon={Layers}
             label="Colecciones de sistema"
@@ -150,16 +153,6 @@ export function RightSidebar() {
               active={conversation.activeCollections}
               onChange={(next) => setActiveCollections(conversation.id, next)}
             />
-          </div>
-        </section>
-
-        <div className="mx-3 border-t border-white/10" />
-
-        {/* 4. Ajustes avanzados de retrieval -- Turnos de historial, Top K */}
-        <section className="flex shrink-0 flex-col pt-3 pb-3">
-          <SidebarSectionHeader icon={SlidersHorizontal} label="Ajustes avanzados" />
-          <div className="pt-1">
-            <AdvancedRetrievalSection conversation={conversation} providers={providersData} />
           </div>
         </section>
       </div>
