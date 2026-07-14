@@ -60,7 +60,7 @@ export interface ProviderInfo {
    * Valor de thinking ya escrito en _MODELS[model] para este modelo --
    * null si el modelo no tiene modo de razonamiento (en ese caso
    * "think_mode" tampoco aparece en `supports`). El botón "Pensar" de
-   * GenerationSection arranca reflejando esto, no un false fijo.
+   * ResponseModeSection arranca reflejando esto, no un false fijo.
    */
   default_think: boolean | null
 }
@@ -106,38 +106,26 @@ export interface DeleteResponse {
 }
 
 // ---------------------------------------------------------------
-// Modo Task -- espejo de src/api/schemas/task.py (ver también
-// src/context/task_files.py, de donde TaskFileInfo se re-exporta en
-// el backend).
+// Archivos adjuntos ad-hoc -- espejo de src/api/schemas/attachments.py
+// (AttachmentInfo se re-exporta ahí desde src/context/attachments.py,
+// mismo patrón que EphemeralFileInfo/src/context/ephemeral.py).
 // ---------------------------------------------------------------
 
-export interface TaskFileInfo {
+export interface AttachmentInfo {
   file_id: string
   filename: string
   size_bytes: number
   uploaded_at: string
 }
 
-export interface TaskFilesResponse {
-  files: TaskFileInfo[]
-}
-
-export interface TaskRequest {
-  question: string
-  chat_history: { user: string; assistant: string }[]
-  conversation_id?: string | null
-  generation?: GenerationOptions | null
-}
-
-export interface TaskResponse {
-  answer: string
-  files_used: string[]
+export interface AttachmentsResponse {
+  files: AttachmentInfo[]
 }
 
 /**
  * Forma del `detail` de un 413 -- ver ContextLimitExceeded.as_detail()
  * en src/llm/context_guard.py. Devuelto tanto por /query, /query/agent
- * como por /task/query (mismo guard reutilizado en los tres).
+ * como por /query cuando cae en el caso sin colecciones/efímeros/web_search (mismo guard reutilizado en los tres casos, ver check_context_fit en src/llm/context_guard.py).
  */
 export interface ContextLimitExceededDetail {
   error: "context_limit_exceeded"

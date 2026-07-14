@@ -175,7 +175,7 @@ body {
   html {
     @apply font-sans;}}
 
-/* Botón "Agente" activo: degradado animado estilo IA (ver GenerationSection.tsx). */
+/* Botón "Agente" activo: degradado animado estilo IA (ver ResponseModeSection.tsx). */
 @keyframes agent-gradient-flow {
   0% {
     background-position: 0% 50%;

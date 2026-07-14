@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils"
  * Ícono de información con tooltip on-hover, sin depender de un portal
  * (@base-ui/react no trae un Tooltip todavía en este proyecto -- ver
  * components.json). Suficiente para textos cortos de ayuda dentro de
- * paneles con overflow, como GenerationSection.
+ * paneles con overflow, como ResponseModeSection.
  */
 export function InfoTooltip({ text, className }: { text: string; className?: string }) {
   return (

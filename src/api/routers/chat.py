@@ -16,7 +16,7 @@ from typing import Any, TypedDict, cast
 from fastapi import APIRouter, Depends, HTTPException
 from langgraph.graph.state import CompiledStateGraph
 
-from src.api.deps import get_context_manager, get_ephemeral_store, get_rag_graph
+from src.api.deps import get_attachment_store, get_context_manager, get_ephemeral_store, get_rag_graph
 from src.api.schemas.chat import (
     CollectionsResponse,
     GenerationOptions,
@@ -27,6 +27,7 @@ from src.api.schemas.chat import (
 from src.chat.types import TurnMemory
 from src.config.models import get_supports
 from src.config.settings import settings
+from src.context.attachments import AttachmentStore
 from src.context.ephemeral import EphemeralStore
 from src.context.manager import ContextManager, LoadedCollection
 from src.graph.state import RAGState
@@ -39,6 +40,7 @@ from src.prompts.builder import (
     build_system_prompt,
     build_web_supplement_prompt,
     build_web_supplement_system_prompt,
+    inject_attachments,
 )
 from src.retrieval.search import search
 from src.retrieval.web_search import WebSearchResult, WebSearchStatus, search_web
@@ -144,18 +146,23 @@ def _resolve_top_k(request: QueryRequest) -> tuple[int | None, int | None]:
     return top_k_initial, top_k_final
 
 
-def _require_context_source(collections: list[LoadedCollection], request: QueryRequest) -> None:
+def _fetch_attachments(
+    conversation_id: str | None, store: AttachmentStore
+) -> list[tuple[str, str]]:
+    """Adjuntos ad-hoc pendientes de esta conversación (ver src/context/attachments.py)."""
+    return store.list_contents(conversation_id)
+
+
+def _consume_attachments(conversation_id: str | None, store: AttachmentStore) -> None:
     """
-    422 si no hay ninguna fuente de contexto posible: ni colecciones/
-    archivos ni web_search=True. Compartido por /query y /query/agent --
-    idéntico chequeo, antes solo vivía en /query.
+    Borra los adjuntos ad-hoc de la conversación después de procesar una
+    query -- son de un solo uso (ver docstring de AttachmentStore). Se
+    llama al final de /query y /query/agent, en las tres ramas
+    (raw/web-only/RAG) por igual: los adjuntos aplican a cualquiera.
+    No-op si conversation_id es None o no había adjuntos.
     """
-    if not collections and not request.web_search:
-        raise HTTPException(
-            status_code=422,
-            detail="No context source available: no collections resolved and no "
-            "ephemeral files for this conversation_id.",
-        )
+    if conversation_id is not None:
+        store.remove_conversation(conversation_id)
 
 
 def _validate_web_search(request: QueryRequest) -> None:
@@ -245,10 +252,12 @@ def _no_context_detail(web_status: WebSearchStatus | None) -> dict[str, Any] | s
 def _answer_web_only(
     request: QueryRequest,
     chat_memory: list[TurnMemory],
+    attachments: list[tuple[str, str]],
 ) -> tuple[str, list[WebSource]]:
     """
-    Caso A (ver QueryRequest.web_search): sin colecciones/archivos, la
-    búsqueda web ES el contexto. Compartido por /query y /query/agent.
+    Caso A (ver QueryRequest.web_search): sin colecciones/archivos
+    efímeros, la búsqueda web ES el contexto. Compartido por /query y
+    /query/agent.
 
     Por qué /query/agent no corre su grafo (retrieve -> evaluate ->
     reformulate -> review) en este caso: ese pipeline está diseñado
@@ -262,6 +271,9 @@ def _answer_web_only(
     mismo camino simple -- el modo agente no aporta nada distinto acá
     porque no hay retrieval local que evaluar o corregir.
 
+    attachments: ver inject_attachments() en src/prompts/builder.py --
+    ortogonales al contexto web, se anteponen a la pregunta igual.
+
     Lanza HTTPException(422) si la búsqueda web no devuelve resultados
     utilizables -- no hay ninguna otra fuente de contexto a la que caer.
     """
@@ -271,7 +283,7 @@ def _answer_web_only(
 
     prompt = build_prompt(
         context_chunks=_web_context_chunks(outcome.results),
-        question=request.question,
+        question=inject_attachments(request.question, attachments),
         mode=request.mode,
     )
     answer = ask_llm(
@@ -281,6 +293,55 @@ def _answer_web_only(
         **_generation_kwargs(request.generation),
     )
     return answer, _web_sources_from_results(outcome.results)
+
+
+def _answer_raw(
+    request: QueryRequest,
+    chat_memory: list[TurnMemory],
+    attachments: list[tuple[str, str]],
+) -> str:
+    """
+    Caso sin ninguna fuente de contexto: ni colecciones, ni colección
+    efímera, ni web_search. Antes esta combinación devolvía 422 (ver
+    versión previa de QueryRequest._require_some_context_source, ya
+    eliminada); ahora es un modo válido y esperado -- preguntas sueltas,
+    o un archivo puntual adjunto (ver src/context/attachments.py) sin
+    ninguna colección elegida.
+
+    A diferencia de _answer_web_only() y del caso RAG normal, acá NO se
+    usa build_system_prompt() -- el LLM responde directo a la pregunta
+    del usuario (más los adjuntos, si los hay) SIN ningún system prompt
+    (ver build_messages() en src/llm/generate.py: system_prompt=""
+    omite el mensaje "system" del todo). El usuario es responsable de
+    darle rol/reglas/tarea al modelo en su propio mensaje -- este modo
+    no le impone ningún marco de RAG/grounding/citación.
+
+    Compartido por /query y /query/agent -- ninguno de los dos gana nada
+    corriendo su pipeline de grounding/review cuando no hay nada contra
+    qué anclar la respuesta (mismo argumento que _answer_web_only, ver
+    su docstring).
+    """
+    prompt = inject_attachments(request.question, attachments)
+    generation_kwargs = _generation_kwargs(request.generation)
+
+    try:
+        check_context_fit(
+            system_prompt="",
+            prompt=prompt,
+            chat_memory=chat_memory,
+            provider=settings.provider_for(LLMRole.GENERATE),
+            max_tokens=generation_kwargs["max_tokens"],
+        )
+    except ContextLimitExceeded as e:
+        raise HTTPException(status_code=413, detail=e.as_detail()) from e
+
+    return ask_llm(
+        prompt=prompt,
+        chat_memory=chat_memory,
+        provider=settings.provider_for(LLMRole.GENERATE),
+        system_prompt="",
+        **generation_kwargs,
+    )
 
 
 def _supplement_with_web(
@@ -397,21 +458,28 @@ async def list_collections(
 async def query(
     request: QueryRequest,
     ephemeral_store: EphemeralStore = Depends(get_ephemeral_store),
+    attachment_store: AttachmentStore = Depends(get_attachment_store),
 ) -> QueryResponse:
     """
     Pipeline lineal: retrieve → generate. Sin adaptive retrieval, prioriza velocidad.
 
-    web_search=True tiene dos comportamientos distintos según haya o no
-    colecciones/archivos (ver QueryRequest.web_search y los helpers
-    _answer_web_only / _supplement_with_web, compartidos con /query/agent):
+    Tres casos posibles, evaluados en este orden (ver helpers
+    compartidos con /query/agent):
 
-      Caso A -- sin fuentes locales: la búsqueda web ES el contexto.
-      Si no devuelve resultados, 422 (no hay nada con qué responder).
+      Caso raw -- sin colecciones/archivos efímeros y sin web_search:
+      no hay ninguna fuente de contexto RAG. Responde directo con el
+      LLM, sin system prompt (ver _answer_raw()). Los archivos adjuntos
+      ad-hoc (ver src/context/attachments.py), si los hay, SÍ se
+      inyectan -- no cuentan como "colección", pero son contexto igual.
+
+      Caso A -- sin fuentes locales pero con web_search=True: la
+      búsqueda web ES el contexto (ver _answer_web_only()). Si no
+      devuelve resultados, 422 (no hay nada con qué responder).
 
       Caso B -- con fuentes locales: el pipeline RAG corre sin cambios
       y genera `answer` primero; la web solo se intenta DESPUÉS, como un
       complemento opcional y best-effort que nunca puede degradar ni
-      bloquear la respuesta ya generada.
+      bloquear la respuesta ya generada (ver _supplement_with_web()).
     """
     logger.info(
         f"[api] POST /query | collections={request.collections} "
@@ -428,17 +496,21 @@ async def query(
     if ephemeral is not None:
         collections = [*collections, ephemeral]
 
-    _require_context_source(collections, request)
+    attachments = _fetch_attachments(request.conversation_id, attachment_store)
 
     chat_memory = _build_chat_memory(request.chat_history)
     used_web_search = False
     web_sources: list[WebSource] = []
     quota_exceeded = False
 
-    if not collections:
-        # Caso A. _require_context_source ya garantiza que si llegamos
-        # acá (sin collections ni ephemeral), web_search es True.
-        answer, web_sources = _answer_web_only(request, chat_memory)
+    if not collections and not request.web_search:
+        # Caso raw -- ver _answer_raw().
+        answer = _answer_raw(request, chat_memory, attachments)
+        confidence = 0.0  # no aplica sin retrieval, ver _answer_raw
+
+    elif not collections:
+        # Caso A -- sin colecciones/efímeros, pero con web_search=True.
+        answer, web_sources = _answer_web_only(request, chat_memory, attachments)
         confidence = 0.0  # no aplica a resultados web, ver _answer_web_only
         used_web_search = True
 
@@ -465,7 +537,7 @@ async def query(
 
         prompt = build_prompt(
             context_chunks=context_chunks,
-            question=request.question,
+            question=inject_attachments(request.question, attachments),
             mode=request.mode,
         )
 
@@ -498,6 +570,9 @@ async def query(
             )
             used_web_search = bool(web_sources)
 
+    # Adjuntos ad-hoc de un solo uso -- ver docstring de AttachmentStore.
+    _consume_attachments(request.conversation_id, attachment_store)
+
     # Ver comentario equivalente en src/llm/generate.py _complete(): log
     # diagnóstico para el bug de mensajes incompletos en el frontend. Si
     # esta longitud ya coincide con la logueada en _complete(), la
@@ -522,26 +597,34 @@ async def query(
 async def query_agent(
     request: QueryRequest,
     ephemeral_store: EphemeralStore = Depends(get_ephemeral_store),
+    attachment_store: AttachmentStore = Depends(get_attachment_store),
     rag_graph: CompiledStateGraph[RAGState] = Depends(get_rag_graph),
 ) -> QueryResponse:
     """
     Pipeline LangGraph: retrieve → evaluate → [reformulate →] generate → review → [correct].
 
-    web_search=True se integra sin tocar el grafo (ver graph/state.py,
-    graph/nodes.py -- ninguno de los dos cambió):
+    Mismos tres casos que /query (ver su docstring), integrados sin
+    tocar el grafo para los dos que lo saltan:
 
-      Caso A -- sin colecciones/archivos: usa _answer_web_only(), el
-      mismo camino simple que /query. El grafo entero se salta -- ver el
-      docstring de _answer_web_only para por qué (confidence/reformulate
-      /review están diseñados en torno al retrieval vectorial local, sin
-      un análogo significativo para resultados web).
+      Caso raw -- sin colecciones/efímeros y sin web_search: usa
+      _answer_raw(), igual que /query. El grafo entero se salta -- sin
+      contexto recuperado no hay nada que el review/correct pueda
+      evaluar.
+
+      Caso A -- sin colecciones/archivos, con web_search=True: usa
+      _answer_web_only(), el mismo camino simple que /query. Ver su
+      docstring para por qué (confidence/reformulate/review están
+      diseñados en torno al retrieval vectorial local, sin un análogo
+      significativo para resultados web).
 
       Caso B -- con colecciones: el grafo corre exactamente igual que
       antes de esta feature (retrieve -> evaluate -> ... -> review ->
       [correct]), termina, y SOLO DESPUÉS se intenta el complemento web
       sobre el `answer` ya revisado/corregido por el grafo -- mismo
       _supplement_with_web() que usa /query, best-effort y no puede
-      alterar lo que el grafo ya decidió.
+      alterar lo que el grafo ya decidió. Los adjuntos ad-hoc, si los
+      hay, viajan en RAGState.attachments y generate_node los inyecta
+      en el prompt final (ver src/graph/nodes.py).
     """
     logger.info(
         f"[api] POST /query/agent | collections={request.collections} "
@@ -558,23 +641,31 @@ async def query_agent(
     if ephemeral is not None:
         collections = [*collections, ephemeral]
 
-    _require_context_source(collections, request)
+    attachments = _fetch_attachments(request.conversation_id, attachment_store)
 
     chat_memory = _build_chat_memory(request.chat_history)
     used_web_search = False
     web_sources: list[WebSource] = []
     quota_exceeded = False
 
-    if not collections:
+    if not collections and not request.web_search:
+        # Caso raw -- ver _answer_raw().
+        answer = _answer_raw(request, chat_memory, attachments)
+        confidence = 0.0
+        reformulated = False
+
+    elif not collections:
         # Caso A -- ver docstring de _answer_web_only.
-        answer, web_sources = _answer_web_only(request, chat_memory)
+        answer, web_sources = _answer_web_only(request, chat_memory, attachments)
         confidence = 0.0
         reformulated = False
         used_web_search = True
 
     else:
         # Caso normal: el grafo corre exactamente igual que antes de
-        # esta feature -- ni graph/state.py ni graph/nodes.py cambiaron.
+        # esta feature -- ni graph/state.py (salvo el nuevo campo
+        # attachments) ni graph/nodes.py cambiaron su lógica de
+        # retrieval/review.
         gen_kwargs = _generation_kwargs(request.generation)
 
         initial_state: RAGState = {
@@ -595,6 +686,7 @@ async def query_agent(
             "max_turns": gen_kwargs["max_turns"],
             "top_k_initial": top_k_initial,
             "top_k_final": top_k_final,
+            "attachments": attachments,
         }
 
         # CompiledStateGraph.invoke() está tipado en la librería como
@@ -632,6 +724,9 @@ async def query_agent(
                 generation=request.generation,
             )
             used_web_search = bool(web_sources)
+
+    # Adjuntos ad-hoc de un solo uso -- ver docstring de AttachmentStore.
+    _consume_attachments(request.conversation_id, attachment_store)
 
     logger.info(
         f"[api] POST /query/agent | respondiendo | answer_len={len(answer)} "

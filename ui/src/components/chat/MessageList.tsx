@@ -2,7 +2,13 @@ import { useEffect, useRef } from "react";
 import type { ChatMessage } from "@/types/chat";
 import { MessageBubble } from "./MessageBubble";
 
-export function MessageList({ messages }: { messages: ChatMessage[] }) {
+export function MessageList({
+  messages,
+  onDeleteMessage,
+}: {
+  messages: ChatMessage[]
+  onDeleteMessage?: (messageId: string) => void
+}) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const lastMessage = messages[messages.length - 1];
   const lastMessageContent = lastMessage?.content;
@@ -14,7 +20,11 @@ export function MessageList({ messages }: { messages: ChatMessage[] }) {
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-4 overflow-y-auto px-8 py-6">
       {messages.map((message) => (
-        <MessageBubble key={message.id} message={message} />
+        <MessageBubble
+          key={message.id}
+          message={message}
+          onDelete={onDeleteMessage ? () => onDeleteMessage(message.id) : undefined}
+        />
       ))}
       <div ref={bottomRef} />
     </div>

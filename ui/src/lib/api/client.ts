@@ -1,5 +1,6 @@
 import axios from "axios"
 import type {
+  AttachmentsResponse,
   CollectionsResponse,
   ContextLimitExceededDetail,
   DeleteResponse,
@@ -8,9 +9,6 @@ import type {
   ProvidersResponse,
   QueryRequest,
   QueryResponse,
-  TaskFilesResponse,
-  TaskRequest,
-  TaskResponse,
 } from "@/types/api"
 
 export const api = axios.create({
@@ -74,7 +72,7 @@ export function apiErrorMessage(error: unknown): string {
  * _answer_web_only, o en el 200 normal de /query y /query/agent cuando
  * el complemento web falló por esto -- ver QueryResponse.web_search_quota_exceeded).
  * Usado en ChatView.tsx para persistir el flag en el store y que
- * GenerationSection.tsx deshabilite el botón "Web".
+ * ResponseModeSection.tsx deshabilite el botón "Web".
  */
 export function isWebSearchQuotaExceededError(error: unknown): boolean {
   const detail = getDetail(error)
@@ -164,46 +162,45 @@ export async function deleteEphemeralConversation(
 }
 
 // ---------------------------------------------------------------
-// Modo Task -- ver src/api/routers/task.py
+// Archivos adjuntos ad-hoc -- ver src/api/routers/attachments.py.
+// De un solo uso: se consumen en el backend después de una query que
+// los incluyó (ver _consume_attachments en src/api/routers/chat.py),
+// así que la UI los vuelve a listar (queryClient.invalidateQueries)
+// después de cada envío para reflejar que la lista quedó vacía.
 // ---------------------------------------------------------------
 
-export async function postTaskQuery(payload: TaskRequest): Promise<TaskResponse> {
-  const { data } = await api.post<TaskResponse>("/task/query", payload)
-  return data
-}
-
-export async function uploadTaskFile(params: {
+export async function uploadAttachment(params: {
   file: File
   conversationId: string
-}): Promise<TaskFilesResponse["files"][number]> {
+}): Promise<AttachmentsResponse["files"][number]> {
   const form = new FormData()
   form.append("file", params.file)
   form.append("conversation_id", params.conversationId)
 
-  const { data } = await api.post<TaskFilesResponse["files"][number]>(
-    "/task/files",
+  const { data } = await api.post<AttachmentsResponse["files"][number]>(
+    "/attachments",
     form,
     { headers: { "Content-Type": "multipart/form-data" } }
   )
   return data
 }
 
-export async function listTaskFiles(conversationId: string): Promise<TaskFilesResponse> {
-  const { data } = await api.get<TaskFilesResponse>(`/task/files/${conversationId}`)
+export async function listAttachments(conversationId: string): Promise<AttachmentsResponse> {
+  const { data } = await api.get<AttachmentsResponse>(`/attachments/${conversationId}`)
   return data
 }
 
-export async function deleteTaskFile(
+export async function deleteAttachment(
   conversationId: string,
   fileId: string
 ): Promise<DeleteResponse> {
   const { data } = await api.delete<DeleteResponse>(
-    `/task/files/${conversationId}/${fileId}`
+    `/attachments/${conversationId}/${fileId}`
   )
   return data
 }
 
-export async function deleteTaskConversation(conversationId: string): Promise<DeleteResponse> {
-  const { data } = await api.delete<DeleteResponse>(`/task/files/${conversationId}`)
+export async function deleteAllAttachments(conversationId: string): Promise<DeleteResponse> {
+  const { data } = await api.delete<DeleteResponse>(`/attachments/${conversationId}`)
   return data
 }

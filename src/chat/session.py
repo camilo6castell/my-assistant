@@ -6,7 +6,6 @@ from src.context.manager import ContextManager, LoadedCollection
 
 
 class ChatSession:
-
     def __init__(self) -> None:
         self.context_manager: ContextManager = ContextManager()
         self.soft_mode: bool = True
@@ -87,4 +86,9 @@ class ChatSession:
             names = [ctx.split("/")[-1] for ctx in sorted(active)]
             ctx_label = ", ".join(names)
 
-        return f"[ CONTEXT: {ctx_label} | MODE: {mode_label} | AGENT: {'ON' if self.agent_active else 'OFF'} ]\n> "
+        return (
+            f"[ CONTEXT: {ctx_label} "
+            + f"| MODE: {mode_label} "
+            + f"| AGENT: {'ON' if self.agent_active else 'OFF'} ]"
+            + "\n> "
+        )

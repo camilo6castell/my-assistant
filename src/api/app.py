@@ -8,11 +8,17 @@ mismos endpoints -- no hay archivos de API por-cliente, la separación
 es por dominio funcional (ver src/api/routers/).
 
 Endpoints (todos bajo /api/v1, ver routers/ para el detalle):
-  chat.py    /collections, /query, /query/agent  -- funciones regulares
-  files.py   /files                               -- upload + colecciones efímeras
-  config.py  /config/providers                    -- capacidades por provider (solo lectura)
-  task.py    /task/query, /task/files             -- modo Task, sin RAG (ver
-                                                       src/context/task_files.py)
+  chat.py        /collections, /query, /query/agent  -- funciones regulares
+                                                          (incluye el caso sin
+                                                          ninguna fuente de
+                                                          contexto -- ver
+                                                          _answer_raw en
+                                                          routers/chat.py)
+  files.py       /files                               -- upload + colecciones efímeras
+  config.py      /config/providers                    -- capacidades por provider (solo lectura)
+  attachments.py /attachments                         -- archivos ad-hoc de un solo
+                                                          envío (ver
+                                                          src/context/attachments.py)
 
 GET /health queda fuera de /api/v1 a propósito: es un liveness probe
 para load balancers, no un recurso versionado de la API.
@@ -38,7 +44,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from src.api import deps
-from src.api.routers import chat, config, files, task
+from src.api.routers import attachments, chat, config, files
 from src.graph import build_rag_graph
 from src.utils.logger import logger
 
@@ -49,11 +55,11 @@ _CLEANUP_INTERVAL_SECONDS = 60 * 30
 
 
 async def _cleanup_loop() -> None:
-    """Tarea de fondo: barre colecciones efímeras y archivos de Task vencidos por TTL."""
+    """Tarea de fondo: barre colecciones efímeras y adjuntos sin enviar, vencidos por TTL."""
     while True:
         await asyncio.sleep(_CLEANUP_INTERVAL_SECONDS)
         deps.get_ephemeral_store().sweep_expired(deps.EPHEMERAL_TTL)
-        deps.get_task_file_store().sweep_expired(deps.EPHEMERAL_TTL)
+        deps.get_attachment_store().sweep_expired(deps.EPHEMERAL_TTL)
 
 
 @asynccontextmanager
@@ -93,7 +99,7 @@ app.add_middleware(
 app.include_router(chat.router, prefix="/api/v1")
 app.include_router(files.router, prefix="/api/v1")
 app.include_router(config.router, prefix="/api/v1")
-app.include_router(task.router, prefix="/api/v1")
+app.include_router(attachments.router, prefix="/api/v1")
 
 
 @app.exception_handler(Exception)

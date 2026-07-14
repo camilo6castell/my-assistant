@@ -41,6 +41,7 @@ from src.prompts.builder import (
     build_review_prompt,
     build_review_system_prompt,
     build_system_prompt,
+    inject_attachments,
 )
 from src.retrieval.search import search
 from src.utils.logger import logger
@@ -187,7 +188,7 @@ def generate_node(state: RAGState) -> RAGStateUpdate:
 
     prompt = build_prompt(
         context_chunks=context_chunks,
-        question=state["question"],
+        question=inject_attachments(state["question"], state["attachments"]),
         mode=state["mode"],
     )
 

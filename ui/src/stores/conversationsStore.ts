@@ -22,7 +22,6 @@ function makeConversation(): Conversation {
     useAgent: false,
     useWebSearch: false,
     generation: { ...emptyGeneration },
-    taskModeActive: false,
   }
 }
 
@@ -42,7 +41,7 @@ interface ConversationsState {
    * estado de LA CUENTA de Tavily, no una preferencia del chat, así que
    * aplica a todas las conversaciones por igual hasta que el usuario lo
    * reinicie manualmente (ver resetWebSearchQuotaExceeded en
-   * GenerationSection.tsx) -- ej. después de actualizar el plan o al
+   * ResponseModeSection.tsx) -- ej. después de actualizar el plan o al
    * empezar un nuevo mes de facturación.
    */
   webSearchQuotaExceeded: boolean
@@ -56,12 +55,12 @@ interface ConversationsState {
   setMode: (id: string, mode: ChatMode) => void
   setUseAgent: (id: string, useAgent: boolean) => void
   setUseWebSearch: (id: string, useWebSearch: boolean) => void
-  setTaskModeActive: (id: string, taskModeActive: boolean) => void
   setGeneration: (id: string, patch: Partial<Conversation["generation"]>) => void
   setWebSearchQuotaExceeded: (value: boolean) => void
 
   addMessage: (id: string, message: ChatMessage) => void
   updateMessage: (id: string, messageId: string, patch: Partial<ChatMessage>) => void
+  deleteMessage: (id: string, messageId: string) => void
 }
 
 export const useConversationsStore = create<ConversationsState>()(
@@ -119,13 +118,6 @@ export const useConversationsStore = create<ConversationsState>()(
           conversations: s.conversations.map((c) => (c.id === id ? { ...c, useWebSearch } : c)),
         })),
 
-      setTaskModeActive: (id, taskModeActive) =>
-        set((s) => ({
-          conversations: s.conversations.map((c) =>
-            c.id === id ? { ...c, taskModeActive } : c
-          ),
-        })),
-
       setGeneration: (id, patch) =>
         set((s) => ({
           conversations: s.conversations.map((c) =>
@@ -161,6 +153,15 @@ export const useConversationsStore = create<ConversationsState>()(
               : c
           ),
         })),
+
+      deleteMessage: (id, messageId) =>
+        set((s) => ({
+          conversations: s.conversations.map((c) =>
+            c.id === id
+              ? { ...c, messages: c.messages.filter((m) => m.id !== messageId) }
+              : c
+          ),
+        })),
     }),
     {
       name: "myassistant-conversations",
@@ -179,7 +180,6 @@ export const useConversationsStore = create<ConversationsState>()(
           conversations: persisted.conversations.map((c) => ({
             ...c,
             useWebSearch: c.useWebSearch ?? false,
-            taskModeActive: c.taskModeActive ?? false,
           })),
         }
       },

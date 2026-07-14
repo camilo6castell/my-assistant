@@ -1,15 +1,13 @@
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { nanoid } from "nanoid";
 import { Navigate, useParams } from "react-router-dom";
 import {
   apiErrorMessage,
   isWebSearchQuotaExceededError,
   postQuery,
-  postTaskQuery,
 } from "@/lib/api/client";
 import { useConversationsStore } from "@/stores/conversationsStore";
 import type { ChatMessage } from "@/types/chat";
-import type { QueryResponse, TaskResponse } from "@/types/api";
 import { ChatToolbar } from "./ChatToolbar";
 import { MessageInput } from "./MessageInput";
 import { MessageList } from "./MessageList";
@@ -40,30 +38,21 @@ export function ChatView() {
   );
   const addMessage = useConversationsStore((s) => s.addMessage);
   const updateMessage = useConversationsStore((s) => s.updateMessage);
+  const deleteMessage = useConversationsStore((s) => s.deleteMessage);
   const setWebSearchQuotaExceeded = useConversationsStore(
     (s) => s.setWebSearchQuotaExceeded,
   );
+  const queryClient = useQueryClient();
 
-  const sendMutation = useMutation<QueryResponse | TaskResponse, Error, string>({
+  // Un solo camino de envío para toda conversación -- /query decide
+  // internamente entre raw/web-only/RAG según haya o no colecciones/
+  // archivos efímeros/web_search (ver _answer_raw en
+  // src/api/routers/chat.py). Sin colecciones activas ni web_search, el
+  // usuario puede seguir preguntando: la pregunta (más los archivos
+  // adjuntos, si los hay) va directo al LLM sin ningún system prompt.
+  const sendMutation = useMutation({
     mutationFn: (text: string) => {
       if (!conversation) throw new Error("Conversación no encontrada");
-
-      if (conversation.taskModeActive) {
-        // Modo Task: sin colecciones, sin modo SOFT/HARD, sin web search --
-        // ver build_task_system_prompt() en el backend. Los archivos de
-        // contexto no van en el body: el backend los lee del
-        // TaskFileStore usando conversation_id (ver TaskFilesSection.tsx).
-        return postTaskQuery({
-          question: text,
-          chat_history: toHistory(conversation.messages),
-          conversation_id: conversation.id,
-          generation: {
-            max_tokens: conversation.generation.maxTokens,
-            think_mode: conversation.generation.thinkMode,
-            max_turns: conversation.generation.maxTurns,
-          },
-        });
-      }
 
       return postQuery(
         {
@@ -107,10 +96,7 @@ export function ChatView() {
       content: "",
       createdAt: Date.now(),
       isPending: true,
-      pendingLabel:
-        !conversation.taskModeActive && conversation.useWebSearch
-          ? "Revisando la web..."
-          : undefined,
+      pendingLabel: conversation.useWebSearch ? "Revisando la web..." : undefined,
     };
 
     addMessage(conversation.id, userMsg);
@@ -118,33 +104,27 @@ export function ChatView() {
 
     sendMutation.mutate(text, {
       onSuccess: (data) => {
-        // postTaskQuery devuelve TaskResponse (solo answer/files_used);
-        // postQuery devuelve QueryResponse (con confidence/collections_used/
-        // etc). "collections_used" discrimina entre las dos formas sin
-        // necesitar un flag aparte.
-        if ("collections_used" in data) {
-          updateMessage(conversation.id, assistantId, {
-            content: data.answer,
-            confidence: data.confidence,
-            collectionsUsed: data.collections_used,
-            reformulated: data.reformulated,
-            usedWebSearch: data.used_web_search,
-            webSources: data.web_sources ?? undefined,
-            isPending: false,
-          });
-          // Caso B silencioso (ver _supplement_with_web en el backend): la
-          // respuesta principal se generó igual, pero el complemento web
-          // se omitió por cuota agotada -- el mensaje no lo refleja, así
-          // que esta es la única señal.
-          if (data.web_search_quota_exceeded) {
-            setWebSearchQuotaExceeded(true);
-          }
-        } else {
-          updateMessage(conversation.id, assistantId, {
-            content: data.answer,
-            isPending: false,
-          });
+        updateMessage(conversation.id, assistantId, {
+          content: data.answer,
+          confidence: data.confidence,
+          collectionsUsed: data.collections_used,
+          reformulated: data.reformulated,
+          usedWebSearch: data.used_web_search,
+          webSources: data.web_sources ?? undefined,
+          isPending: false,
+        });
+        // Caso B silencioso (ver _supplement_with_web en el backend): la
+        // respuesta principal se generó igual, pero el complemento web
+        // se omitió por cuota agotada -- el mensaje no lo refleja, así
+        // que esta es la única señal.
+        if (data.web_search_quota_exceeded) {
+          setWebSearchQuotaExceeded(true);
         }
+        // Los archivos adjuntos, si había, se consumieron en el backend
+        // al procesar esta query (ver _consume_attachments en
+        // src/api/routers/chat.py) -- se refresca la lista para que el
+        // sidebar derecho refleje que ya no están adjuntos.
+        queryClient.invalidateQueries({ queryKey: ["attachments", conversation.id] });
       },
       onError: (error) => {
         updateMessage(conversation.id, assistantId, {
@@ -158,18 +138,22 @@ export function ChatView() {
         if (isWebSearchQuotaExceededError(error)) {
           setWebSearchQuotaExceeded(true);
         }
-        // 413 del guard de contexto (src/llm/context_guard.py, tanto en
-        // /query como en /task/query) llega acá también: apiErrorMessage()
-        // ya arma el mensaje legible (tokens estimados/límite) a partir
-        // del detail estructurado, así que no necesita un caso aparte.
+        // 413 del guard de contexto (src/llm/context_guard.py) llega acá
+        // también: apiErrorMessage() ya arma el mensaje legible (tokens
+        // estimados/límite) a partir del detail estructurado.
       },
     });
+  }
+
+  function handleDeleteMessage(messageId: string) {
+    if (!conversation) return;
+    deleteMessage(conversation.id, messageId);
   }
 
   return (
     <div className="flex h-full flex-col">
       <ChatToolbar conversation={conversation} />
-      <MessageList messages={conversation.messages} />
+      <MessageList messages={conversation.messages} onDeleteMessage={handleDeleteMessage} />
       <MessageInput onSend={handleSend} disabled={sendMutation.isPending} />
     </div>
   );

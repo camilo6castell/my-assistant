@@ -2,11 +2,11 @@ import { FileCode2, Trash2, UploadCloud } from "lucide-react"
 import { useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { apiErrorMessage } from "@/lib/api/client"
-import type { useTaskFiles } from "@/hooks/useTaskFiles"
+import type { useAttachments } from "@/hooks/useAttachments"
 
-// Espejo de SUPPORTED_SUFFIXES en src/context/task_files.py -- si agregás
-// una extensión ahí, agregala acá también para que el selector de
-// archivos del navegador no la oculte.
+// Espejo de SUPPORTED_SUFFIXES en src/context/attachments.py -- si
+// agregás una extensión ahí, agregala acá también para que el selector
+// de archivos del navegador no la oculte.
 const ACCEPTED_EXTENSIONS =
   ".txt,.md,.json,.py,.js,.ts,.tsx,.jsx,.java,.yaml,.yml,.toml,.csv,.sql,.sh,.env,.cfg,.ini,.xml,.css,.html"
 
@@ -16,16 +16,22 @@ function formatSize(bytes: number): string {
 }
 
 /**
- * Panel de archivos del modo Task -- reemplaza a <FilesSection> mientras
- * conversation.taskModeActive es true (ver RightSidebar.tsx). A
- * diferencia de FilesSection, acá no hay toggle de "colección
- * permanente": los archivos de Task nunca se indexan, solo se inyectan
- * crudos en el prompt (ver src/context/task_files.py).
+ * Archivos que se inyectan enteros en la PRÓXIMA query -- ver
+ * src/context/attachments.py. Se aplican sin importar el modo de
+ * respuesta: con colecciones activas, sin ninguna (ver _answer_raw en
+ * el backend), o con búsqueda web. Una vez enviados, el backend los
+ * consume (los borra) y esta lista vuelve a estar vacía -- por eso
+ * ChatView.tsx invalida la query de useAttachments después de cada
+ * envío exitoso.
  */
-export function TaskFilesSection({ files }: { files: ReturnType<typeof useTaskFiles> }) {
+export function AttachmentsSection({
+  attachments,
+}: {
+  attachments: ReturnType<typeof useAttachments>
+}) {
   const inputRef = useRef<HTMLInputElement>(null)
 
-  const fileCount = files.data?.files.length ?? 0
+  const fileCount = attachments.data?.files.length ?? 0
 
   function handlePickFile() {
     inputRef.current?.click()
@@ -35,15 +41,14 @@ export function TaskFilesSection({ files }: { files: ReturnType<typeof useTaskFi
     const file = e.target.files?.[0]
     e.target.value = ""
     if (!file) return
-    files.upload.mutate(file)
+    attachments.upload.mutate(file)
   }
 
   return (
     <div className="space-y-3 px-3">
       <p className="text-[11px] leading-snug text-muted-foreground/70">
-        Estos archivos se pasan enteros como contexto al modelo -- sin
-        búsqueda ni resúmenes. Ideal para pegarle un módulo puntual a
-        refactorizar.
+        Se mandan enteros con tu próximo mensaje -- sin búsqueda ni
+        resúmenes. Una vez enviados, dejan de estar adjuntos.
       </p>
 
       <input
@@ -57,24 +62,26 @@ export function TaskFilesSection({ files }: { files: ReturnType<typeof useTaskFi
         variant="secondary"
         size="sm"
         className="w-full gap-1.5"
-        disabled={files.upload.isPending}
+        disabled={attachments.upload.isPending}
         onClick={handlePickFile}
       >
         <UploadCloud className="size-3.5" />
-        {files.upload.isPending ? "Subiendo..." : "Subir archivo"}
+        {attachments.upload.isPending ? "Subiendo..." : "Adjuntar archivo"}
       </Button>
 
-      {files.upload.isError && (
-        <p className="text-xs text-destructive">{apiErrorMessage(files.upload.error)}</p>
+      {attachments.upload.isError && (
+        <p className="text-xs text-destructive">
+          {apiErrorMessage(attachments.upload.error)}
+        </p>
       )}
 
       {fileCount === 0 ? (
         <p className="py-2 text-center text-xs text-muted-foreground">
-          Sin archivos en esta tarea todavía.
+          Sin adjuntos pendientes.
         </p>
       ) : (
         <ul className="space-y-1">
-          {files.data?.files.map((f) => (
+          {attachments.data?.files.map((f) => (
             <li
               key={f.file_id}
               className="flex items-center justify-between gap-2 rounded-md px-2 py-1.5 hover:bg-white/5"
@@ -88,8 +95,8 @@ export function TaskFilesSection({ files }: { files: ReturnType<typeof useTaskFi
               </span>
               <button
                 type="button"
-                aria-label={`Borrar ${f.filename}`}
-                onClick={() => files.remove.mutate(f.file_id)}
+                aria-label={`Quitar ${f.filename}`}
+                onClick={() => attachments.remove.mutate(f.file_id)}
                 className="shrink-0 rounded p-1 text-muted-foreground hover:bg-white/10 hover:text-destructive"
               >
                 <Trash2 className="size-3.5" />

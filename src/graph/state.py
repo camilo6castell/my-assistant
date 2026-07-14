@@ -26,6 +26,14 @@ Campos:
                    temperatura NO vive acá -- es una propiedad fija de
                    cada modelo (src/config/models/<backend>.py), nunca
                    un override por-request.
+  attachments      archivos adjuntos ad-hoc (ver
+                   src/context/attachments.py), como lista de
+                   (filename, content). Solo generate_node los inyecta
+                   en el prompt final (ver inject_attachments() en
+                   src/prompts/builder.py) -- retrieve_node y
+                   reformulate_node usan `question` sin adjuntos, para
+                   no ensuciar el embedding de búsqueda ni la
+                   reformulación con contenido de archivo.
 
 NOTA: este módulo NO usa `from __future__ import annotations`.
 LangGraph llama get_type_hints(RAGState) en runtime para inspeccionar
@@ -76,6 +84,7 @@ class RAGState(TypedDict):
     top_k_initial: int | None
     top_k_final: int | None
     max_turns: int | None
+    attachments: list[tuple[str, str]]
 
 
 class RAGStateUpdate(TypedDict, total=False):
@@ -107,3 +116,4 @@ class RAGStateUpdate(TypedDict, total=False):
     top_k_initial: int | None
     top_k_final: int | None
     max_turns: int | None
+    attachments: list[tuple[str, str]]

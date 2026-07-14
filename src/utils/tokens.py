@@ -25,7 +25,7 @@ HEURISTIC_CHARS_PER_TOKEN = 3.5
 try:
     import tiktoken
 
-    _encoder = tiktoken.get_encoding("cl100k_base")
+    _encoder: tiktoken.Encoding | None = tiktoken.get_encoding("cl100k_base")
 except Exception:  # pragma: no cover -- tiktoken no instalado o falla al cargar
     _encoder = None
     logger.warning(

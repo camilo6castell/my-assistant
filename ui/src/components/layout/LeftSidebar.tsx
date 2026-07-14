@@ -2,20 +2,20 @@ import { formatDistanceToNow } from "date-fns";
 import { es } from "date-fns/locale";
 import {
   Check,
-  Layers,
   MessageSquarePlus,
   MessagesSquare,
   Pencil,
+  Settings2,
   Trash2,
 } from "lucide-react";
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { useCollections } from "@/hooks/useCollections";
+import { ResponseModeSection } from "@/components/chat/ResponseModeSection";
+import { useProviders } from "@/hooks/useProviders";
 import { cn } from "@/lib/utils";
 import { useConversationsStore } from "@/stores/conversationsStore";
 import { useUiStore } from "@/stores/uiStore";
-import { CollectionsPicker } from "./CollectionsPicker";
 import { SidebarSectionHeader } from "./SidebarSectionHeader";
 import { SidebarShell } from "./SidebarShell";
 
@@ -26,9 +26,6 @@ export function Sidebar() {
   const createConversation = useConversationsStore((s) => s.createConversation);
   const deleteConversation = useConversationsStore((s) => s.deleteConversation);
   const renameConversation = useConversationsStore((s) => s.renameConversation);
-  const setActiveCollections = useConversationsStore(
-    (s) => s.setActiveCollections,
-  );
   const activeConversation = useConversationsStore((s) =>
     s.conversations.find((c) => c.id === conversationId),
   );
@@ -41,7 +38,7 @@ export function Sidebar() {
   const setLeftWidth = useUiStore((s) => s.setLeftWidth);
   const toggleLeftCollapsed = useUiStore((s) => s.toggleLeftCollapsed);
 
-  const { data: collectionsData } = useCollections();
+  const { data: providersData } = useProviders();
 
   function handleNewConversation() {
     const id = createConversation();
@@ -95,10 +92,10 @@ export function Sidebar() {
       <button
         type="button"
         onClick={toggleLeftCollapsed}
-        title="Colecciones"
+        title="Generación"
         className="flex size-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-white/10 hover:text-foreground"
       >
-        <Layers className="size-4" />
+        <Settings2 className="size-4" />
       </button>
     </>
   );
@@ -234,32 +231,20 @@ export function Sidebar() {
 
       <section className="flex h-[fit-content] max-h-[50%] min-h-0 flex-col pt-3">
         <SidebarSectionHeader
-          icon={Layers}
-          label="Colecciones"
-          count={collectionsData?.collections.length ?? 0}
+          icon={Settings2}
+          label="Generación"
         />
-        <div className="h-[fit-content] max-h-full min-h-0 overflow-y-auto px-3 pb-4">
+        <div className="h-[fit-content] max-h-full min-h-0 overflow-y-auto pb-4">
           {activeConversation ? (
-            <CollectionsPicker
-              collections={collectionsData?.collections ?? []}
-              active={activeConversation.activeCollections}
-              onChange={(next) =>
-                setActiveCollections(activeConversation.id, next)
-              }
-              disabled={activeConversation.taskModeActive}
+            <ResponseModeSection
+              conversation={activeConversation}
+              providers={providersData}
             />
           ) : (
-            <>
-              <p className="px-2 pb-2 text-center text-xs text-muted-foreground">
-                Elige o creá una conversación para seleccionar colecciones.
-              </p>
-              <CollectionsPicker
-                collections={collectionsData?.collections ?? []}
-                active={[]}
-                onChange={() => {}}
-                disabled
-              />
-            </>
+            <p className="px-3 py-4 text-center text-xs text-muted-foreground">
+              Elegí o creá una conversación para configurar el modo de
+              respuesta.
+            </p>
           )}
         </div>
       </section>

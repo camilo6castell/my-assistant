@@ -1,16 +1,22 @@
 """
-Almacén de archivos crudos para el modo Task: a diferencia de
-EphemeralStore (src/context/ephemeral.py), acá NO hay chunking ni
-embeddings -- el modo Task no hace retrieval, así que no tiene sentido
-pagar ese costo. El archivo completo se guarda como texto y se inyecta
-entero en el prompt (ver build_task_prompt() en src/prompts/builder.py).
+Almacén de archivos "adjuntos" ad-hoc: archivos que el usuario sube para
+que se inyecten crudos (sin chunking ni embeddings) en el prompt de su
+PRÓXIMA query -- ver inject_attachments() en src/prompts/builder.py y
+QueryRequest en src/api/schemas/chat.py.
 
-Mismo motivo de existencia en memoria (no disco), mismo indexado por
-conversation_id, y mismo mecanismo de TTL que EphemeralStore -- ver ese
-docstring para el razonamiento completo de concurrencia/single-worker.
-Reutiliza el mismo EPHEMERAL_TTL (src/api/deps.py) en vez de definir
-uno propio: son dos formas de "contexto de una sola conversación" con
-la misma semántica de vida útil.
+A diferencia de EphemeralStore (src/context/ephemeral.py), que indexa
+archivos en FAISS para retrieval semántico y persiste mientras dure la
+conversación, acá no hay indexado ni persistencia más allá de un solo
+envío: una vez que una query se procesa con archivos adjuntos
+presentes, el router los consume (AttachmentStore.remove_conversation)
+y la lista vuelve a estar vacía -- ver "Archivos adjuntos" en
+RightSidebar.tsx, que se refresca después de cada envío para reflejar
+esto.
+
+Aplican en cualquier modo de respuesta: con colecciones activas, sin
+ninguna (ver _answer_raw en src/api/routers/chat.py), o con
+web_search. No son "contexto RAG" en sí mismos -- son contexto puntual
+del usuario para esta pregunta.
 """
 
 from __future__ import annotations
@@ -24,10 +30,10 @@ from pydantic import BaseModel
 from src.utils.logger import logger
 
 # Extensiones de texto plano que tiene sentido inyectar crudas en un
-# prompt de código. A diferencia de _SUPPORTED_SUFFIXES en
-# api/routers/files.py (.pdf/.html/.txt, pensado para RAG), acá el caso
-# de uso es "pegame este módulo para refactorizarlo" -- todo lo que sea
-# texto plano de código/config aplica.
+# prompt. A diferencia de _SUPPORTED_SUFFIXES en api/routers/files.py
+# (.pdf/.html/.txt, pensado para indexar en una colección efímera), acá
+# el caso de uso típico es "pegame este módulo puntual" -- todo lo que
+# sea texto plano de código/config/datos aplica.
 SUPPORTED_SUFFIXES = {
     ".txt", ".md", ".json", ".py", ".js", ".ts", ".tsx", ".jsx",
     ".java", ".yaml", ".yml", ".toml", ".csv", ".sql", ".sh",
@@ -42,8 +48,8 @@ SUPPORTED_SUFFIXES = {
 MAX_FILE_BYTES = 512_000  # 500 KB
 
 
-class TaskFileInfo(BaseModel):
-    """Metadata de un archivo de Task (para respuestas de API)."""
+class AttachmentInfo(BaseModel):
+    """Metadata de un archivo adjunto (para respuestas de API)."""
 
     file_id: str
     filename: str
@@ -52,47 +58,47 @@ class TaskFileInfo(BaseModel):
 
 
 @dataclass
-class _TaskFile:
+class _Attachment:
     filename: str
     content: str
     uploaded_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
 @dataclass
-class _ConversationTaskFiles:
-    """Estado en memoria de los archivos de Task de una conversación."""
+class _ConversationAttachments:
+    """Estado en memoria de los adjuntos pendientes de una conversación."""
 
-    files: dict[str, _TaskFile] = field(default_factory=dict)
+    files: dict[str, _Attachment] = field(default_factory=dict)
     last_used: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
-class TaskFileStore:
-    """Archivos crudos en memoria, uno por conversation_id, para el modo Task."""
+class AttachmentStore:
+    """Archivos adjuntos en memoria, uno por conversation_id, pendientes de envío."""
 
     def __init__(self) -> None:
-        self._conversations: dict[str, _ConversationTaskFiles] = {}
+        self._conversations: dict[str, _ConversationAttachments] = {}
 
     # -------------------------------------------------
     # ESCRITURA
     # -------------------------------------------------
 
-    def add_file(self, conversation_id: str, filename: str, content: str) -> TaskFileInfo:
+    def add_file(self, conversation_id: str, filename: str, content: str) -> AttachmentInfo:
         file_id = uuid.uuid4().hex[:12]
-        store = self._conversations.setdefault(conversation_id, _ConversationTaskFiles())
+        store = self._conversations.setdefault(conversation_id, _ConversationAttachments())
 
-        task_file = _TaskFile(filename=filename, content=content)
-        store.files[file_id] = task_file
+        attachment = _Attachment(filename=filename, content=content)
+        store.files[file_id] = attachment
         store.last_used = datetime.now(UTC)
 
-        info = TaskFileInfo(
+        info = AttachmentInfo(
             file_id=file_id,
             filename=filename,
             size_bytes=len(content.encode()),
-            uploaded_at=task_file.uploaded_at,
+            uploaded_at=attachment.uploaded_at,
         )
 
         logger.info(
-            f"[task_files] archivo agregado | conversation={conversation_id} "
+            f"[attachments] archivo agregado | conversation={conversation_id} "
             f"| file={filename} | file_id={file_id} | bytes={info.size_bytes}"
         )
         return info
@@ -102,12 +108,7 @@ class TaskFileStore:
     # -------------------------------------------------
 
     def remove_file(self, conversation_id: str, file_id: str) -> bool:
-        """
-        Borra un archivo puntual. Si era el último de la conversación,
-        borra la conversación entera (mismo criterio que
-        EphemeralStore.remove_file). Devuelve False si conversation_id
-        o file_id no existen (idempotente: el router lo traduce a 404).
-        """
+        """Borra un adjunto puntual (botón de borrar manual en la UI, antes de enviar)."""
         store = self._conversations.get(conversation_id)
         if store is None or file_id not in store.files:
             return False
@@ -117,35 +118,34 @@ class TaskFileStore:
 
         if not store.files:
             del self._conversations[conversation_id]
-            logger.info(
-                f"[task_files] se borró el último archivo -> conversación "
-                f"limpiada | conversation={conversation_id}"
-            )
-        else:
-            logger.info(
-                f"[task_files] archivo borrado | conversation={conversation_id} "
-                f"| file_id={file_id} | archivos_restantes={len(store.files)}"
-            )
         return True
 
     def remove_conversation(self, conversation_id: str) -> bool:
-        """Borra todos los archivos de Task de una conversación (ej: al cerrarla en la UI)."""
+        """
+        Borra todos los adjuntos pendientes de una conversación.
+
+        Se llama en dos casos: (1) el usuario los borra todos manualmente
+        desde la UI, o (2) -- el caso normal -- el router de chat los
+        consume automáticamente después de procesar una query que los
+        incluyó (ver src/api/routers/chat.py), para que la lista quede
+        vacía de cara al próximo mensaje.
+        """
         existed = conversation_id in self._conversations
         self._conversations.pop(conversation_id, None)
         if existed:
-            logger.info(f"[task_files] conversación eliminada | conversation={conversation_id}")
+            logger.info(f"[attachments] conversación consumida/limpiada | conversation={conversation_id}")
         return existed
 
     # -------------------------------------------------
     # LECTURA
     # -------------------------------------------------
 
-    def list_files(self, conversation_id: str) -> list[TaskFileInfo]:
+    def list_files(self, conversation_id: str) -> list[AttachmentInfo]:
         store = self._conversations.get(conversation_id)
         if store is None:
             return []
         return [
-            TaskFileInfo(
+            AttachmentInfo(
                 file_id=fid,
                 filename=f.filename,
                 size_bytes=len(f.content.encode()),
@@ -154,8 +154,10 @@ class TaskFileStore:
             for fid, f in store.files.items()
         ]
 
-    def list_contents(self, conversation_id: str) -> list[tuple[str, str]]:
-        """(filename, content) de todos los archivos -- para build_task_prompt()."""
+    def list_contents(self, conversation_id: str | None) -> list[tuple[str, str]]:
+        """(filename, content) de todos los adjuntos -- para inject_attachments()."""
+        if conversation_id is None:
+            return []
         store = self._conversations.get(conversation_id)
         if store is None:
             return []
@@ -168,9 +170,11 @@ class TaskFileStore:
 
     def sweep_expired(self, ttl: timedelta) -> int:
         """
-        Borra conversaciones sin actividad hace más de `ttl`. Llamado
-        periódicamente junto con EphemeralStore.sweep_expired desde el
-        mismo _cleanup_loop en src/api/app.py.
+        Borra conversaciones con adjuntos sin consumir hace más de `ttl`
+        -- red de seguridad para adjuntos que el usuario subió pero nunca
+        llegó a enviar. Llamado periódicamente junto con
+        EphemeralStore.sweep_expired desde el mismo _cleanup_loop en
+        src/api/app.py.
         """
         cutoff = datetime.now(UTC) - ttl
         expired = [cid for cid, s in self._conversations.items() if s.last_used < cutoff]
@@ -179,6 +183,6 @@ class TaskFileStore:
             del self._conversations[cid]
 
         if expired:
-            logger.info(f"[task_files] limpieza TTL | conversaciones eliminadas={len(expired)}")
+            logger.info(f"[attachments] limpieza TTL | conversaciones eliminadas={len(expired)}")
 
         return len(expired)

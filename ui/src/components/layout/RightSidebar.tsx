@@ -1,67 +1,83 @@
-import { Paperclip, Settings2, Wrench } from "lucide-react";
+import { Layers, Paperclip, Sparkles, SlidersHorizontal } from "lucide-react";
 import { useParams } from "react-router-dom";
+import { AttachmentsSection } from "@/components/chat/AttachmentsSection";
 import { FilesSection } from "@/components/chat/FilesSection";
-import { GenerationSection } from "@/components/chat/GenerationSection";
-import { TaskFilesSection } from "@/components/chat/TaskFilesSection";
-import { cn } from "@/lib/utils";
+import { AdvancedRetrievalSection } from "@/components/chat/AdvancedRetrievalSection";
+import { CollectionsPicker } from "@/components/layout/CollectionsPicker";
+import { useAttachments } from "@/hooks/useAttachments";
+import { useCollections } from "@/hooks/useCollections";
 import { useEphemeralFiles } from "@/hooks/useEphemeralFiles";
 import { useProviders } from "@/hooks/useProviders";
-import { useTaskFiles } from "@/hooks/useTaskFiles";
 import { useConversationsStore } from "@/stores/conversationsStore";
 import { useUiStore } from "@/stores/uiStore";
 import { SidebarSectionHeader } from "./SidebarSectionHeader";
 import { SidebarShell } from "./SidebarShell";
 
-const TASK_MODE_EXPLANATION =
-  "Modo Task: tareas de desarrollo puntuales (funciones, refactors, " +
-  "estructuras de datos) sin usar tus colecciones -- el modelo solo ve " +
-  "los archivos que adjuntes acá. Mientras está activo, las colecciones " +
-  "y las opciones de generación quedan deshabilitadas: son dos flujos " +
-  "independientes.";
-
+/**
+ * Sidebar derecho: todo lo relacionado con CONOCIMIENTO, de más
+ * puntual a más permanente --
+ *
+ *   1. Archivos adjuntos   -- ad-hoc, de un solo envío (ver
+ *                              src/context/attachments.py)
+ *   2. Colecciones efímeras -- indexadas, viven mientras dure la
+ *                              conversación (ver src/context/ephemeral.py)
+ *   3. Colecciones de sistema -- indexadas con `python -m src.ingest`,
+ *                              permanentes, compartidas entre conversaciones
+ *
+ * El sidebar izquierdo (ver LeftSidebar.tsx) es todo lo relacionado con
+ * la CONVERSACIÓN en sí: historial de chats y modo de respuesta.
+ */
 export function RightSidebar() {
   const { conversationId } = useParams<{ conversationId: string }>();
   const conversation = useConversationsStore((s) =>
     s.conversations.find((c) => c.id === conversationId),
   );
+  const setActiveCollections = useConversationsStore((s) => s.setActiveCollections);
 
   const rightWidth = useUiStore((s) => s.rightWidth);
   const rightCollapsed = useUiStore((s) => s.rightCollapsed);
   const setRightWidth = useUiStore((s) => s.setRightWidth);
   const toggleRightCollapsed = useUiStore((s) => s.toggleRightCollapsed);
 
+  const attachments = useAttachments(conversationId ?? null);
   const ephemeralFiles = useEphemeralFiles(conversationId ?? null);
-  const taskFiles = useTaskFiles(conversationId ?? null);
-  const setTaskModeActive = useConversationsStore((s) => s.setTaskModeActive);
+  const { data: collectionsData } = useCollections();
   const { data: providersData } = useProviders();
 
-  const taskModeActive = conversation?.taskModeActive ?? false;
-  const fileCount = taskModeActive
-    ? (taskFiles.data?.files.length ?? 0)
-    : (ephemeralFiles.data?.files.length ?? 0);
+  const attachmentCount = attachments.data?.files.length ?? 0;
+  const ephemeralCount = ephemeralFiles.data?.files.length ?? 0;
+  const systemCollectionCount = collectionsData?.collections.length ?? 0;
 
   const collapsedContent = (
     <>
       <button
         type="button"
         onClick={toggleRightCollapsed}
-        title="Archivos"
+        title="Archivos adjuntos"
         className="relative flex size-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-white/10 hover:text-foreground"
       >
         <Paperclip className="size-4" />
-        {fileCount > 0 && (
+        {attachmentCount > 0 && (
           <span className="absolute -right-0.5 -top-0.5 flex size-3.5 items-center justify-center rounded-full bg-primary text-[9px] text-primary-foreground">
-            {fileCount}
+            {attachmentCount}
           </span>
         )}
       </button>
       <button
         type="button"
         onClick={toggleRightCollapsed}
-        title="Generación"
+        title="Colecciones efímeras"
         className="flex size-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-white/10 hover:text-foreground"
       >
-        <Settings2 className="size-4" />
+        <Sparkles className="size-4" />
+      </button>
+      <button
+        type="button"
+        onClick={toggleRightCollapsed}
+        title="Colecciones de sistema"
+        className="flex size-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-white/10 hover:text-foreground"
+      >
+        <Layers className="size-4" />
       </button>
     </>
   );
@@ -77,16 +93,11 @@ export function RightSidebar() {
         collapsedContent={collapsedContent}
       >
         <p className="px-3 py-6 text-center text-xs text-muted-foreground">
-          Elegí o creá una conversación para ver sus archivos y opciones de
-          generación.
+          Elegí o creá una conversación para ver sus archivos y colecciones.
         </p>
       </SidebarShell>
     );
   }
-
-  const activeProvider = providersData
-    ? providersData.providers[providersData.active_generation_provider]
-    : undefined;
 
   return (
     <SidebarShell
@@ -97,55 +108,61 @@ export function RightSidebar() {
       onResize={setRightWidth}
       collapsedContent={collapsedContent}
     >
-      <div className="px-3 pt-2">
-        <button
-          type="button"
-          onClick={() => setTaskModeActive(conversation.id, !taskModeActive)}
-          title={TASK_MODE_EXPLANATION}
-          aria-pressed={taskModeActive}
-          className={cn(
-            "flex w-full items-center justify-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition-colors",
-            taskModeActive
-              ? "border-primary/40 bg-primary/15 text-primary"
-              : "border-white/10 text-muted-foreground hover:bg-white/5 hover:text-foreground",
-          )}
-        >
-          <Wrench className="size-4" />
-          Task
-        </button>
-      </div>
-
-      <section className="flex min-h-0 flex-grow-1 flex-col pt-1">
-        <SidebarSectionHeader
-          icon={Paperclip}
-          label={taskModeActive ? "Archivos de la tarea" : "Archivos"}
-          count={fileCount}
-        />
-        <div className="min-h-0 flex-1 overflow-y-auto pb-3">
-          {taskModeActive ? (
-            <TaskFilesSection files={taskFiles} />
-          ) : (
-            <FilesSection files={ephemeralFiles} />
-          )}
-        </div>
-      </section>
-
-      <div className="mx-3 border-t border-white/10" />
-
-      <section className="flex min-h-0 flex-shrink-0 flex-grow-0 flex-col pt-3">
-        <SidebarSectionHeader
-          icon={Settings2}
-          label="Generación"
-          count={activeProvider?.name + " · " + activeProvider?.model}
-        />
-        <div className="min-h-0 flex-1 overflow-y-auto pb-3">
-          <GenerationSection
-            conversation={conversation}
-            providers={providersData}
-            disabled={taskModeActive}
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+        {/* 1. Archivos adjuntos -- ad-hoc, de un solo envío */}
+        <section className="flex shrink-0 flex-col pt-2">
+          <SidebarSectionHeader
+            icon={Paperclip}
+            label="Archivos adjuntos"
+            count={attachmentCount}
           />
-        </div>
-      </section>
+          <div className="pb-3">
+            <AttachmentsSection attachments={attachments} />
+          </div>
+        </section>
+
+        <div className="mx-3 border-t border-white/10" />
+
+        {/* 2. Colecciones efímeras -- indexadas, alcance de esta conversación */}
+        <section className="flex shrink-0 flex-col pt-3">
+          <SidebarSectionHeader
+            icon={Sparkles}
+            label="Colecciones efímeras"
+            count={ephemeralCount}
+          />
+          <div className="pb-3">
+            <FilesSection files={ephemeralFiles} />
+          </div>
+        </section>
+
+        <div className="mx-3 border-t border-white/10" />
+
+        {/* 3. Colecciones de sistema -- indexadas con `python -m src.ingest`, permanentes */}
+        <section className="flex shrink-0 flex-col pt-3">
+          <SidebarSectionHeader
+            icon={Layers}
+            label="Colecciones de sistema"
+            count={systemCollectionCount}
+          />
+          <div className="px-3 pb-3">
+            <CollectionsPicker
+              collections={collectionsData?.collections ?? []}
+              active={conversation.activeCollections}
+              onChange={(next) => setActiveCollections(conversation.id, next)}
+            />
+          </div>
+        </section>
+
+        <div className="mx-3 border-t border-white/10" />
+
+        {/* 4. Ajustes avanzados de retrieval -- Turnos de historial, Top K */}
+        <section className="flex shrink-0 flex-col pt-3 pb-3">
+          <SidebarSectionHeader icon={SlidersHorizontal} label="Ajustes avanzados" />
+          <div className="pt-1">
+            <AdvancedRetrievalSection conversation={conversation} providers={providersData} />
+          </div>
+        </section>
+      </div>
     </SidebarShell>
   );
 }

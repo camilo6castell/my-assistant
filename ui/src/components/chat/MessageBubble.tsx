@@ -1,4 +1,4 @@
-import { AlertCircle, Globe, Layers, Sparkles } from "lucide-react"
+import { AlertCircle, Globe, Layers, Sparkles, Trash2 } from "lucide-react"
 import ReactMarkdown from "react-markdown"
 import rehypeHighlight from "rehype-highlight"
 import remarkGfm from "remark-gfm"
@@ -18,11 +18,35 @@ function ThinkingDots({ label }: { label?: string }) {
   )
 }
 
-export function MessageBubble({ message }: { message: ChatMessage }) {
+export function MessageBubble({
+  message,
+  onDelete,
+}: {
+  message: ChatMessage
+  /** Ausente = no se puede borrar este mensaje individualmente (no usado hoy, pero deja la puerta abierta). */
+  onDelete?: () => void
+}) {
   const isUser = message.role === "user"
 
   return (
-    <div className={cn("flex w-full", isUser ? "justify-end" : "justify-start")}>
+    <div className={cn("group flex w-full items-start gap-1.5", isUser ? "justify-end" : "justify-start")}>
+      {/* Botón de borrar del lado del avatar/margen -- del lado izquierdo
+          para mensajes de usuario (que están alineados a la derecha) y
+          del lado derecho para mensajes del assistant, para no quedar
+          nunca pegado al texto de la burbuja. Oculto hasta hover de la
+          fila (mismo patrón que los botones de renombrar/borrar chat en
+          LeftSidebar.tsx) para no ensuciar la lectura normal. */}
+      {onDelete && !message.isPending && isUser && (
+        <button
+          type="button"
+          onClick={onDelete}
+          aria-label="Borrar mensaje"
+          title="Borrar mensaje"
+          className="order-first mt-2.5 shrink-0 self-start rounded-md p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-white/10 hover:text-destructive group-hover:opacity-100"
+        >
+          <Trash2 className="size-3.5" />
+        </button>
+      )}
       <div
         className={cn(
           "max-w-[75ch] rounded-2xl px-4 py-3 text-sm leading-relaxed",
@@ -93,6 +117,18 @@ export function MessageBubble({ message }: { message: ChatMessage }) {
           </div>
         )}
       </div>
+
+      {onDelete && !message.isPending && !isUser && (
+        <button
+          type="button"
+          onClick={onDelete}
+          aria-label="Borrar mensaje"
+          title="Borrar mensaje"
+          className="mt-2.5 shrink-0 self-start rounded-md p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-white/10 hover:text-destructive group-hover:opacity-100"
+        >
+          <Trash2 className="size-3.5" />
+        </button>
+      )}
     </div>
   )
 }

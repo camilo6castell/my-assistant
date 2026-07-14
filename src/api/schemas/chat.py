@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field
 
 
 class GenerationOptions(BaseModel):
@@ -81,11 +81,6 @@ class QueryRequest(BaseModel):
 
     collections:    tokens con la misma sintaxis que el CLI, ej.
                     ["sociologia", "psicoanalisis/Freud_Suenos"].
-                    Puede venir vacío SI conversation_id apunta a una
-                    conversación con archivos efímeros subidos (ver
-                    POST /api/v1/files), o si web_search=True (ver
-                    abajo) -- el router devuelve 422 si ninguna de las
-                    tres fuentes de contexto está presente.
     mode:           "SOFT" (default) | "HARD"
     chat_history:   turnos previos de conversación. Cada turno es un dict
                     {"user": "...", "assistant": "..."}. El cliente es
@@ -93,8 +88,10 @@ class QueryRequest(BaseModel):
                     API es stateless por diseño.
     conversation_id: id opaco que el cliente genera una vez por
                     conversación (ej. crypto.randomUUID() en el
-                    frontend). Solo hace falta si esa conversación tiene
-                    archivos efímeros adjuntos; si no, se puede omitir.
+                    frontend). Hace falta si esa conversación tiene
+                    colecciones efímeras (POST /api/v1/files) o archivos
+                    adjuntos ad-hoc (POST /api/v1/attachments) -- si no
+                    tiene ninguno de los dos, se puede omitir.
     generation:     overrides opcionales de temperatura/tokens/think mode.
     web_search:     si True, complementa (o reemplaza, si no hay
                     colecciones/archivos) el contexto con una búsqueda
@@ -104,6 +101,16 @@ class QueryRequest(BaseModel):
                     no, el router devuelve 400. Best-effort: si la
                     búsqueda web falla y SÍ hay colecciones/archivos, el
                     request no falla por eso (ver QueryResponse.used_web_search).
+
+    Sin `collections`, sin colección efímera, y con web_search=False: NO
+    es un error (a diferencia de una versión anterior de este schema,
+    que exigía al menos una fuente de contexto). El router responde
+    directo con el LLM, sin ningún system prompt ni retrieval -- ver
+    _answer_raw() en src/api/routers/chat.py. Es el modo esperado para
+    preguntas sueltas o para adjuntar un archivo puntual
+    (POST /api/v1/attachments) sin tener ninguna colección elegida: el
+    usuario es responsable de darle rol/reglas/tarea al modelo en su
+    propio mensaje.
     """
 
     question: str = Field(..., min_length=1)
@@ -113,16 +120,6 @@ class QueryRequest(BaseModel):
     conversation_id: str | None = None
     generation: GenerationOptions | None = None
     web_search: bool = False
-
-    @model_validator(mode="after")
-    def _require_some_context_source(self) -> QueryRequest:
-        if not self.collections and not self.conversation_id and not self.web_search:
-            raise ValueError(
-                "Se requiere al menos una colección en 'collections', un "
-                "'conversation_id' con archivos efímeros adjuntos, o "
-                "web_search=True."
-            )
-        return self
 
 
 class QueryResponse(BaseModel):

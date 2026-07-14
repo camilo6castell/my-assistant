@@ -178,9 +178,7 @@ def _handle_remove(session: ChatSession, raw_tokens: str) -> None:
 
 
 def _handle_question(session: ChatSession, question: str) -> None:
-    collections: list[LoadedCollection] = (
-        session.context_manager.get_loaded_collections()
-    )
+    collections: list[LoadedCollection] = session.context_manager.get_loaded_collections()
 
     if not collections:
         print("\n  Load a context first.  E.g., /context sociologia\n")
@@ -246,9 +244,7 @@ def _handle_agent_question(session: ChatSession, question: str) -> None:
     posteriores dentro de la misma sesión (build_rag_graph está cacheado
     en el atributo _graph del ChatSession extendido por start_chat).
     """
-    collections: list[LoadedCollection] = (
-        session.context_manager.get_loaded_collections()
-    )
+    collections: list[LoadedCollection] = session.context_manager.get_loaded_collections()
 
     if not collections:
         print("\n  Load a context first.  E.g., /context liberty\n")
@@ -283,6 +279,7 @@ def _handle_agent_question(session: ChatSession, question: str) -> None:
         "top_k_initial": None,
         "top_k_final": None,
         "max_turns": None,
+        "attachments": [],
     }
 
     # CompiledStateGraph.invoke() está tipado en la librería como
@@ -301,10 +298,7 @@ def _handle_agent_question(session: ChatSession, question: str) -> None:
         return
 
     if reformulated:
-        print(
-            "  [agent] Low confidence in initial search → "
-            "query reformulated automatically.\n"
-        )
+        print("  [agent] Low confidence in initial search → query reformulated automatically.\n")
 
     print("  Answer:\n")
     print(answer)

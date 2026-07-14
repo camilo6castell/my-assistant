@@ -79,9 +79,9 @@ def build_messages(
     pero es el antipattern clásico de default mutable/evaluado-al-
     importar en Python, y además impedía pasar un system prompt
     distinto sin tocar la firma. ask_llm() ahora expone ese override
-    (ver su propio docstring) para el modo Task
-    (src/api/routers/task.py), que usa build_task_system_prompt() en
-    vez del prompt de RAG.
+    (ver su propio docstring) para el caso sin ninguna fuente de
+    contexto (_answer_raw() en src/api/routers/chat.py), que llama con
+    system_prompt="" para omitir el system prompt de RAG por completo.
 
     max_turns: override por-request (ver GenerationOptions en
     src/api/schemas/chat.py). None usa settings.max_turns -- mismo
@@ -90,9 +90,14 @@ def build_messages(
     effective_max_turns = settings.max_turns if max_turns is None else max_turns
     effective_system_prompt = system_prompt if system_prompt is not None else build_system_prompt()
 
-    messages: list[ChatTurn] = [
-        {"role": "system", "content": effective_system_prompt},
-    ]
+    # system_prompt="" (distinto de None) es "sin system prompt en
+    # absoluto" -- caso _answer_raw() en src/api/routers/chat.py, donde
+    # no hay ninguna fuente de contexto y el usuario controla el rol/las
+    # reglas/la tarea íntegramente desde su propio mensaje. No se manda
+    # un mensaje "system" vacío: se omite del todo.
+    messages: list[ChatTurn] = []
+    if effective_system_prompt:
+        messages.append({"role": "system", "content": effective_system_prompt})
 
     # TurnMemory es BaseModel: acceso por atributo (.user, .assistant)
     for turn in chat_memory[-effective_max_turns:]:
@@ -268,11 +273,12 @@ def ask_llm(
 
     system_prompt: override opcional del system prompt -- None usa
     build_system_prompt() (comportamiento RAG por defecto, con
-    grounding/citación contra contexto recuperado). El modo Task
-    (src/api/routers/task.py) pasa build_task_system_prompt() acá en vez
-    de bifurcar el pipeline del grafo RAG con un parámetro de modo: es
-    la misma llamada al LLM, con distinto system prompt y sin contexto
-    recuperado en `prompt`.
+    grounding/citación contra contexto recuperado). "" (string vacío,
+    distinto de None) omite el mensaje "system" por completo -- ver
+    build_messages() más arriba y _answer_raw() en
+    src/api/routers/chat.py, el caso sin ninguna colección/archivo
+    efímero/web_search activo: el usuario controla rol/reglas/tarea
+    desde su propio mensaje, sin nada del servidor de por medio.
     """
     messages = build_messages(
         prompt=prompt,
