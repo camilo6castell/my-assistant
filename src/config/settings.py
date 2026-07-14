@@ -17,7 +17,7 @@ from pathlib import Path
 from pydantic import Field, ValidationInfo, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from src.llm.roles import LLMRole
+from src.nlp.llm.roles import LLMRole
 
 
 class Settings(BaseSettings):

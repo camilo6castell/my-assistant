@@ -12,7 +12,7 @@ from __future__ import annotations
 from copy import deepcopy
 from typing import Any
 
-from src.llm.backends.base import ChatTurn
+from src.nlp.llm.backends.base import ChatTurn
 
 _MODELS: dict[str, dict[str, Any]] = {
     "gemini-2.5-flash-lite": {

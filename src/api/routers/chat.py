@@ -16,7 +16,12 @@ from typing import Any, TypedDict, cast
 from fastapi import APIRouter, Depends, HTTPException
 from langgraph.graph.state import CompiledStateGraph
 
-from src.api.deps import get_attachment_store, get_context_manager, get_ephemeral_store, get_rag_graph
+from src.api.deps import (
+    get_attachment_store,
+    get_context_manager,
+    get_ephemeral_store,
+    get_rag_graph,
+)
 from src.api.schemas.chat import (
     CollectionsResponse,
     GenerationOptions,
@@ -24,17 +29,17 @@ from src.api.schemas.chat import (
     QueryResponse,
     WebSource,
 )
-from src.chat.types import TurnMemory
+from src.cli.types import TurnMemory
 from src.config.models import get_supports
 from src.config.settings import settings
 from src.context.attachments import AttachmentStore
 from src.context.ephemeral import EphemeralStore
 from src.context.manager import ContextManager, LoadedCollection
 from src.graph.state import RAGState
-from src.llm.context_guard import ContextLimitExceeded, check_context_fit
-from src.llm.generate import ask_llm, ask_llm_internal
-from src.llm.providers import get_provider
-from src.llm.roles import LLMRole
+from src.nlp.llm.context_guard import ContextLimitExceeded, check_context_fit
+from src.nlp.llm.generate import ask_llm, ask_llm_internal
+from src.nlp.llm.providers import get_provider
+from src.nlp.llm.roles import LLMRole
 from src.prompts.builder import (
     build_prompt,
     build_system_prompt,

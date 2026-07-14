@@ -23,14 +23,14 @@ Sintaxis de <tokens>:
 import warnings
 from typing import cast
 
-from src.chat.session import ChatSession
+from src.cli.session import ChatSession
 from src.config.settings import settings
 from src.context.manager import LoadedCollection
 from src.context.models import SearchResult
 from src.context.selector import match_contexts
 from src.graph import RAGState, build_rag_graph
-from src.llm.generate import ask_llm
-from src.llm.roles import LLMRole
+from src.nlp.llm.generate import ask_llm
+from src.nlp.llm.roles import LLMRole
 from src.prompts.builder import build_prompt
 from src.retrieval.search import search
 
@@ -178,9 +178,7 @@ def _handle_remove(session: ChatSession, raw_tokens: str) -> None:
 
 
 def _handle_question(session: ChatSession, question: str) -> None:
-    collections: list[LoadedCollection] = (
-        session.context_manager.get_loaded_collections()
-    )
+    collections: list[LoadedCollection] = session.context_manager.get_loaded_collections()
 
     if not collections:
         print("\n  Load a context first.  E.g., /context sociologia\n")
@@ -246,9 +244,7 @@ def _handle_agent_question(session: ChatSession, question: str) -> None:
     posteriores dentro de la misma sesión (build_rag_graph está cacheado
     en el atributo _graph del ChatSession extendido por start_chat).
     """
-    collections: list[LoadedCollection] = (
-        session.context_manager.get_loaded_collections()
-    )
+    collections: list[LoadedCollection] = session.context_manager.get_loaded_collections()
 
     if not collections:
         print("\n  Load a context first.  E.g., /context liberty\n")
@@ -300,10 +296,7 @@ def _handle_agent_question(session: ChatSession, question: str) -> None:
         return
 
     if reformulated:
-        print(
-            "  [agent] Low confidence in initial search → "
-            "query reformulated automatically.\n"
-        )
+        print("  [agent] Low confidence in initial search → query reformulated automatically.\n")
 
     print("  Answer:\n")
     print(answer)

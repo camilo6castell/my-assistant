@@ -43,11 +43,11 @@ from __future__ import annotations
 
 from typing import Any
 
-from src.chat.types import TurnMemory
+from src.cli.types import TurnMemory
 from src.config.models import build_kwargs, get_supports
 from src.config.settings import settings
-from src.llm.backends.base import ChatTurn
-from src.llm.providers import ProviderConfig, get_client
+from src.nlp.llm.backends.base import ChatTurn
+from src.nlp.llm.providers import ProviderConfig, get_client
 from src.prompts.builder import build_system_prompt
 from src.utils.logger import logger
 

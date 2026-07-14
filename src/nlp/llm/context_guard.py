@@ -13,11 +13,9 @@ espacio para terminarla).
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-
-from src.chat.types import TurnMemory
+from src.cli.types import TurnMemory
 from src.config.models import get_context_window
-from src.llm.providers import get_client
+from src.nlp.llm.providers import get_client
 from src.utils.tokens import estimate_tokens
 
 # Margen de seguridad sobre el estimado de tokens -- tiktoken/heurística

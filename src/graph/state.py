@@ -57,7 +57,7 @@ para que exista en el namespace del módulo cuando LangGraph lo evalúa.
 
 from typing import Any, TypedDict
 
-from src.chat.types import TurnMemory
+from src.cli.types import TurnMemory
 from src.context.manager import LoadedCollection
 from src.context.models import SearchResult
 

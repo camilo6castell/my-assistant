@@ -25,17 +25,17 @@ from collections.abc import Callable
 
 
 def _cmd_chat() -> None:
-    from src.chat.interface import start_chat
-    from src.chat.session import ChatSession
+    from src.cli.interface import start_chat
+    from src.cli.session import ChatSession
 
     session = ChatSession()
     start_chat(session)
 
 
 def _cmd_menu() -> None:
-    from src.chat.interface import start_chat
-    from src.chat.session import ChatSession
     from src.cli.commands import show_about, show_contexts, show_main_menu, show_modes
+    from src.cli.interface import start_chat
+    from src.cli.session import ChatSession
 
     session = ChatSession()
 

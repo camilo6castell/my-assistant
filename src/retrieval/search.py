@@ -8,11 +8,11 @@ from __future__ import annotations
 
 import numpy as np
 
-from src.chat.modes import ChatMode
+from src.cli.modes import ChatMode
 from src.config.settings import settings
 from src.context.manager import LoadedCollection
 from src.context.models import SearchResult
-from src.embeddings.encoder import get_encoder
+from src.nlp.embedders.encoder import get_encoder
 
 # ======================================================
 # QUERY BUILDING

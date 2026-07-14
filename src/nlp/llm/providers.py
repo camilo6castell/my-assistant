@@ -41,9 +41,9 @@ from dataclasses import dataclass
 from functools import cache
 
 from src.config.settings import settings
-from src.llm.backends.base import LLMClient
-from src.llm.backends.ollama_native import OllamaNativeClient
-from src.llm.backends.openai_compat import OpenAICompatClient
+from src.nlp.llm.backends.base import LLMClient
+from src.nlp.llm.backends.ollama_native import OllamaNativeClient
+from src.nlp.llm.backends.openai_compat import OpenAICompatClient
 from src.utils.logger import logger
 
 
@@ -142,9 +142,7 @@ def get_provider(name: str) -> ProviderConfig:
         config = table[name]
     except KeyError as exc:
         valid = ", ".join(sorted(table))
-        raise ValueError(
-            f"Proveedor LLM desconocido: {name!r}. Válidos: {valid}"
-        ) from exc
+        raise ValueError(f"Proveedor LLM desconocido: {name!r}. Válidos: {valid}") from exc
 
     if not config.base_url or not config.model:
         raise ValueError(

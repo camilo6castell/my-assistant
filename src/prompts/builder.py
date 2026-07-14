@@ -29,7 +29,7 @@ Exported functions:
   build_correction_prompt   -> Repair prompt after a failed review.
 """
 
-from src.chat.modes import ChatMode
+from src.cli.modes import ChatMode
 
 
 def build_system_prompt() -> str:

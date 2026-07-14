@@ -40,7 +40,7 @@ from __future__ import annotations
 
 from typing import Any, Protocol
 
-from src.llm.backends.base import ChatTurn
+from src.nlp.llm.backends.base import ChatTurn
 
 
 class _ModelBackend(Protocol):
@@ -89,8 +89,7 @@ def _module(capabilities_key: str) -> _ModelBackend:
     except KeyError:
         valid = ", ".join(sorted(registry))
         raise ValueError(
-            f"Backend de capacidades desconocido: {capabilities_key!r}. "
-            f"Válidos: {valid}"
+            f"Backend de capacidades desconocido: {capabilities_key!r}. Válidos: {valid}"
         ) from None
 
 

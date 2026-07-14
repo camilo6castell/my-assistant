@@ -4,7 +4,7 @@ El menú es deliberadamente simple: Chat es donde ocurre todo.
 Las opciones 2-4 son solo consulta, sin modificar estado.
 """
 
-from src.chat.session import ChatSession
+from src.cli.session import ChatSession
 from src.config.settings import settings
 
 # ======================================================
@@ -81,7 +81,7 @@ def show_modes() -> None:
     - Does not infer or connect ideas external to the text.
     - Ideal for precise and verifiable queries.
 
-  **Change the mode within the chat with: '/mode'""  
+  **Change the mode within the chat with: '/mode'""
   ─────────────────────────────────────────────────────────────────
 """)
 

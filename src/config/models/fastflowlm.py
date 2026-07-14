@@ -20,7 +20,7 @@ from __future__ import annotations
 from copy import deepcopy
 from typing import Any
 
-from src.llm.backends.base import ChatTurn
+from src.nlp.llm.backends.base import ChatTurn
 
 _MODELS: dict[str, dict[str, Any]] = {
     "qwen3.5:9b": {
@@ -157,9 +157,7 @@ def build_kwargs(
 
     if think is not None:
         if not supports_thinking(model_name):
-            raise ValueError(
-                f"El modelo '{model_name}' no tiene modo de razonamiento configurado."
-            )
+            raise ValueError(f"El modelo '{model_name}' no tiene modo de razonamiento configurado.")
         extra_body = kwargs.setdefault("extra_body", {})
         _set_thinking(extra_body, think)
 

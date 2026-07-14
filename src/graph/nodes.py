@@ -31,9 +31,9 @@ import json
 from src.config.settings import settings
 from src.context.manager import LoadedCollection
 from src.graph.state import RAGState, RAGStateUpdate
-from src.llm.context_guard import ContextLimitExceeded, check_context_fit
-from src.llm.generate import ask_llm, ask_llm_internal
-from src.llm.roles import LLMRole
+from src.nlp.llm.context_guard import check_context_fit
+from src.nlp.llm.generate import ask_llm, ask_llm_internal
+from src.nlp.llm.roles import LLMRole
 from src.prompts.builder import (
     build_correction_prompt,
     build_prompt,

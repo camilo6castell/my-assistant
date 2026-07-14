@@ -23,7 +23,7 @@ import numpy as np
 from pydantic import BaseModel, ConfigDict
 
 from src.config.settings import settings
-from src.embeddings.encoder import get_encoder
+from src.nlp.embedders.encoder import get_encoder
 from src.utils.logger import logger
 
 if TYPE_CHECKING:
@@ -156,9 +156,7 @@ def load_collection(collection: str) -> RawCollection:
             raw: list[object] = pickle.load(f)
             # model_validate maneja tanto dicts (pickles anteriores a esta
             # migración) como instancias ChunkMetadata ya serializadas.
-            metadata: list[ChunkMetadata] = [
-                ChunkMetadata.model_validate(m) for m in raw
-            ]
+            metadata: list[ChunkMetadata] = [ChunkMetadata.model_validate(m) for m in raw]
 
         vectors: np.ndarray | None = None
 

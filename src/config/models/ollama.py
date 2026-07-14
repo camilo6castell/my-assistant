@@ -14,7 +14,7 @@ from __future__ import annotations
 from copy import deepcopy
 from typing import Any
 
-from src.llm.backends.base import ChatTurn
+from src.nlp.llm.backends.base import ChatTurn
 from src.utils.logger import logger
 
 _MODELS: dict[str, dict[str, Any]] = {
@@ -84,9 +84,7 @@ def build_kwargs(
 
     if think is not None:
         if "think" not in kwargs:
-            raise ValueError(
-                f"El modelo '{model_name}' no tiene modo de razonamiento configurado."
-            )
+            raise ValueError(f"El modelo '{model_name}' no tiene modo de razonamiento configurado.")
         kwargs["think"] = think
 
     if extra:
