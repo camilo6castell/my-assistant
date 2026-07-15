@@ -10,7 +10,6 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { Button } from "@/components/ui/button";
 import { ResponseModeSection } from "@/components/chat/ResponseModeSection";
 import { useProviders } from "@/hooks/useProviders";
 import { cn } from "@/lib/utils";
@@ -109,21 +108,12 @@ export function Sidebar() {
       onResize={setLeftWidth}
       collapsedContent={collapsedContent}
     >
-      <div className="px-3 pb-2">
-        <Button
-          variant="secondary"
-          className="w-full justify-start gap-2 bg-white/[0.06] hover:bg-white/[0.1]"
-          onClick={handleNewConversation}
-        >
-          <MessageSquarePlus className="size-4" />
-          Nueva conversación
-        </Button>
-      </div>
       <section className="flex min-h-0 flex-1 flex-col pt-1">
         <SidebarSectionHeader
           icon={MessagesSquare}
           label="Chats"
           count={conversations.length}
+          actionHandler={handleNewConversation}
         />
         <nav className="min-h-0 flex-1 space-y-1 overflow-y-auto px-3 pb-2">
           {conversations.length === 0 && (
@@ -225,9 +215,7 @@ export function Sidebar() {
           })}
         </nav>
       </section>
-
       <div className="mx-3 border-t border-white/10" />
-
       <section className="flex h-[fit-content] max-h-[50%] min-h-0 flex-col pt-3">
         <SidebarSectionHeader icon={Settings2} label="Generación" />
         <div className="h-[fit-content] max-h-full min-h-0 overflow-y-auto pb-4">

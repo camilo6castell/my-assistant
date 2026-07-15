@@ -53,6 +53,20 @@ export function SidebarShell({
           side === "left" ? "justify-end " : "justify-start",
         )}
       >
+        {side === "left" && (
+          <>
+            <img className="w-6 h-6 mx-1.5" src="/favicon.svg" alt="" />
+            <div className="group flex w-full items-center justify-center gap-2 rounded-lg px-3 py-4 text-left text-sm transition-colors">
+              <span className="font-bold text-foreground truncate text-sm">
+                My assistant
+              </span>
+              <span className="text-xs font-normal text-muted-foreground/80 truncate">
+                RAG by camilo6castell
+              </span>
+            </div>
+          </>
+        )}
+
         <button
           type="button"
           onClick={onToggleCollapsed}
