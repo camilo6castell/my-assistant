@@ -4,7 +4,7 @@ import { Navigate, useParams } from "react-router-dom"
 import { apiErrorMessage, isWebSearchQuotaExceededError, postQuery } from "@/lib/api/client"
 import { askGeminiDemo, buildAttachmentsContext, DEMO_MODE, type DemoAnswer } from "@/lib/demo"
 import { useConversationsStore } from "@/stores/conversationsStore"
-import { useDemoAttachmentsStore } from "@/stores/demoAttachmentsStore"
+import { useDemoAttachmentsStore, selectDemoFiles } from "@/stores/demoAttachmentsStore"
 import type { ChatMessage } from "@/types/chat"
 import type { QueryResponse } from "@/types/api"
 import { ChatToolbar } from "./ChatToolbar"
@@ -33,9 +33,7 @@ export function ChatView() {
   const deleteMessage = useConversationsStore((s) => s.deleteMessage)
   const setWebSearchQuotaExceeded = useConversationsStore((s) => s.setWebSearchQuotaExceeded)
   const queryClient = useQueryClient()
-  const demoAttachments = useDemoAttachmentsStore((s) =>
-    conversation ? (s.filesByConversation[conversation.id] ?? []) : []
-  )
+  const demoAttachments = useDemoAttachmentsStore(selectDemoFiles(conversation?.id ?? null))
   const clearDemoAttachments = useDemoAttachmentsStore((s) => s.clearFiles)
 
   // Un solo camino de envío para toda conversación -- /query decide

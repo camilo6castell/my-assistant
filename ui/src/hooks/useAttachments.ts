@@ -7,7 +7,7 @@ import {
   uploadAttachment,
 } from "@/lib/api/client"
 import { DEMO_MODE } from "@/lib/demo"
-import { useDemoAttachmentsStore } from "@/stores/demoAttachmentsStore"
+import { useDemoAttachmentsStore, selectDemoFiles } from "@/stores/demoAttachmentsStore"
 
 /**
  * Adjuntos ad-hoc de una conversación -- ver src/context/attachments.py
@@ -65,9 +65,7 @@ function readFileAsText(file: File): Promise<string> {
 }
 
 function useDemoAttachments(conversationId: string | null) {
-  const files = useDemoAttachmentsStore((s) =>
-    conversationId ? (s.filesByConversation[conversationId] ?? []) : []
-  )
+  const files = useDemoAttachmentsStore(selectDemoFiles(conversationId))
   const addFile = useDemoAttachmentsStore((s) => s.addFile)
   const removeFile = useDemoAttachmentsStore((s) => s.removeFile)
   const clearFiles = useDemoAttachmentsStore((s) => s.clearFiles)
