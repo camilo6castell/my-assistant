@@ -183,35 +183,50 @@ class RAGState(TypedDict):
 
 ## 🔀 Multi-Provider LLM
 
-The system uses a **provider-per-node** architecture (`src/llm/providers.py`). Each node can use a different LLM provider without any change to `graph.py` or `nodes.py`. Providers are configured in `.env.providers` and resolved at runtime from a cached factory.
+The system uses a **provider-per-role** architecture (`src/nlp/llm/providers.py`). Each role in the pipeline (`LLMRole` in `src/nlp/llm/roles.py`) can use a different backend + model without any change to `graph.py` or `nodes.py`. Backends and per-role model choices are configured in `.env.providers` and resolved at runtime from a cached factory.
 
-### Provider routing (default)
+### Two independent axes
 
-| Operation           | Provider | Rationale                                      |
-| ------------------- | -------- | ---------------------------------------------- |
-| Query reformulation | Gemini   | Short, context-free input — fast and cheap     |
-| Answer generation   | local    | Full context (chunks) never leaves the machine |
-| Answer review       | Gemini   | Evaluates the answer text, not the documents   |
-| Correction          | local    | Same as generation — final answer stays local  |
+- **Backend** — a concrete runtime: `flm` (FastFlowLM) | `ollama` | `gemini`. Configured once with its URL (and credential, for Gemini):
+
+  ```bash
+  LLM_FLM_URL=http://127.0.0.1:52625/v1
+  LLM_OLLAMA_URL=http://127.0.0.1:11434
+  LLM_GEMINI_URL=https://generativelanguage.googleapis.com/v1beta/openai/
+  GEMINI_API_KEY=...
+  ```
+
+- **Role** — picks a `backend,model` pair directly:
+
+  ```bash
+  LLM_ROL_GENERATE=flm,qwen3.5:9b
+  LLM_ROL_REFORMULATE=ollama,qwen3.5:2b
+  LLM_ROL_REVIEW=gemini,gemini-2.5-flash-lite
+  LLM_ROL_SUPPLEMENT=flm,qwen3.5:9b
+  ```
+
+Roles sharing the same `backend,model` (above, generation and web-supplement both use `flm,qwen3.5:9b`) share a single cached client instead of opening a duplicate connection.
+
+### Default routing (example above)
+
+| Role                | Backend | Rationale                                             |
+| ------------------- | ------- | ------------------------------------------------------ |
+| Query reformulation | ollama  | Short, context-free input — a small model is enough    |
+| Answer generation   | flm     | Full context (chunks) never leaves the machine         |
+| Answer review       | gemini  | Evaluates the answer text, not the documents            |
+| Web supplement      | flm     | Same as generation — stays local                        |
 
 ### Privacy guarantee
 
-Gemini only ever receives: (a) the reformulated query string, and (b) the generated answer text for review. **The indexed document chunks are never sent to any external provider.**
+Gemini (or any external backend assigned to a role) only ever receives what that role's prompt sends it — for `review`, the generated answer text, not the retrieved chunks. Assign an external backend to `generate`/`supplement` only if you're fine with the retrieved chunks leaving the machine.
 
-### Adding a new provider
+### Adding a model to an existing backend
 
-Add one entry in `src/llm/providers.py`:
+One entry in `src/config/models/<backend>.py` (`flm.py` | `ollama.py` | `gemini.py`) with its capabilities (`max_tokens`, `think_mode`, context window). No new environment variable needed.
 
-```python
-"claude": ProviderConfig(
-    name="claude",
-    base_url=settings.claude_base_url,
-    api_key=settings.claude_api_key,
-    model=settings.claude_model,
-),
-```
+### Adding a new backend
 
-Then set `REFORMULATE_PROVIDER=claude` or `GENERATE_PROVIDER=claude` in `.env.providers`. No changes to graph or node code.
+One entry in the registries at the top of `src/nlp/llm/providers.py` (`_backend_url_table`, `_backend_api_key_table`, `_BACKEND_CLIENT`), plus a new file in `src/config/models/` and, if it needs a distinct HTTP client, one in `src/nlp/llm/backends/`. Then point any role at it in `.env.providers` (e.g. `LLM_ROL_GENERATE=claude,claude-haiku-4-5`). No changes to graph or node code.
 
 ---
 
@@ -391,7 +406,7 @@ Lists all available collections from the vectorstore directory.
 
 - Python 3.11+
 - A local OpenAI-compatible LLM runtime ([FastFlowLM](https://fastflowlm.com/), [Ollama](https://ollama.com/), or similar)
-- A Gemini API key for query reformulation and answer review (free tier sufficient)
+- A Gemini API key for whichever roles you point at `gemini` in `.env.providers` (free tier sufficient; the example config below only uses it for answer review)
 
 ### Install
 
@@ -411,20 +426,26 @@ cp .env.example .env.providers
 Edit `.env.providers`:
 
 ```env
-# Local runtime (FastFlowLM / Ollama / any OpenAI-compatible endpoint)
-LOCAL_BASE_URL=http://127.0.0.1:52625/v1
-LOCAL_API_KEY=flm
-LOCAL_MODEL=qwen3:8b
-
-# Gemini (reformulation + review only — documents never leave local)
-GEMINI_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai/
+# Backend URLs (configured once)
+LLM_FLM_URL=http://127.0.0.1:52625/v1
+LLM_OLLAMA_URL=http://127.0.0.1:11434
+LLM_GEMINI_URL=https://generativelanguage.googleapis.com/v1beta/openai/
 GEMINI_API_KEY=your_key_here
-GEMINI_MODEL=gemini-2.0-flash
 
-# Routing
-REFORMULATE_PROVIDER=gemini
-GENERATE_PROVIDER=local
+EMBEDDER_FLM_URL=http://127.0.0.1:52625/v1
+EMBEDDER_OLLAMA_URL=http://127.0.0.1:11434
+
+# Embedder: backend,model
+EMBEDDER=ollama,bge-m3
+
+# LLM per role: backend,model (documents only ever reach roles you point at a local backend)
+LLM_ROL_GENERATE=flm,qwen3.5:9b
+LLM_ROL_REFORMULATE=ollama,qwen3.5:2b
+LLM_ROL_REVIEW=gemini,gemini-2.5-flash-lite
+LLM_ROL_SUPPLEMENT=flm,qwen3.5:9b
 ```
+
+See [Multi-Provider LLM](#-multi-provider-llm) above for the full model of backends vs. roles.
 
 ### Create vectorstore directory
 
@@ -500,7 +521,7 @@ All configuration is managed via Pydantic Settings (`src/config/settings.py`) an
 | Variable               | Default                                                    | Description                                        |
 | ---------------------- | ---------------------------------------------------------- | -------------------------------------------------- |
 | `AI_HOME`              | `/srv/ai`                                                  | Root directory for vectorstores and data           |
-| `EMBED_MODEL`          | `BAAI/bge-small-en-v1.5`                                   | HuggingFace embedding model                        |
+| `EMBEDDER`             | `ollama,bge-m3`                                            | `backend,model` used to generate embeddings        |
 | `CHUNK_SIZE`           | `500`                                                      | Characters per chunk                               |
 | `CHUNK_OVERLAP`        | `100`                                                      | Overlap between consecutive chunks                 |
 | `MAX_PAGES`            | `50`                                                       | Max pages per web crawl                            |
@@ -511,12 +532,14 @@ All configuration is managed via Pydantic Settings (`src/config/settings.py`) an
 | `MAX_TURNS`            | `4`                                                        | Conversation turns kept in context window          |
 | `CONFIDENCE_LIMIT`     | `0.79`                                                     | Cosine threshold below which query is reformulated |
 | `LLM_TIMEOUT`          | `600`                                                      | LLM call timeout in seconds                        |
-| `LOCAL_BASE_URL`       | `http://127.0.0.1:52625/v1`                                | Local runtime endpoint                             |
-| `LOCAL_MODEL`          | _(from `LLM_MODEL`)_                                       | Model name at the local runtime                    |
-| `GEMINI_BASE_URL`      | `https://generativelanguage.googleapis.com/v1beta/openai/` | Gemini OpenAI-compatible endpoint                  |
-| `GEMINI_MODEL`         | —                                                          | Gemini model (e.g. `gemini-2.0-flash`)             |
-| `REFORMULATE_PROVIDER` | `gemini`                                                   | Provider for `reformulate_node` and `review_node`  |
-| `GENERATE_PROVIDER`    | `local`                                                    | Provider for `generate_node` and `correct_node`    |
+| `LLM_FLM_URL`          | `http://127.0.0.1:52625/v1`                                | FastFlowLM endpoint                                |
+| `LLM_OLLAMA_URL`       | `http://127.0.0.1:11434`                                   | Ollama endpoint                                    |
+| `LLM_GEMINI_URL`       | `https://generativelanguage.googleapis.com/v1beta/openai/` | Gemini OpenAI-compatible endpoint                  |
+| `GEMINI_API_KEY`       | —                                                           | Gemini API key                                     |
+| `LLM_ROL_GENERATE`     | —                                                           | `backend,model` for `generate_node`/`correct_node` |
+| `LLM_ROL_REFORMULATE`  | —                                                           | `backend,model` for `reformulate_node`             |
+| `LLM_ROL_REVIEW`       | —                                                           | `backend,model` for `review_node`                  |
+| `LLM_ROL_SUPPLEMENT`   | —                                                           | `backend,model` for the web-supplement decision    |
 | `API_HOST`             | `127.0.0.1`                                                | FastAPI bind address                               |
 | `API_PORT`             | `8000`                                                     | FastAPI port                                       |
 
@@ -526,7 +549,7 @@ All configuration is managed via Pydantic Settings (`src/config/settings.py`) an
 
 - **`.env.*` files are gitignored** (except `.env.example`). Never commit API keys.
 - If you cloned an earlier version of this repo, **rotate your Gemini API key** — `.env.gemini` was not excluded from git in versions prior to the multi-provider refactor.
-- The local LLM receives full document chunks in every request. Ensure your local runtime is not exposed on a public interface (`LOCAL_BASE_URL` should always bind to `127.0.0.1`).
+- Any role pointed at a local backend (`flm`/`ollama`) receives full document chunks in every request. Ensure your local runtime is not exposed on a public interface (`LLM_FLM_URL`/`LLM_OLLAMA_URL` should always bind to `127.0.0.1`).
 - The FastAPI server also defaults to `127.0.0.1`. Do not expose it publicly without authentication and TLS.
 
 ---

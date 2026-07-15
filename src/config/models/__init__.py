@@ -4,9 +4,17 @@ Registro de capacidades por modelo -- reemplaza los antiguos
 en .env) por un dict JSON por modelo, uno por backend, en su propio
 archivo:
 
-    src/config/models/fastflowlm.py
+    src/config/models/flm.py
     src/config/models/ollama.py
     src/config/models/gemini.py
+
+El nombre de archivo/clave de cada backend acá ("flm", "ollama",
+"gemini") coincide 1:1 con el alias de backend usado en .env.providers
+(LLM_FLM_URL, EMBEDDER_OLLAMA_URL, LLM_ROL_GENERATE=flm,..., EMBEDDER=
+ollama,..., etc. -- ver src/config/settings.py) y con el `capabilities`
+de cada ProviderConfig en src/nlp/llm/providers.py. Es a propósito: el
+mismo string identifica al backend en las tres capas, así que agregar
+un backend nuevo nunca implica inventar un alias distinto en cada capa.
 
 Por qué esto y no .env:
   Antes era posible declarar "think_mode" en LOCAL_SUPPORTS y olvidarse
@@ -73,10 +81,10 @@ class _ModelBackend(Protocol):
 def _registry() -> dict[str, _ModelBackend]:
     # Import perezoso (dentro de la función) para que agregar un archivo
     # nuevo en esta carpeta no requiera tocar nada acá salvo esta línea.
-    from src.config.models import fastflowlm, gemini, ollama
+    from src.config.models import flm, gemini, ollama
 
     return {
-        "fastflowlm": fastflowlm,
+        "flm": flm,
         "ollama": ollama,
         "gemini": gemini,
     }

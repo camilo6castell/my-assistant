@@ -1,13 +1,13 @@
 """
 Roles de LLM: cada punto del pipeline que llama a un modelo se identifica
-con uno de estos roles. El provider que atiende cada rol se configura de
-forma independiente (ver Settings.provider_for en src/config/settings.py)
--- antes reformular, revisar, y evaluar el complemento web compartían el
-mismo "reformulate_provider" sin ninguna razón salvo que nunca se
-separaron; ahora cada rol tiene su propia env var, así se puede, por
-ejemplo, correr la respuesta final en un modelo local potente y las
-tareas cortas de apoyo en un modelo rápido en la nube, sin acoplar unas
-con otras.
+con uno de estos roles. El backend+modelo que atiende cada rol se
+configura de forma independiente (ver Settings.role_spec en
+src/config/settings.py) -- antes reformular, revisar, y evaluar el
+complemento web compartían el mismo "reformulate_provider" sin ninguna
+razón salvo que nunca se separaron; ahora cada rol tiene su propia env
+var, así se puede, por ejemplo, correr la respuesta final en un modelo
+local potente y las tareas cortas de apoyo en un modelo rápido en la
+nube, sin acoplar unas con otras.
 
 Módulo separado, sin importar nada del resto del proyecto (ni siquiera
 settings), específicamente para poder importarse tanto desde

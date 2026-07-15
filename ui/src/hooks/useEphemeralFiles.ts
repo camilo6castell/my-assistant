@@ -5,6 +5,7 @@ import {
   listEphemeralFiles,
   uploadFile,
 } from "@/lib/api/client"
+import { DEMO_MODE } from "@/lib/demo"
 
 export function useEphemeralFiles(conversationId: string | null) {
   const queryClient = useQueryClient()
@@ -13,7 +14,9 @@ export function useEphemeralFiles(conversationId: string | null) {
   const query = useQuery({
     queryKey,
     queryFn: () => listEphemeralFiles(conversationId!),
-    enabled: conversationId !== null,
+    // No backend in a demo deployment -- see RightSidebar.tsx, which
+    // shows an explanatory message instead of calling this at all.
+    enabled: conversationId !== null && !DEMO_MODE,
     staleTime: 10_000,
   })
 

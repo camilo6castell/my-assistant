@@ -11,7 +11,6 @@ from fastapi import APIRouter
 
 from src.api.schemas.config import ProviderInfo, ProvidersResponse
 from src.config.models import get_default_think, get_supports
-from src.config.settings import settings
 from src.nlp.llm.providers import list_provider_configs
 from src.nlp.llm.roles import LLMRole
 
@@ -50,6 +49,5 @@ async def list_providers() -> ProvidersResponse:
             )
             for name, config in table.items()
         },
-        active_generation_provider=settings.provider_for(LLMRole.GENERATE),
-        provider_roles={role.value: settings.provider_for(role) for role in LLMRole},
+        active_generation_provider=LLMRole.GENERATE.value,
     )

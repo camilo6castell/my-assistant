@@ -11,7 +11,7 @@ const emptyGeneration = {
 function makeConversation(): Conversation {
   return {
     id: nanoid(),
-    title: "Nueva conversación",
+    title: "New conversation",
     createdAt: Date.now(),
     messages: [],
     activeCollections: [],
@@ -25,7 +25,7 @@ function makeConversation(): Conversation {
 /** ChatGPT/Claude-style: el título sale del primer mensaje del usuario. */
 function titleFromMessage(content: string): string {
   const trimmed = content.trim().replace(/\s+/g, " ")
-  return trimmed.length > 48 ? `${trimmed.slice(0, 48)}…` : trimmed || "Nueva conversación"
+  return trimmed.length > 48 ? `${trimmed.slice(0, 48)}…` : trimmed || "New conversation"
 }
 
 interface ConversationsState {

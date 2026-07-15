@@ -1,5 +1,5 @@
 import { formatDistanceToNow } from "date-fns";
-import { es } from "date-fns/locale";
+import { enUS } from "date-fns/locale";
 import {
   Check,
   MessageSquarePlus,
@@ -75,7 +75,7 @@ export function Sidebar() {
       <button
         type="button"
         onClick={handleNewConversation}
-        title="Nueva conversación"
+        title="New conversation"
         className="flex size-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-white/10 hover:text-foreground"
       >
         <MessageSquarePlus className="size-4" />
@@ -91,7 +91,7 @@ export function Sidebar() {
       <button
         type="button"
         onClick={toggleLeftCollapsed}
-        title="Generación"
+        title="Generation"
         className="flex size-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-white/10 hover:text-foreground"
       >
         <Settings2 className="size-4" />
@@ -118,7 +118,7 @@ export function Sidebar() {
         <nav className="min-h-0 flex-1 space-y-1 overflow-y-auto px-3 pb-2">
           {conversations.length === 0 && (
             <p className="px-2 py-4 text-center text-xs text-muted-foreground">
-              Todavía no tenés conversaciones.
+              No conversations yet.
             </p>
           )}
           {conversations.map((conv) => {
@@ -167,7 +167,7 @@ export function Sidebar() {
                   <span className="block truncate text-[11px] text-muted-foreground/70">
                     {formatDistanceToNow(conv.createdAt, {
                       addSuffix: true,
-                      locale: es,
+                      locale: enUS,
                     })}
                   </span>
                 </span>
@@ -182,7 +182,7 @@ export function Sidebar() {
                         handleCommitEdit(conv.id);
                       }}
                       className="rounded-md p-1 text-muted-foreground hover:bg-white/10 hover:text-foreground"
-                      aria-label="Guardar nombre"
+                      aria-label="Save name"
                     >
                       <Check className="size-3.5" />
                     </span>
@@ -192,7 +192,7 @@ export function Sidebar() {
                       tabIndex={0}
                       onClick={(e) => handleStartEdit(e, conv.id, conv.title)}
                       className="rounded-md p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-white/10 hover:text-foreground group-hover:opacity-100"
-                      aria-label="Renombrar conversación"
+                      aria-label="Rename conversation"
                     >
                       <Pencil className="size-3.5" />
                     </span>
@@ -205,7 +205,7 @@ export function Sidebar() {
                       "rounded-md p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-white/10 hover:text-destructive group-hover:opacity-100",
                       isEditing && "hidden",
                     )}
-                    aria-label="Eliminar conversación"
+                    aria-label="Delete conversation"
                   >
                     <Trash2 className="size-3.5" />
                   </span>
@@ -217,7 +217,7 @@ export function Sidebar() {
       </section>
       <div className="mx-3 border-t border-white/10" />
       <section className="flex h-[fit-content] max-h-[50%] min-h-0 flex-col pt-3">
-        <SidebarSectionHeader icon={Settings2} label="Generación" />
+        <SidebarSectionHeader icon={Settings2} label="Generation" />
         <div className="h-[fit-content] max-h-full min-h-0 overflow-y-auto pb-4">
           {activeConversation ? (
             <ResponseModeSection
@@ -226,8 +226,7 @@ export function Sidebar() {
             />
           ) : (
             <p className="px-3 py-4 text-center text-xs text-muted-foreground">
-              Elegí o creá una conversación para configurar el modo de
-              respuesta.
+              Pick or create a conversation to configure the response mode.
             </p>
           )}
         </div>

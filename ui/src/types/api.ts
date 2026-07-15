@@ -67,8 +67,6 @@ export interface ProviderInfo {
 export interface ProvidersResponse {
   providers: Record<string, ProviderInfo>
   active_generation_provider: string
-  /** Mapa completo rol -> provider (ver LLMRole en el backend). */
-  provider_roles: Record<string, string>
 }
 
 export interface EphemeralFileInfo {

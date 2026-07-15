@@ -40,8 +40,8 @@ export function MessageBubble({
         <button
           type="button"
           onClick={onDelete}
-          aria-label="Borrar mensaje"
-          title="Borrar mensaje"
+          aria-label="Delete message"
+          title="Delete message"
           className="order-first mt-2.5 shrink-0 self-start rounded-md p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-white/10 hover:text-destructive group-hover:opacity-100"
         >
           <Trash2 className="size-3.5" />
@@ -73,7 +73,7 @@ export function MessageBubble({
             {message.confidence !== undefined && (
               <span className="inline-flex items-center gap-1">
                 <Sparkles className="size-3" />
-                confianza {(message.confidence * 100).toFixed(0)}%
+                confidence {(message.confidence * 100).toFixed(0)}%
               </span>
             )}
             {!!message.collectionsUsed?.length && (
@@ -85,10 +85,10 @@ export function MessageBubble({
             {message.usedWebSearch && (
               <span className="inline-flex items-center gap-1">
                 <Globe className="size-3" />
-                incluye búsqueda web
+                includes web search
               </span>
             )}
-            {message.reformulated && <span>· pregunta reformulada</span>}
+            {message.reformulated && <span>· question reformulated</span>}
           </div>
         )}
 
@@ -113,7 +113,7 @@ export function MessageBubble({
         {message.isError && (
           <div className="mt-2 flex items-center gap-1.5 text-xs">
             <AlertCircle className="size-3.5" />
-            No se pudo completar la respuesta
+            Couldn't complete the response
           </div>
         )}
       </div>
@@ -122,8 +122,8 @@ export function MessageBubble({
         <button
           type="button"
           onClick={onDelete}
-          aria-label="Borrar mensaje"
-          title="Borrar mensaje"
+          aria-label="Delete message"
+          title="Delete message"
           className="mt-2.5 shrink-0 self-start rounded-md p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-white/10 hover:text-destructive group-hover:opacity-100"
         >
           <Trash2 className="size-3.5" />

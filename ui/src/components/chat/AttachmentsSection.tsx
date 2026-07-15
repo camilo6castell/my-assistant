@@ -47,8 +47,8 @@ export function AttachmentsSection({
   return (
     <div className="space-y-3 px-3">
       <p className="text-[11px] leading-snug text-muted-foreground/70">
-        Se mandan enteros con tu próximo mensaje -- sin búsqueda ni
-        resúmenes. Una vez enviados, dejan de estar adjuntos.
+        Sent whole with your next message -- no search, no summaries.
+        Once sent, they're no longer attached.
       </p>
 
       <input
@@ -66,7 +66,7 @@ export function AttachmentsSection({
         onClick={handlePickFile}
       >
         <UploadCloud className="size-3.5" />
-        {attachments.upload.isPending ? "Subiendo..." : "Adjuntar archivo"}
+        {attachments.upload.isPending ? "Uploading..." : "Attach file"}
       </Button>
 
       {attachments.upload.isError && (
@@ -77,7 +77,7 @@ export function AttachmentsSection({
 
       {fileCount === 0 ? (
         <p className="py-2 text-center text-xs text-muted-foreground">
-          Sin adjuntos pendientes.
+          No pending attachments.
         </p>
       ) : (
         <ul className="space-y-1">
@@ -95,7 +95,7 @@ export function AttachmentsSection({
               </span>
               <button
                 type="button"
-                aria-label={`Quitar ${f.filename}`}
+                aria-label={`Remove ${f.filename}`}
                 onClick={() => attachments.remove.mutate(f.file_id)}
                 className="shrink-0 rounded p-1 text-muted-foreground hover:bg-white/10 hover:text-destructive"
               >

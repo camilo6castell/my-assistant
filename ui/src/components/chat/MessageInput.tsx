@@ -43,7 +43,7 @@ export function MessageInput({
           value={value}
           onChange={handleInput}
           onKeyDown={handleKeyDown}
-          placeholder="Escribí tu pregunta..."
+          placeholder="Type your question..."
           rows={1}
           className="max-h-[200px] flex-1 px-2 py-2"
           disabled={disabled}
@@ -52,7 +52,7 @@ export function MessageInput({
           size="icon"
           onClick={handleSubmit}
           disabled={disabled || !value.trim()}
-          aria-label="Enviar mensaje"
+          aria-label="Send message"
         >
           <ArrowUp className="size-4" />
         </Button>

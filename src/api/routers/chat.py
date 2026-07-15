@@ -150,7 +150,7 @@ def _validate_generation_options(request: QueryRequest) -> None:
     """
     400 si `request.generation` pide think_mode y/o extra pero el
     provider que efectivamente va a generar la respuesta
-    (settings.provider_for(LLMRole.GENERATE)) no los soporta -- ver
+    (LLMRole.GENERATE.value) no los soporta -- ver
     get_supports() en src/config/models/. Fail-fast acá, antes de
     resolver colecciones o tocar el LLM, mismo criterio que
     _validate_web_search.
@@ -164,7 +164,7 @@ def _validate_generation_options(request: QueryRequest) -> None:
     if generation is None:
         return
 
-    provider_name = settings.provider_for(LLMRole.GENERATE)
+    provider_name = LLMRole.GENERATE.value
     config = get_provider(provider_name)
     supports = get_supports(config.capabilities, config.model)
 
@@ -255,7 +255,7 @@ def _answer_web_only(
     answer = ask_llm(
         prompt=prompt,
         chat_memory=chat_memory,
-        provider=settings.provider_for(LLMRole.GENERATE),
+        provider=LLMRole.GENERATE.value,
         **_generation_kwargs(request.generation),
     )
     return answer, _web_sources_from_results(outcome.results)
@@ -295,7 +295,7 @@ def _answer_raw(
             system_prompt="",
             prompt=prompt,
             chat_memory=chat_memory,
-            provider=settings.provider_for(LLMRole.GENERATE),
+            provider=LLMRole.GENERATE.value,
             max_tokens=generation_kwargs["max_tokens"],
         )
     except ContextLimitExceeded as e:
@@ -304,7 +304,7 @@ def _answer_raw(
     return ask_llm(
         prompt=prompt,
         chat_memory=chat_memory,
-        provider=settings.provider_for(LLMRole.GENERATE),
+        provider=LLMRole.GENERATE.value,
         system_prompt="",
         **generation_kwargs,
     )
@@ -347,7 +347,7 @@ def _supplement_with_web(
         supplement = ask_llm_internal(
             prompt=supplement_prompt,
             system_prompt=build_web_supplement_system_prompt(),
-            provider=settings.provider_for(LLMRole.WEB_SUPPLEMENT),
+            provider=LLMRole.WEB_SUPPLEMENT.value,
             max_tokens=gen_kwargs["max_tokens"],
         )
 
@@ -512,7 +512,7 @@ async def query(
                 system_prompt=build_system_prompt(),
                 prompt=prompt,
                 chat_memory=chat_memory,
-                provider=settings.provider_for(LLMRole.GENERATE),
+                provider=LLMRole.GENERATE.value,
                 max_tokens=generation_kwargs["max_tokens"],
             )
         except ContextLimitExceeded as e:
@@ -521,7 +521,7 @@ async def query(
         answer = ask_llm(
             prompt=prompt,
             chat_memory=chat_memory,
-            provider=settings.provider_for(LLMRole.GENERATE),
+            provider=LLMRole.GENERATE.value,
             **generation_kwargs,
         )
 

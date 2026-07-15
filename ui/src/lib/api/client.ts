@@ -40,7 +40,9 @@ function getDetail(error: unknown): string | StructuredErrorDetail | undefined {
 /**
  * Extrae un mensaje legible del `detail` que devuelve FastAPI en 400/404/422
  * (ver HTTPException en los routers) -- si no hay detail estructurado, cae
- * al mensaje genérico de axios/red.
+ * al mensaje genérico de axios/red. También maneja Error planos (no-axios)
+ * para el modo demo (ver lib/demo.ts -- askGeminiDemo lanza Error, no pega
+ * contra el backend, así que nunca hay un AxiosError que inspeccionar).
  */
 export function apiErrorMessage(error: unknown): string {
   const detail = getDetail(error)
@@ -49,21 +51,24 @@ export function apiErrorMessage(error: unknown): string {
     if (detail.message) return detail.message
     if (detail.error === "context_limit_exceeded") {
       return (
-        `El mensaje es demasiado largo para el modelo activo ` +
-        `(${detail.estimated_tokens} tokens estimados, límite ${detail.limit}). ` +
-        `Acortá el mensaje o quitá algún archivo adjunto.`
+        `The message is too long for the active model ` +
+        `(${detail.estimated_tokens} estimated tokens, limit ${detail.limit}). ` +
+        `Shorten the message or remove an attachment.`
       )
     }
   }
 
   if (axios.isAxiosError(error)) {
     if (error.code === "ERR_NETWORK") {
-      return "No se pudo conectar con el backend. ¿Está corriendo uvicorn en " +
+      return (
+        "Couldn't connect to the backend. Is uvicorn running at " +
         `${import.meta.env.VITE_API_BASE_URL}?`
+      )
     }
     return error.message
   }
-  return "Ocurrió un error inesperado."
+  if (error instanceof Error) return error.message
+  return "An unexpected error occurred."
 }
 
 /**

@@ -6,6 +6,7 @@ Las opciones 2-4 son solo consulta, sin modificar estado.
 
 from src.cli.session import ChatSession
 from src.config.settings import settings
+from src.nlp.llm.roles import LLMRole
 
 # ======================================================
 # MAIN MENU
@@ -94,12 +95,14 @@ def show_modes() -> None:
 def show_about() -> None:
     """Información de la aplicación."""
 
+    generate_backend, generate_model = settings.role_spec(LLMRole.GENERATE)
+
     print(f"""
   ─────────────────────────────────────────────────────────────────
   My-Asisstant is a RAG SYSTEM made by camilo6castell
   ─────────────────────────────────────────────────────────────────
-  Embedding model : {settings.embedding_model}
-  LLM model       : {settings.local_model}
+  Embedding model : {settings.embedding_backend}/{settings.embedding_model}
+  LLM model       : {generate_backend}/{generate_model}
   Chunk size      : {settings.chunk_size} chars  (overlap {settings.chunk_overlap})
   Top-K riguroso  : {settings.hard_top_k_final} resultados finales
   Top-K interpret : {settings.soft_top_k_final} resultados finales

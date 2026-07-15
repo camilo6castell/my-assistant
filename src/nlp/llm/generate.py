@@ -272,9 +272,9 @@ def ask_llm(
 ) -> str:
     """
     provider es obligatorio y siempre debe venir de
-    settings.provider_for(LLMRole.GENERATE) -- ver src/llm/roles.py. Este
+    LLMRole.GENERATE.value -- ver src/nlp/llm/roles.py. Este
     módulo ya no elige un default por su cuenta: el único lugar donde se
-    decide "qué modelo genera la respuesta" es Settings.provider_for(),
+    decide "qué modelo genera la respuesta" es Settings.role_spec(),
     para que no haya una segunda fuente de verdad silenciosa.
 
     system_prompt: override opcional del system prompt -- None usa
@@ -371,7 +371,7 @@ def ask_llm_internal(
 #     src/api/routers/chat.py).
 
 #     provider es obligatorio -- debe venir de
-#     settings.provider_for(LLMRole.WEB_SUPPLEMENT).
+#     LLMRole.WEB_SUPPLEMENT.value.
 #     """
 #     messages = build_messages(
 #         prompt=prompt, chat_memory=[], system_prompt=system_prompt

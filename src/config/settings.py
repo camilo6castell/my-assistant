@@ -20,6 +20,25 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from src.nlp.llm.roles import LLMRole
 
 
+def _split_backend_model(raw: str, var_name: str) -> tuple[str, str]:
+    """
+    Parsea el formato "backend,modelo" que usan EMBEDDER y LLM_ROL_* en
+    .env.providers (ej. "flm,qwen3.5:9b" -> ("flm", "qwen3.5:9b")).
+
+    El split es solo en la PRIMERA coma: el nombre del modelo puede traer
+    ':' legítimamente (tags de Ollama/FastFlowLM, ej. "qwen3.5:9b"), así
+    que nunca se parte por eso.
+    """
+    backend, sep, model = raw.partition(",")
+    backend, model = backend.strip(), model.strip()
+    if not sep or not backend or not model:
+        raise ValueError(
+            f"{var_name} debe tener el formato 'backend,modelo' "
+            f"(ej. 'ollama,bge-m3'). Valor actual: {raw!r}"
+        )
+    return backend, model
+
+
 class Settings(BaseSettings):
     """
     Configuración del sistema RAG.
@@ -54,35 +73,105 @@ class Settings(BaseSettings):
         return self.ai_home / "logs"
 
     # ======================================================
-    # EMBEDDING BACKEND
+    # BACKENDS -- URLs de runtime (.env.providers)
     # ======================================================
-    # EMBEDDING_BACKEND controla qué runtime genera los embeddings:
+    # Un backend es un runtime concreto (FastFlowLM, Ollama, Gemini).
+    # Acá solo vive CÓMO conectarse a cada uno (URL + credencial); QUÉ
+    # modelo de ese backend usa cada rol se decide más abajo, en
+    # EMBEDDER / LLM_ROL_* -- nunca en esta sección.
     #
-    #   sentence_transformers  → carga el modelo localmente en Python
-    #                            (CPU o GPU según disponibilidad de torch).
-    #                            Sin servidor externo. Default.
-    #
-    #   ollama                 → petición HTTP a Ollama (GPU Vulkan).
-    #                            Requiere: EMBEDDING_BASE_URL, EMBEDDING_MODEL.
-    #
-    #   fastflowlm             → petición HTTP a FastFlowLM (NPU).
-    #                            Requiere: EMBEDDING_BASE_URL, EMBEDDING_MODEL.
-    #                            Usa el endpoint OpenAI-compatible /v1/embeddings.
-    #
-    # IMPORTANTE: cambiar backend o modelo invalida los índices existentes.
-    # Los vectores de backends distintos viven en rutas separadas:
-    #   /srv/ai/vector_stores/<backend>/<model_safe>/<category>/<collection>/
-    # donde model_safe reemplaza '/' por '_' para evitar subdirectorios.
+    # flm/ollama no requieren API key real (runtimes locales); el campo
+    # existe solo porque el SDK de OpenAI exige un string no vacío -- ver
+    # Settings.embedding_api_key y providers._backend_api_key().
+    llm_flm_url: str = Field(default="")
+    llm_ollama_url: str = Field(default="")
+    llm_gemini_url: str = Field(default="")
+    gemini_api_key: str = Field(default="")
 
-    embedding_model: str = Field(default="BAAI/bge-m3")
-    embedding_backend: str = Field(default="sentence_transformers")
-    embedding_base_url: str = Field(default="http://127.0.0.1:11434")
-    embedding_api_key: str = Field(default="ollama")
+    embedder_flm_url: str = Field(default="")
+    embedder_ollama_url: str = Field(default="")
+
+    # ======================================================
+    # EMBEDDER -- qué backend + modelo generan los embeddings
+    # ======================================================
+    # Formato "backend,modelo" (ver _split_backend_model). Backends
+    # válidos: sentence_transformers (en proceso, sin URL) | ollama |
+    # flm. Agregar un modelo nuevo a un backend existente es una entrada
+    # en src/config/models/<backend>.py -- nunca una variable de entorno
+    # nueva.
+    #
+    # IMPORTANTE: cambiar backend o modelo invalida los índices
+    # existentes. Los índices se guardan en rutas separadas por
+    # backend/modelo:
+    #   /srv/ai/vector_stores/<backend>/<model_safe>/<categoria>/<coleccion>/
+    # donde model_safe reemplaza '/' y ':' por '_'.
+    embedder: str = Field(default="ollama,bge-m3")
+
+    @field_validator(
+        "embedder",
+        "llm_rol_generate",
+        "llm_rol_reformulate",
+        "llm_rol_review",
+        "llm_rol_supplement",
+        mode="after",
+    )
+    @classmethod
+    def _validate_backend_model_format(cls, v: str, info: ValidationInfo) -> str:
+        """Falla rápido en el arranque si EMBEDDER/LLM_ROL_* no vienen 'backend,modelo'."""
+        if info.field_name is not None:
+            _split_backend_model(v, info.field_name.upper())
+        return v
+
+    @property
+    def embedder_backend(self) -> str:
+        return _split_backend_model(self.embedder, "EMBEDDER")[0]
+
+    @property
+    def embedder_model(self) -> str:
+        return _split_backend_model(self.embedder, "EMBEDDER")[1]
+
+    # Alias retrocompatibles -- ingest/core.py, cli/commands.py,
+    # context/*.py y nlp/embedders/encoder.py ya conocían estos nombres
+    # desde antes de la simplificación de .env.providers; se mantienen
+    # como la interfaz pública de "qué backend/modelo generan embeddings"
+    # para no tener que tocar esos call sites.
+    @property
+    def embedding_backend(self) -> str:
+        return self.embedder_backend
+
+    @property
+    def embedding_model(self) -> str:
+        return self.embedder_model
 
     @property
     def embedding_model_safe(self) -> str:
         """Nombre del modelo sanitizado para usar como directorio."""
         return self.embedding_model.replace("/", "_").replace(":", "_")
+
+    @property
+    def embedding_base_url(self) -> str:
+        """
+        URL HTTP del backend de embeddings activo.
+
+        Solo tiene sentido para backends HTTP (ollama/flm) -- llamar esto
+        con EMBEDDER=sentence_transformers,... es un error del caller
+        (ese backend corre en proceso, sin URL) y se señaliza como tal.
+        """
+        urls = {"flm": self.embedder_flm_url, "ollama": self.embedder_ollama_url}
+        backend = self.embedding_backend
+        try:
+            return urls[backend]
+        except KeyError:
+            raise ValueError(
+                f"El backend de embeddings {backend!r} no usa URL HTTP "
+                f"(¿EMBEDDER=sentence_transformers,...? ese backend no tiene base_url)."
+            ) from None
+
+    @property
+    def embedding_api_key(self) -> str:
+        # Ni Ollama ni FastFlowLM validan esta key -- el SDK de OpenAI
+        # simplemente exige un string no vacío para construirse.
+        return "not-needed"
 
     @property
     def vector_store_path_for_backend(self) -> Path:
@@ -136,61 +225,51 @@ class Settings(BaseSettings):
     llm_debug_dump: bool = Field(default=False)
 
     # ======================================================
-    # MULTI-PROVIDER LLM
-    # ======================================================
-    # Arquitectura "provider-per-node": cada nodo del grafo puede usar un
-    # proveedor distinto (local, gemini, y los que se agreguen después)
-    # sin tocar graph.py ni nodes.py. Ver src/llm/providers.py.
-    #
-    # local  -> modelo en runtime local (FastFlowLM/Ollama, OpenAI-compatible)
-    # gemini -> Gemini vía endpoint OpenAI-compatible de Google
-    local_base_url: str = Field(default="")
-    local_api_key: str = Field(default="")
-    local_model: str = Field(default="")
-    # "openai_compat" | "ollama_native" -- qué implementación de
-    # LLMClient usar (ver src/llm/backends/).
-    local_client: str = Field(default="openai_compat")
-    # Qué archivo de src/config/models/ mirar para las capacidades reales
-    # de local_model (temperature, max_tokens, think mode y cómo
-    # activarlo). El "supports" que antes vivía acá como string plana
-    # ahora se DERIVA de esa estructura tipada -- no puede desincronizarse.
-    local_capabilities: str = Field(default="fastflowlm")
-
-    gemini_base_url: str = Field(default="")
-    gemini_api_key: str = Field(default="")
-    gemini_model: str = Field(default="")
-    gemini_client: str = Field(default="openai_compat")
-    gemini_capabilities: str = Field(default="gemini")
-
-    # ======================================================
-    # LLM POR ROL
+    # LLM POR ROL -- qué backend + modelo atiende cada rol
     # ======================================================
     # Cada punto del pipeline que llama a un LLM se identifica con un rol
-    # (ver LLMRole en src/llm/roles.py), y el provider que lo atiende se
-    # configura acá, por separado -- este es el único lugar donde se
-    # decide "qué modelo hace qué". Antes reformular, revisar, y evaluar
-    # el complemento web compartían un mismo REFORMULATE_PROVIDER sin
-    # ninguna razón salvo que nunca se separaron; ahora cada uno tiene su
-    # propia env var, así se puede, por ejemplo, correr la respuesta
-    # final en un modelo local potente y las tareas cortas de apoyo
-    # (reformular/revisar/evaluar-web) en un modelo rápido en la nube,
-    # sin acoplar unas con otras. Todo call site que necesita un LLM
-    # pasa SIEMPRE por provider_for(role) más abajo -- ver
-    # src/llm/generate.py, donde provider dejó de tener un default
-    # implícito precisamente para forzar esto.
-    provider_generate: str = Field(default="local")
-    provider_reformulate: str = Field(default="local")
-    provider_review: str = Field(default="local")
-    provider_web_supplement: str = Field(default="local")
+    # (ver LLMRole en src/nlp/llm/roles.py). Acá se decide, por
+    # separado y en formato "backend,modelo" (ver _split_backend_model),
+    # qué backend + modelo lo atiende -- este es el ÚNICO lugar donde se
+    # decide "qué modelo hace qué rol". No hay una capa de indirección
+    # extra tipo PROVIDER_GENERATE=local: el rol especifica su backend y
+    # modelo directamente, y ambos ejes (backend -> URL/cliente,
+    # modelo -> capacidades) se resuelven en src/nlp/llm/providers.py.
+    #
+    # Agregar un modelo nuevo a un backend existente = una entrada en
+    # src/config/models/<backend>.py, nunca una variable de entorno
+    # nueva. Agregar un backend nuevo (ej. Claude, OpenAI) = una entrada
+    # en los registros de src/nlp/llm/providers.py + un archivo en
+    # src/config/models/ + (si hace falta un cliente nuevo) uno en
+    # src/nlp/llm/backends/ -- nunca hace falta tocar graph.py, nodes.py
+    # ni generate.py.
+    llm_rol_generate: str = Field(default="")
+    llm_rol_reformulate: str = Field(default="")
+    llm_rol_review: str = Field(default="")
+    # Nombrada distinto a LLMRole.WEB_SUPPLEMENT a propósito: en
+    # .env.providers el rol se llama "SUPPLEMENT" (más corto), el nombre
+    # interno completo ("web_supplement") solo vive en el enum. El mapeo
+    # entre ambos está en role_spec() más abajo -- único lugar que lo
+    # conoce.
+    llm_rol_supplement: str = Field(default="")
 
-    def provider_for(self, role: LLMRole) -> str:
-        """Único punto de lookup rol -> provider. Ver LLMRole para qué es cada uno."""
-        return {
-            LLMRole.GENERATE: self.provider_generate,
-            LLMRole.REFORMULATE: self.provider_reformulate,
-            LLMRole.REVIEW: self.provider_review,
-            LLMRole.WEB_SUPPLEMENT: self.provider_web_supplement,
-        }[role]
+    def role_spec(self, role: LLMRole) -> tuple[str, str]:
+        """
+        Devuelve (backend, modelo) configurado para `role`, ej.
+        role_spec(LLMRole.GENERATE) -> ("flm", "qwen3.5:9b").
+
+        Único punto de lookup rol -> (backend, modelo). Los call sites
+        (src/nlp/llm/providers.py, src/nlp/llm/context_guard.py) nunca
+        leen llm_rol_* directamente.
+        """
+        raw_by_role: dict[LLMRole, tuple[str, str]] = {
+            LLMRole.GENERATE: ("LLM_ROL_GENERATE", self.llm_rol_generate),
+            LLMRole.REFORMULATE: ("LLM_ROL_REFORMULATE", self.llm_rol_reformulate),
+            LLMRole.REVIEW: ("LLM_ROL_REVIEW", self.llm_rol_review),
+            LLMRole.WEB_SUPPLEMENT: ("LLM_ROL_SUPPLEMENT", self.llm_rol_supplement),
+        }
+        var_name, raw = raw_by_role[role]
+        return _split_backend_model(raw, var_name)
 
     # Agent — umbral de foco temático para el grafo LangGraph.
     # Con 1 colección mide spread de chunk_index (menor = match).

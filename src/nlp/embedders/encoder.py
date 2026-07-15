@@ -6,12 +6,13 @@ Diseño:
   EmbeddingEncoder cacheada. Toda la lógica de backend vive aquí —
   core.py y search.py solo importan get_encoder() y llaman a encode().
 
-  Backends soportados:
+  Backends soportados (mismo alias que en .env.providers, ver EMBEDDER
+  en src/config/settings.py):
     sentence_transformers  — carga el modelo HuggingFace en proceso Python.
                              Sin servidor externo. Default.
     ollama                 — HTTP al endpoint /api/embeddings de Ollama.
                              Ollama corre con soporte Vulkan (GPU AMD).
-    fastflowlm             — HTTP al endpoint /v1/embeddings, compatible
+    flm                    — HTTP al endpoint /v1/embeddings, compatible
                              con la API OpenAI. FastFlowLM usa la NPU.
 
   Ambos backends HTTP usan el mismo client OpenAI porque FastFlowLM expone
@@ -119,8 +120,9 @@ class HttpEmbeddingEncoder(EmbeddingEncoder):
 
     Ambos exponen un endpoint /v1/embeddings compatible con la API
     OpenAI, por lo que comparten el mismo client. La diferencia entre
-    ollama y fastflowlm es solo la base_url y el modelo configurados
-    en .env.providers.
+    ollama y flm es solo la base_url (EMBEDDER_OLLAMA_URL /
+    EMBEDDER_FLM_URL) y el modelo (EMBEDDER=<backend>,<modelo>)
+    configurados en .env.providers.
 
     Ollama: http://localhost:11434  (GPU Vulkan)
     FastFlowLM: http://127.0.0.1:52625  (NPU)
@@ -169,7 +171,7 @@ class HttpEmbeddingEncoder(EmbeddingEncoder):
 _BACKEND_MAP: dict[str, type[EmbeddingEncoder]] = {
     "sentence_transformers": SentenceTransformersEncoder,
     "ollama": HttpEmbeddingEncoder,
-    "fastflowlm": HttpEmbeddingEncoder,
+    "flm": HttpEmbeddingEncoder,
 }
 
 

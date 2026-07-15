@@ -24,7 +24,6 @@ import warnings
 from typing import cast
 
 from src.cli.session import ChatSession
-from src.config.settings import settings
 from src.context.manager import LoadedCollection
 from src.context.models import SearchResult
 from src.context.selector import match_contexts
@@ -214,7 +213,7 @@ def _handle_question(session: ChatSession, question: str) -> None:
     answer: str = ask_llm(
         prompt=prompt,
         chat_memory=session.chat_memory,
-        provider=settings.provider_for(LLMRole.GENERATE),
+        provider=LLMRole.GENERATE.value,
     )
 
     print("  Answer:\n")

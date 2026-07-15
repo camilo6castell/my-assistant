@@ -30,7 +30,7 @@ export function FilesSection({ files }: { files: ReturnType<typeof useEphemeralF
   return (
     <div className="space-y-3 px-3">
       <label className="flex items-center justify-between">
-        <span className="text-xs text-muted-foreground">Adjuntar a colección permanente</span>
+        <span className="text-xs text-muted-foreground">Attach to permanent collection</span>
         <Switch checked={attachToCollection} onCheckedChange={setAttachToCollection} />
       </label>
 
@@ -38,7 +38,7 @@ export function FilesSection({ files }: { files: ReturnType<typeof useEphemeralF
         <input
           value={collectionName}
           onChange={(e) => setCollectionName(e.target.value)}
-          placeholder="namespace/coleccion"
+          placeholder="namespace/collection"
           className="w-full rounded-lg border border-white/10 bg-white/5 px-2.5 py-1.5 text-xs outline-none placeholder:text-muted-foreground focus-visible:border-ring"
         />
       )}
@@ -58,7 +58,7 @@ export function FilesSection({ files }: { files: ReturnType<typeof useEphemeralF
         onClick={handlePickFile}
       >
         <UploadCloud className="size-3.5" />
-        {files.upload.isPending ? "Subiendo..." : "Subir archivo"}
+        {files.upload.isPending ? "Uploading..." : "Upload file"}
       </Button>
 
       {files.upload.isError && (
@@ -67,7 +67,7 @@ export function FilesSection({ files }: { files: ReturnType<typeof useEphemeralF
 
       {fileCount === 0 ? (
         <p className="py-2 text-center text-xs text-muted-foreground">
-          Sin archivos efímeros en esta conversación.
+          No ephemeral files in this conversation.
         </p>
       ) : (
         <ul className="space-y-1">
@@ -82,7 +82,7 @@ export function FilesSection({ files }: { files: ReturnType<typeof useEphemeralF
               </span>
               <button
                 type="button"
-                aria-label={`Borrar ${f.filename}`}
+                aria-label={`Delete ${f.filename}`}
                 onClick={() => files.remove.mutate(f.file_id)}
                 className="shrink-0 rounded p-1 text-muted-foreground hover:bg-white/10 hover:text-destructive"
               >

@@ -1,6 +1,7 @@
 import { Sparkles } from "lucide-react"
 import { useNavigate } from "react-router-dom"
 import { Button } from "@/components/ui/button"
+import { DEMO_MODE } from "@/lib/demo"
 import { useConversationsStore } from "@/stores/conversationsStore"
 
 export function EmptyState() {
@@ -18,14 +19,15 @@ export function EmptyState() {
         <Sparkles className="size-6 text-primary" />
       </div>
       <div className="space-y-1">
-        <h1 className="text-lg font-medium text-foreground">Tu asistente RAG</h1>
+        <h1 className="text-lg font-medium text-foreground">Your RAG assistant</h1>
         <p className="max-w-sm text-sm text-muted-foreground">
-          Elegí una conversación existente o empezá una nueva para consultar
-          tus colecciones.
+          {DEMO_MODE
+            ? "This is a static portfolio demo -- chat directly with Gemini, no backend or indexed collections behind it."
+            : "Pick an existing conversation or start a new one to query your collections."}
         </p>
       </div>
       <Button onClick={handleStart} className="mt-2">
-        Nueva conversación
+        New conversation
       </Button>
     </div>
   )

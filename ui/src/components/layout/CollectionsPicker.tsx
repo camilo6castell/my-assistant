@@ -95,7 +95,7 @@ export function CollectionsPicker({
   if (groups.length === 0) {
     return (
       <p className="px-2 py-6 text-center text-xs text-muted-foreground">
-        No hay colecciones disponibles.
+        No collections available.
       </p>
     );
   }

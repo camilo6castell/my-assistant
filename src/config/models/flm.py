@@ -1,5 +1,6 @@
 """
-Configuración de modelos FastFlowLM -- un backend OpenAI-compatible.
+Configuración de modelos FastFlowLM (backend "flm" en .env.providers) --
+un backend OpenAI-compatible.
 
 _MODELS es la ÚNICA fuente de verdad: un dict por modelo con exactamente
 los kwargs que espera `client.chat.completions.create(**kwargs)`. Para

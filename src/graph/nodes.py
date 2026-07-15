@@ -157,7 +157,7 @@ def reformulate_node(state: RAGState) -> RAGStateUpdate:
     reformulated_question = ask_llm_internal(
         system_prompt=build_reformulation_system_prompt(),
         prompt=reformulation_prompt,
-        provider=settings.provider_for(LLMRole.REFORMULATE),
+        provider=LLMRole.REFORMULATE.value,
     )
 
     logger.info(
@@ -208,14 +208,14 @@ def generate_node(state: RAGState) -> RAGStateUpdate:
         system_prompt=build_system_prompt(),
         prompt=prompt,
         chat_memory=state["chat_memory"],
-        provider=settings.provider_for(LLMRole.GENERATE),
+        provider=LLMRole.GENERATE.value,
         max_tokens=state.get("max_tokens"),
     )
 
     answer = ask_llm(
         prompt=prompt,
         chat_memory=state["chat_memory"],
-        provider=settings.provider_for(LLMRole.GENERATE),
+        provider=LLMRole.GENERATE.value,
         max_tokens=state.get("max_tokens"),
         think_mode=state.get("think_mode"),
         extra=state.get("extra"),
@@ -273,7 +273,7 @@ def review_node(state: RAGState) -> RAGStateUpdate:
     raw = ask_llm_internal(
         system_prompt=build_review_system_prompt(),
         prompt=review_prompt,
-        provider=settings.provider_for(LLMRole.REVIEW),
+        provider=LLMRole.REVIEW.value,
     )
 
     temp: str = raw if raw is not None else '{"passed": true, "feedback": ""}'
@@ -335,7 +335,7 @@ def correct_node(state: RAGState) -> RAGStateUpdate:
     corrected = ask_llm(
         prompt=correction_prompt,
         chat_memory=state["chat_memory"],
-        provider=settings.provider_for(LLMRole.GENERATE),
+        provider=LLMRole.GENERATE.value,
         max_tokens=state.get("max_tokens"),
         think_mode=state.get("think_mode"),
         extra=state.get("extra"),

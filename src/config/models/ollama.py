@@ -27,10 +27,20 @@ _MODELS: dict[str, dict[str, Any]] = {
         },
         "think": False,
     },
+    "qwen3.5:2b": {
+        "options": {
+            "temperature": 0.0,
+            "num_predict": 4096,
+            "top_p": 1.0,
+            "top_k": 20,
+        },
+        "think": False,
+    },
 }
 
 _CONTEXT_WINDOWS: dict[str, int] = {
     "deepseek-r1": 32_768,
+    "qwen3.5:2b": 32_768,
 }
 
 

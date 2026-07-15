@@ -70,7 +70,7 @@ export function SidebarShell({
         <button
           type="button"
           onClick={onToggleCollapsed}
-          aria-label={collapsed ? "Expandir panel" : "Colapsar panel"}
+          aria-label={collapsed ? "Expand panel" : "Collapse panel"}
           className="rounded-md p-1.5 text-muted-foreground hover:bg-white/10 hover:text-foreground"
         >
           {collapsed ? (
