@@ -29,12 +29,6 @@ _MODELS: dict[str, dict[str, Any]] = {
     },
 }
 
-
-# Ver el comentario extenso en src/config/models/fastflowlm.py --
-# mismo motivo para mantener esto separado de _MODELS.
-#
-# TODO(Alejandro): depende del modelo que tengas pulleado y su num_ctx
-# real en Ollama (`ollama show deepseek-r1 --modelfile`).
 _CONTEXT_WINDOWS: dict[str, int] = {
     "deepseek-r1": 32_768,
 }

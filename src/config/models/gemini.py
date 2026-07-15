@@ -24,11 +24,6 @@ _MODELS: dict[str, dict[str, Any]] = {
 }
 
 
-# Ver el comentario extenso en src/config/models/fastflowlm.py --
-# mismo motivo para mantener esto separado de _MODELS.
-#
-# TODO(Alejandro): confirmar contra la doc oficial del modelo que
-# efectivamente uses vía el endpoint OpenAI-compatible.
 _CONTEXT_WINDOWS: dict[str, int] = {
     "gemini-2.5-flash-lite": 1_000_000,
 }

@@ -86,7 +86,8 @@ export function ResponseModeSection({
       title: webSearchQuotaExceeded
         ? WEB_SEARCH_QUOTA_EXCEEDED_EXPLANATION
         : WEB_SEARCH_EXPLANATION,
-      onToggle: () => setUseWebSearch(conversation.id, !conversation.useWebSearch),
+      onToggle: () =>
+        setUseWebSearch(conversation.id, !conversation.useWebSearch),
     },
     {
       key: "think",
@@ -97,7 +98,8 @@ export function ResponseModeSection({
       title: supportsThinkMode
         ? THINK_EXPLANATION
         : `El modelo activo (${activeProvider?.model ?? "sin provider"}) no tiene modo de razonamiento configurado.`,
-      onToggle: () => setGeneration(conversation.id, { thinkMode: !effectiveThink }),
+      onToggle: () =>
+        setGeneration(conversation.id, { thinkMode: !effectiveThink }),
     },
     {
       key: "agent",
@@ -107,7 +109,7 @@ export function ResponseModeSection({
       disabled: false,
       title: AGENT_EXPLANATION,
       onToggle: () => setUseAgent(conversation.id, !conversation.useAgent),
-      variant: "gradient",
+      // variant: "gradient",
     },
   ];
 
@@ -149,29 +151,40 @@ export function ResponseModeSection({
           Mejoras
         </span>
         <div className="grid grid-cols-3 gap-1.5">
-          {enhancements.map(({ key, label, icon: Icon, active, disabled, title, onToggle, variant }) => (
-            <button
-              key={key}
-              type="button"
-              onClick={onToggle}
-              disabled={disabled}
-              aria-pressed={active}
-              title={title}
-              className={cn(
-                "flex flex-col items-center gap-1 rounded-lg border px-2 py-2 text-[11px] font-medium transition-all",
-                disabled
-                  ? "cursor-not-allowed border-white/5 text-muted-foreground/30"
-                  : active
-                    ? variant === "gradient"
-                      ? "agent-gradient-active border-transparent text-white shadow-[0_0_12px_rgba(168,85,247,0.45)]"
-                      : "border-primary/40 bg-primary/15 text-primary"
-                    : "border-white/10 text-muted-foreground hover:bg-white/5 hover:text-foreground",
-              )}
-            >
-              <Icon className="size-3.5" />
-              {label}
-            </button>
-          ))}
+          {enhancements.map(
+            ({
+              key,
+              label,
+              icon: Icon,
+              active,
+              disabled,
+              title,
+              onToggle,
+              variant,
+            }) => (
+              <button
+                key={key}
+                type="button"
+                onClick={onToggle}
+                disabled={disabled}
+                aria-pressed={active}
+                title={title}
+                className={cn(
+                  "flex flex-col items-center gap-1 rounded-lg border px-2 py-2 text-[11px] font-medium transition-all",
+                  disabled
+                    ? "cursor-not-allowed border-white/5 text-muted-foreground/30"
+                    : active
+                      ? variant === "gradient"
+                        ? "agent-gradient-active border-transparent text-white shadow-[0_0_12px_rgba(168,85,247,0.45)]"
+                        : "border-primary/40 bg-primary/15 text-primary"
+                      : "border-white/10 text-muted-foreground hover:bg-white/5 hover:text-foreground",
+                )}
+              >
+                <Icon className="size-3.5" />
+                {label}
+              </button>
+            ),
+          )}
         </div>
       </div>
 

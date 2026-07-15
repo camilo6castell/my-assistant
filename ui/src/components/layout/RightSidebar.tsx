@@ -36,7 +36,9 @@ export function RightSidebar() {
   const conversation = useConversationsStore((s) =>
     s.conversations.find((c) => c.id === conversationId),
   );
-  const setActiveCollections = useConversationsStore((s) => s.setActiveCollections);
+  const setActiveCollections = useConversationsStore(
+    (s) => s.setActiveCollections,
+  );
 
   const rightWidth = useUiStore((s) => s.rightWidth);
   const rightCollapsed = useUiStore((s) => s.rightCollapsed);
@@ -111,43 +113,46 @@ export function RightSidebar() {
       onResize={setRightWidth}
       collapsedContent={collapsedContent}
     >
-      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
-        {/* 1. Archivos adjuntos -- ad-hoc, de un solo envío */}
-        <section className="flex shrink-0 flex-col pt-2">
-          <SidebarSectionHeader
-            icon={Paperclip}
-            label="Archivos adjuntos"
-            count={attachmentCount}
-          />
-          <div className="pb-3">
-            <AttachmentsSection attachments={attachments} />
-          </div>
-        </section>
+      <div className="flex min-h-0 flex-1 flex-col">
+        {/* Bloque superior: secciones 1 y 2 se reparten el espacio restante al 50/50 */}
+        <div className="flex min-h-0 flex-1 flex-col">
+          {/* 1. Archivos adjuntos -- ad-hoc, de un solo envío */}
+          <section className="flex min-h-0 flex-1 flex-col pt-2">
+            <SidebarSectionHeader
+              icon={Paperclip}
+              label="Archivos adjuntos"
+              count={attachmentCount}
+            />
+            <div className="min-h-0 flex-1 overflow-y-auto pb-3">
+              <AttachmentsSection attachments={attachments} />
+            </div>
+          </section>
 
-        <div className="mx-3 border-t border-white/10" />
+          <div className="mx-3 shrink-0 border-t border-white/10" />
 
-        {/* 2. Colecciones efímeras -- indexadas, alcance de esta conversación */}
-        <section className="flex shrink-0 flex-col pt-3">
-          <SidebarSectionHeader
-            icon={Sparkles}
-            label="Colecciones efímeras"
-            count={ephemeralCount}
-          />
-          <div className="pb-3">
-            <FilesSection files={ephemeralFiles} />
-          </div>
-        </section>
+          {/* 2. Colecciones efímeras -- indexadas, alcance de esta conversación */}
+          <section className="flex min-h-0 flex-1 flex-col pt-3">
+            <SidebarSectionHeader
+              icon={Sparkles}
+              label="Colecciones efímeras"
+              count={ephemeralCount}
+            />
+            <div className="min-h-0 flex-1 overflow-y-auto pb-3">
+              <FilesSection files={ephemeralFiles} />
+            </div>
+          </section>
+        </div>
 
-        <div className="mx-3 border-t border-white/10" />
+        <div className="mx-3 shrink-0 border-t border-white/10" />
 
-        {/* 3. Colecciones de sistema -- indexadas con `python -m src.ingest`, permanentes */}
-        <section className="flex shrink-0 flex-col pt-3 pb-3">
+        {/* 3. Colecciones de sistema -- pegada abajo, máx 50% de altura, scroll propio */}
+        <section className="flex max-h-[50%] min-h-0 shrink-0 flex-col pt-3 pb-3">
           <SidebarSectionHeader
             icon={Layers}
             label="Colecciones de sistema"
             count={systemCollectionCount}
           />
-          <div className="px-3 pb-3">
+          <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-3">
             <CollectionsPicker
               collections={collectionsData?.collections ?? []}
               active={conversation.activeCollections}

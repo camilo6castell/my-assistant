@@ -59,22 +59,9 @@ _MODELS: dict[str, dict[str, Any]] = {
     },
 }
 
-
-# Ventana de contexto por modelo, en tokens -- usada por el guard de
-# contexto (src/llm/context_guard.py). Deliberadamente SEPARADA de
-# _MODELS: build_kwargs() hace deepcopy(_lookup(model_name)) y lo
-# entrega casi tal cual como kwargs al SDK, así que meter
-# "context_window" ahí lo filtraría al payload real y rompería la
-# llamada con un kwarg desconocido.
-#
-# TODO(Alejandro): confirmar estos valores contra tu build real de
-# FastFlowLM -- son el contexto NOMINAL de cada modelo base, pero
-# FastFlowLM en NPU puede correr con una ventana efectiva menor según
-# cómo hayas compilado/cuantizado el modelo. Hasta confirmarlos, el
-# guard usa estos placeholders.
 _CONTEXT_WINDOWS: dict[str, int] = {
     "qwen3.5:9b": 32_768,
-    "gpt-oss:20b": 32_768,
+    "gpt-oss:20b": 128_000,
     "qwen3.5:2b": 32_768,
 }
 

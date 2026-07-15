@@ -119,7 +119,6 @@ export function Sidebar() {
           Nueva conversación
         </Button>
       </div>
-
       <section className="flex min-h-0 flex-1 flex-col pt-1">
         <SidebarSectionHeader
           icon={MessagesSquare}
@@ -230,10 +229,7 @@ export function Sidebar() {
       <div className="mx-3 border-t border-white/10" />
 
       <section className="flex h-[fit-content] max-h-[50%] min-h-0 flex-col pt-3">
-        <SidebarSectionHeader
-          icon={Settings2}
-          label="Generación"
-        />
+        <SidebarSectionHeader icon={Settings2} label="Generación" />
         <div className="h-[fit-content] max-h-full min-h-0 overflow-y-auto pb-4">
           {activeConversation ? (
             <ResponseModeSection
