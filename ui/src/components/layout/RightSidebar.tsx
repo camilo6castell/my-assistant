@@ -3,6 +3,7 @@ import { useParams } from "react-router-dom"
 import { AttachmentsSection } from "@/components/chat/AttachmentsSection"
 import { FilesSection } from "@/components/chat/FilesSection"
 import { CollectionsPicker } from "@/components/layout/CollectionsPicker"
+import { Skeleton } from "@/components/ui/skeleton"
 import { useAttachments } from "@/hooks/useAttachments"
 import { useCollections } from "@/hooks/useCollections"
 import { useEphemeralFiles } from "@/hooks/useEphemeralFiles"
@@ -59,7 +60,7 @@ export function RightSidebar() {
 
   const attachments = useAttachments(conversationId ?? null)
   const ephemeralFiles = useEphemeralFiles(conversationId ?? null)
-  const { data: collectionsData } = useCollections()
+  const { data: collectionsData, isLoading: collectionsLoading } = useCollections()
 
   const attachmentCount = attachments.data?.files.length ?? 0
   const ephemeralCount = DEMO_MODE ? 0 : (ephemeralFiles.data?.files.length ?? 0)
@@ -71,7 +72,7 @@ export function RightSidebar() {
         type="button"
         onClick={toggleRightCollapsed}
         title="Attachments"
-        className="relative flex size-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-white/10 hover:text-foreground"
+        className="relative flex size-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-overlay-hover hover:text-foreground"
       >
         <Paperclip className="size-4" />
         {attachmentCount > 0 && (
@@ -84,7 +85,7 @@ export function RightSidebar() {
         type="button"
         onClick={toggleRightCollapsed}
         title="Ephemeral collections"
-        className="flex size-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-white/10 hover:text-foreground"
+        className="flex size-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-overlay-hover hover:text-foreground"
       >
         <Sparkles className="size-4" />
       </button>
@@ -92,7 +93,7 @@ export function RightSidebar() {
         type="button"
         onClick={toggleRightCollapsed}
         title="System collections"
-        className="flex size-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-white/10 hover:text-foreground"
+        className="flex size-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-overlay-hover hover:text-foreground"
       >
         <Layers className="size-4" />
       </button>
@@ -132,11 +133,15 @@ export function RightSidebar() {
           <section className="flex min-h-0 flex-1 flex-col pt-2">
             <SidebarSectionHeader icon={Paperclip} label="Attachments" count={attachmentCount} />
             <div className="min-h-0 flex-1 overflow-y-auto pb-3">
-              <AttachmentsSection attachments={attachments} />
+              {attachments.isLoading ? (
+                <ListSkeleton />
+              ) : (
+                <AttachmentsSection attachments={attachments} />
+              )}
             </div>
           </section>
 
-          <div className="mx-3 shrink-0 border-t border-white/10" />
+          <div className="mx-3 shrink-0 border-t border-border" />
 
           {/* 2. Colecciones efímeras -- indexadas, alcance de esta conversación */}
           <section className="flex min-h-0 flex-1 flex-col pt-3">
@@ -148,6 +153,8 @@ export function RightSidebar() {
             <div className="min-h-0 flex-1 overflow-y-auto pb-3">
               {DEMO_MODE ? (
                 <DemoUnavailableNotice text={EPHEMERAL_COLLECTIONS_DEMO_EXPLANATION} />
+              ) : ephemeralFiles.isLoading ? (
+                <ListSkeleton />
               ) : (
                 <FilesSection files={ephemeralFiles} />
               )}
@@ -155,7 +162,7 @@ export function RightSidebar() {
           </section>
         </div>
 
-        <div className="mx-3 shrink-0 border-t border-white/10" />
+        <div className="mx-3 shrink-0 border-t border-border" />
 
         {/* 3. Colecciones de sistema -- pegada abajo, máx 50% de altura, scroll propio */}
         <section className="flex max-h-[50%] min-h-0 shrink-0 flex-col pt-3 pb-3">
@@ -167,6 +174,8 @@ export function RightSidebar() {
           <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-3">
             {DEMO_MODE ? (
               <DemoUnavailableNotice text={SYSTEM_COLLECTIONS_DEMO_EXPLANATION} />
+            ) : collectionsLoading ? (
+              <ListSkeleton />
             ) : (
               <CollectionsPicker
                 collections={collectionsData?.collections ?? []}
@@ -181,9 +190,18 @@ export function RightSidebar() {
   )
 }
 
+function ListSkeleton() {
+  return (
+    <div className="space-y-1.5 px-3">
+      <Skeleton className="h-8 w-full" />
+      <Skeleton className="h-8 w-5/6" />
+    </div>
+  )
+}
+
 function DemoUnavailableNotice({ text }: { text: string }) {
   return (
-    <p className="rounded-lg border border-white/10 bg-white/[0.02] px-3 py-3 text-center text-[11px] leading-relaxed text-muted-foreground">
+    <p className="rounded-lg border border-border bg-overlay px-3 py-3 text-center text-[11px] leading-relaxed text-muted-foreground">
       {text}
     </p>
   )

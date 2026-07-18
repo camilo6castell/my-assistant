@@ -7,6 +7,7 @@ import {
   SIDEBAR_MAX_WIDTH,
   SIDEBAR_MIN_WIDTH,
 } from "@/stores/uiStore";
+import { ThemeToggle } from "./ThemeToggle";
 
 export function SidebarShell({
   side,
@@ -41,29 +42,28 @@ export function SidebarShell({
     <aside
       style={{ width: collapsed ? SIDEBAR_COLLAPSED_WIDTH : width }}
       className={cn(
-        "relative z-10 flex h-full shrink-0 flex-col bg-white/[0.03] backdrop-blur-2xl",
-        side === "left"
-          ? "border-r border-white/10"
-          : "border-l border-white/10",
+        "relative z-10 flex h-full shrink-0 flex-col bg-overlay backdrop-blur-2xl",
+        side === "left" ? "border-r border-border" : "border-l border-border",
       )}
     >
       <div
         className={cn(
-          "flex items-center px-2 py-2",
-          side === "left" ? "justify-end " : "justify-start",
+          "flex items-center gap-1 px-2 py-2",
+          side === "left" ? "justify-end" : "justify-start",
         )}
       >
-        {side === "left" && (
+        {side === "left" && !collapsed && (
           <>
-            <img className="w-6 h-6 mx-1.5" src="/favicon.svg" alt="" />
+            <img className="mx-1.5 size-6" src="/favicon.svg" alt="" />
             <div className="group flex w-full items-center justify-center gap-2 rounded-lg px-3 py-4 text-left text-sm transition-colors">
-              <span className="font-bold text-foreground truncate text-sm">
+              <span className="truncate text-sm font-bold text-foreground">
                 My assistant
               </span>
-              <span className="text-xs font-normal text-muted-foreground/80 truncate">
+              <span className="truncate text-xs font-normal text-muted-foreground/80">
                 RAG by camilo6castell
               </span>
             </div>
+            <ThemeToggle />
           </>
         )}
 
@@ -71,7 +71,7 @@ export function SidebarShell({
           type="button"
           onClick={onToggleCollapsed}
           aria-label={collapsed ? "Expand panel" : "Collapse panel"}
-          className="rounded-md p-1.5 text-muted-foreground hover:bg-white/10 hover:text-foreground"
+          className="rounded-md p-1.5 text-muted-foreground hover:bg-overlay-hover hover:text-foreground"
         >
           {collapsed ? (
             <ExpandIcon className="size-4" />
@@ -83,7 +83,11 @@ export function SidebarShell({
 
       {collapsed ? (
         <div className="flex flex-1 flex-col items-center gap-1 overflow-y-auto px-1.5 pb-3">
+          {side === "left" && (
+            <img className="mb-1 size-6" src="/favicon.svg" alt="" />
+          )}
           {collapsedContent}
+          {side === "left" && <ThemeToggle className="mt-auto flex-col" />}
         </div>
       ) : (
         <div className="flex min-h-0 flex-1 flex-col">{children}</div>

@@ -1,8 +1,11 @@
 import { Outlet } from "react-router-dom";
+import { useThemeSync } from "@/hooks/useThemeSync";
 import { RightSidebar } from "./RightSidebar";
 import { Sidebar } from "./LeftSidebar";
 
 export function AppShell() {
+  useThemeSync();
+
   return (
     <div className="relative flex h-dvh w-full overflow-hidden bg-background text-foreground">
       {/* Glow de fondo sutil -- lo que le da el aire "glass" sin recargar la UI */}

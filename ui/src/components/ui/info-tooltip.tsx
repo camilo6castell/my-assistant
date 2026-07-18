@@ -15,7 +15,7 @@ export function InfoTooltip({ text, className }: { text: string; className?: str
         role="tooltip"
         className={cn(
           "pointer-events-none absolute bottom-full left-1/2 z-20 mb-2 w-56 -translate-x-1/2",
-          "rounded-lg border border-white/10 bg-popover px-2.5 py-2 text-[11px] leading-snug text-popover-foreground shadow-lg",
+          "rounded-lg border border-border bg-popover px-2.5 py-2 text-[11px] leading-snug text-popover-foreground shadow-lg",
           "opacity-0 scale-95 transition-all duration-150",
           "group-hover/tooltip:opacity-100 group-hover/tooltip:scale-100"
         )}

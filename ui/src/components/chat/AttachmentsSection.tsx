@@ -84,7 +84,7 @@ export function AttachmentsSection({
           {attachments.data?.files.map((f) => (
             <li
               key={f.file_id}
-              className="flex items-center justify-between gap-2 rounded-md px-2 py-1.5 hover:bg-white/5"
+              className="flex items-center justify-between gap-2 rounded-md px-2 py-1.5 hover:bg-overlay-hover"
             >
               <span className="flex min-w-0 items-center gap-1.5 truncate text-xs">
                 <FileCode2 className="size-3.5 shrink-0 text-muted-foreground" />
@@ -97,7 +97,7 @@ export function AttachmentsSection({
                 type="button"
                 aria-label={`Remove ${f.filename}`}
                 onClick={() => attachments.remove.mutate(f.file_id)}
-                className="shrink-0 rounded p-1 text-muted-foreground hover:bg-white/10 hover:text-destructive"
+                className="shrink-0 rounded p-1 text-muted-foreground hover:bg-overlay-hover hover:text-destructive"
               >
                 <Trash2 className="size-3.5" />
               </button>

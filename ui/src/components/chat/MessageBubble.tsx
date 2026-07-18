@@ -42,7 +42,7 @@ export function MessageBubble({
           onClick={onDelete}
           aria-label="Delete message"
           title="Delete message"
-          className="order-first mt-2.5 shrink-0 self-start rounded-md p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-white/10 hover:text-destructive group-hover:opacity-100"
+          className="order-first mt-2.5 shrink-0 self-start rounded-md p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-overlay-hover hover:text-destructive group-hover:opacity-100"
         >
           <Trash2 className="size-3.5" />
         </button>
@@ -52,7 +52,7 @@ export function MessageBubble({
           "max-w-[75ch] rounded-2xl px-4 py-3 text-sm leading-relaxed",
           isUser
             ? "bg-primary/90 text-primary-foreground"
-            : "border border-white/10 bg-white/[0.04] text-foreground backdrop-blur-xl",
+            : "border border-border bg-overlay text-foreground backdrop-blur-xl",
           message.isError && "border-destructive/30 bg-destructive/10 text-destructive"
         )}
       >
@@ -61,7 +61,7 @@ export function MessageBubble({
         ) : isUser ? (
           <p className="whitespace-pre-wrap">{message.content}</p>
         ) : (
-          <div className="prose prose-sm prose-invert max-w-none prose-p:leading-relaxed prose-pre:bg-black/40">
+          <div className="prose prose-sm dark:prose-invert max-w-none prose-p:leading-relaxed prose-pre:bg-transparent">
             <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]}>
               {message.content}
             </ReactMarkdown>
@@ -69,7 +69,7 @@ export function MessageBubble({
         )}
 
         {!isUser && !message.isPending && !message.isError && (
-          <div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-white/10 pt-2 text-[11px] text-muted-foreground">
+          <div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-border pt-2 text-[11px] text-muted-foreground">
             {message.confidence !== undefined && (
               <span className="inline-flex items-center gap-1">
                 <Sparkles className="size-3" />
@@ -101,7 +101,7 @@ export function MessageBubble({
                 target="_blank"
                 rel="noopener noreferrer"
                 title={source.url}
-                className="inline-flex max-w-[220px] items-center gap-1 truncate rounded-full border border-white/10 bg-white/[0.04] px-2 py-0.5 text-[11px] text-muted-foreground transition-colors hover:bg-white/10 hover:text-foreground"
+                className="inline-flex max-w-[220px] items-center gap-1 truncate rounded-full border border-border bg-overlay px-2 py-0.5 text-[11px] text-muted-foreground transition-colors hover:bg-overlay-hover hover:text-foreground"
               >
                 <Globe className="size-3 shrink-0" />
                 <span className="truncate">{source.title}</span>
@@ -124,7 +124,7 @@ export function MessageBubble({
           onClick={onDelete}
           aria-label="Delete message"
           title="Delete message"
-          className="mt-2.5 shrink-0 self-start rounded-md p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-white/10 hover:text-destructive group-hover:opacity-100"
+          className="mt-2.5 shrink-0 self-start rounded-md p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-overlay-hover hover:text-destructive group-hover:opacity-100"
         >
           <Trash2 className="size-3.5" />
         </button>

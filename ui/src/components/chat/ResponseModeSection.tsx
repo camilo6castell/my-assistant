@@ -135,7 +135,7 @@ export function ResponseModeSection({
           un toggle de tema claro/oscuro: dos estados mutuamente excluyentes. */}
       <div className="space-y-1.5">
         <span className="block text-xs font-medium text-muted-foreground">Search mode</span>
-        <div className="grid grid-cols-2 gap-1 rounded-lg border border-white/10 bg-white/[0.03] p-1">
+        <div className="grid grid-cols-2 gap-1 rounded-lg border border-border bg-overlay p-1">
           {(["SOFT", "HARD"] as const).map((m) => (
             <button
               key={m}
@@ -145,8 +145,8 @@ export function ResponseModeSection({
               className={cn(
                 "rounded-md px-2.5 py-1.5 text-xs font-medium transition-all",
                 conversation.mode === m
-                  ? "bg-white/10 text-foreground shadow-sm"
-                  : "text-muted-foreground hover:bg-white/5 hover:text-foreground"
+                  ? "bg-overlay-strong text-foreground shadow-sm"
+                  : "text-muted-foreground hover:bg-overlay-hover hover:text-foreground"
               )}
             >
               {m === "SOFT" ? "Soft" : "Strict"}
@@ -181,8 +181,8 @@ export function ResponseModeSection({
                       disabled && "cursor-default"
                     )
                   : disabled
-                    ? "cursor-not-allowed border-white/5 text-muted-foreground/30"
-                    : "border-white/10 text-muted-foreground hover:bg-white/5 hover:text-foreground"
+                    ? "cursor-not-allowed border-border/50 text-muted-foreground/30"
+                    : "border-border text-muted-foreground hover:bg-overlay-hover hover:text-foreground"
               )}
             >
               <Icon className="size-3.5" />

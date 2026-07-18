@@ -6,10 +6,10 @@
 @plugin "@tailwindcss/typography";
 
 @custom-variant dark (&:is(.dark *));
+
 :root {
   font: 18px/145% var(--font-sans);
   letter-spacing: 0.18px;
-  color-scheme: dark;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -19,65 +19,67 @@
     font-size: 16px;
   }
 
+  /* -----------------------------------------------------------------
+   * Light theme (default). Brand hue: 264 (indigo-violet) -- matches
+   * the --sidebar-primary hue that was already present in the old
+   * dark palette, so it's a continuation of an existing choice, not
+   * an arbitrary new one. Used sparingly: primary actions, focus
+   * rings, active/selected state. Everything else stays neutral gray.
+   * ----------------------------------------------------------------- */
   --background: oklch(1 0 0);
-
-  --foreground: oklch(0.145 0 0);
+  --foreground: oklch(0.16 0.006 264);
 
   --card: oklch(1 0 0);
-
-  --card-foreground: oklch(0.145 0 0);
+  --card-foreground: oklch(0.16 0.006 264);
 
   --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.16 0.006 264);
 
-  --popover-foreground: oklch(0.145 0 0);
+  --primary: oklch(0.5 0.19 264);
+  --primary-foreground: oklch(0.98 0.005 264);
 
-  --primary: oklch(0.205 0 0);
+  --secondary: oklch(0.96 0.004 264);
+  --secondary-foreground: oklch(0.24 0.01 264);
 
-  --primary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.96 0.004 264);
+  --muted-foreground: oklch(0.5 0.014 264);
 
-  --secondary: oklch(0.97 0 0);
-
-  --secondary-foreground: oklch(0.205 0 0);
-
-  --muted: oklch(0.97 0 0);
-
-  --muted-foreground: oklch(0.556 0 0);
-
-  --accent-foreground: oklch(0.205 0 0);
+  --accent: oklch(0.94 0.02 264);
+  --accent-foreground: oklch(0.3 0.05 264);
 
   --destructive: oklch(0.577 0.245 27.325);
 
-  --input: oklch(0.922 0 0);
+  --border: oklch(0.16 0.006 264 / 9%);
+  --input: oklch(0.16 0.006 264 / 12%);
+  --ring: oklch(0.58 0.18 264);
 
-  --ring: oklch(0.708 0 0);
-
-  --chart-1: oklch(0.87 0 0);
-
-  --chart-2: oklch(0.556 0 0);
-
-  --chart-3: oklch(0.439 0 0);
-
-  --chart-4: oklch(0.371 0 0);
-
-  --chart-5: oklch(0.269 0 0);
+  --chart-1: oklch(0.6 0.19 264);
+  --chart-2: oklch(0.65 0.15 200);
+  --chart-3: oklch(0.7 0.16 150);
+  --chart-4: oklch(0.75 0.15 80);
+  --chart-5: oklch(0.65 0.2 25);
 
   --radius: 0.625rem;
 
-  --sidebar: oklch(0.985 0 0);
+  --sidebar: oklch(0.985 0.002 264);
+  --sidebar-foreground: oklch(0.16 0.006 264);
+  --sidebar-primary: oklch(0.5 0.19 264);
+  --sidebar-primary-foreground: oklch(0.98 0.005 264);
+  --sidebar-accent: oklch(0.94 0.02 264);
+  --sidebar-accent-foreground: oklch(0.3 0.05 264);
+  --sidebar-border: oklch(0.16 0.006 264 / 9%);
+  --sidebar-ring: oklch(0.58 0.18 264);
 
-  --sidebar-foreground: oklch(0.145 0 0);
-
-  --sidebar-primary: oklch(0.205 0 0);
-
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-
-  --sidebar-accent: oklch(0.97 0 0);
-
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-
-  --sidebar-border: oklch(0.922 0 0);
-
-  --sidebar-ring: oklch(0.708 0 0)
+  /* Superficies translúcidas reutilizables -- reemplazan los literales
+   * bg-white/[0.05], border-white/10, etc. repartidos por los
+   * componentes. Un solo lugar para ajustar "cuánto glass" tiene la UI,
+   * y se resuelven distinto por tema (negro semi-transparente en claro,
+   * blanco semi-transparente en oscuro) en vez de romperse en uno de
+   * los dos como pasaba antes. */
+  --overlay: oklch(0.16 0.006 264 / 3%);
+  --overlay-hover: oklch(0.16 0.006 264 / 6%);
+  --overlay-strong: oklch(0.16 0.006 264 / 9%);
+  --overlay-border: oklch(0.16 0.006 264 / 8%);
 }
 
 html,
@@ -124,6 +126,10 @@ body {
   --color-card: var(--card);
   --color-foreground: var(--foreground);
   --color-background: var(--background);
+  --color-overlay: var(--overlay);
+  --color-overlay-hover: var(--overlay-hover);
+  --color-overlay-strong: var(--overlay-strong);
+  --color-overlay-border: var(--overlay-border);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -134,46 +140,76 @@ body {
 }
 
 .dark {
+  color-scheme: dark;
+
   --background: oklch(0.145 0 0);
   --foreground: oklch(0.985 0 0);
   --card: oklch(0.205 0 0);
   --card-foreground: oklch(0.985 0 0);
   --popover: oklch(0.205 0 0);
   --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
+
+  --primary: oklch(0.72 0.16 264);
+  --primary-foreground: oklch(0.16 0.02 264);
+
   --secondary: oklch(0.269 0 0);
   --secondary-foreground: oklch(0.985 0 0);
   --muted: oklch(0.269 0 0);
   --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
+  --accent: oklch(0.28 0.03 264);
+  --accent-foreground: oklch(0.9 0.03 264);
   --destructive: oklch(0.704 0.191 22.216);
+
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
+  --ring: oklch(0.72 0.16 264);
+
+  --chart-1: oklch(0.72 0.16 264);
+  --chart-2: oklch(0.7 0.13 200);
+  --chart-3: oklch(0.72 0.14 150);
+  --chart-4: oklch(0.75 0.13 80);
+  --chart-5: oklch(0.7 0.18 25);
+
   --sidebar: oklch(0.205 0 0);
   --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-primary: oklch(0.72 0.16 264);
+  --sidebar-primary-foreground: oklch(0.16 0.02 264);
+  --sidebar-accent: oklch(0.28 0.03 264);
+  --sidebar-accent-foreground: oklch(0.9 0.03 264);
   --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  --sidebar-ring: oklch(0.72 0.16 264);
+
+  --overlay: oklch(1 0 0 / 3%);
+  --overlay-hover: oklch(1 0 0 / 8%);
+  --overlay-strong: oklch(1 0 0 / 12%);
+  --overlay-border: oklch(1 0 0 / 10%);
 }
 
 @layer base {
   * {
-    @apply border-border outline-ring/50;}
+    @apply border-border outline-ring/50;
+  }
   body {
-    @apply bg-background text-foreground;}
+    @apply bg-background text-foreground;
+  }
   html {
-    @apply font-sans;}}
+    @apply font-sans;
+  }
+}
+
+/* Transición suave al cambiar de tema -- solo color/fondo/borde, nunca
+ * layout, y respeta prefers-reduced-motion. */
+@media (prefers-reduced-motion: no-preference) {
+  html.theme-transition,
+  html.theme-transition * {
+    transition:
+      background-color 180ms ease,
+      border-color 180ms ease,
+      color 180ms ease,
+      fill 180ms ease,
+      stroke 180ms ease !important;
+  }
+}
 
 /* Botón "Agente" activo: degradado animado estilo IA (ver ResponseModeSection.tsx). */
 @keyframes agent-gradient-flow {
@@ -198,4 +234,28 @@ body {
   );
   background-size: 300% 300%;
   animation: agent-gradient-flow 5s ease infinite;
+}
+
+/* El tema highlight.js/github-dark trae sus propios colores de token
+ * (keywords, strings, etc.) que funcionan razonablemente sobre fondo
+ * claro u oscuro porque son tonos medios, no blanco puro -- solo se
+ * fuerza el fondo del bloque a nuestro --muted para que combine con
+ * el tema activo en vez del negro fijo del theme original. */
+.hljs {
+  background: var(--muted) !important;
+  border-radius: var(--radius-md);
+}
+
+@keyframes skeleton-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.skeleton-pulse {
+  animation: skeleton-pulse 1.6s ease-in-out infinite;
 }

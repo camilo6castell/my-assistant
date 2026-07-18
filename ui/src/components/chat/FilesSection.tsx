@@ -39,7 +39,7 @@ export function FilesSection({ files }: { files: ReturnType<typeof useEphemeralF
           value={collectionName}
           onChange={(e) => setCollectionName(e.target.value)}
           placeholder="namespace/collection"
-          className="w-full rounded-lg border border-white/10 bg-white/5 px-2.5 py-1.5 text-xs outline-none placeholder:text-muted-foreground focus-visible:border-ring"
+          className="w-full rounded-lg border border-border bg-overlay px-2.5 py-1.5 text-xs outline-none placeholder:text-muted-foreground focus-visible:border-ring"
         />
       )}
 
@@ -74,7 +74,7 @@ export function FilesSection({ files }: { files: ReturnType<typeof useEphemeralF
           {files.data?.files.map((f) => (
             <li
               key={f.file_id}
-              className="flex items-center justify-between gap-2 rounded-md px-2 py-1.5 hover:bg-white/5"
+              className="flex items-center justify-between gap-2 rounded-md px-2 py-1.5 hover:bg-overlay-hover"
             >
               <span className="min-w-0 truncate text-xs">
                 {f.filename}
@@ -84,7 +84,7 @@ export function FilesSection({ files }: { files: ReturnType<typeof useEphemeralF
                 type="button"
                 aria-label={`Delete ${f.filename}`}
                 onClick={() => files.remove.mutate(f.file_id)}
-                className="shrink-0 rounded p-1 text-muted-foreground hover:bg-white/10 hover:text-destructive"
+                className="shrink-0 rounded p-1 text-muted-foreground hover:bg-overlay-hover hover:text-destructive"
               >
                 <Trash2 className="size-3.5" />
               </button>

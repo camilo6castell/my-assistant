@@ -11,6 +11,7 @@ import {
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { ResponseModeSection } from "@/components/chat/ResponseModeSection";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useProviders } from "@/hooks/useProviders";
 import { cn } from "@/lib/utils";
 import { useConversationsStore } from "@/stores/conversationsStore";
@@ -37,7 +38,7 @@ export function Sidebar() {
   const setLeftWidth = useUiStore((s) => s.setLeftWidth);
   const toggleLeftCollapsed = useUiStore((s) => s.toggleLeftCollapsed);
 
-  const { data: providersData } = useProviders();
+  const { data: providersData, isLoading: providersLoading } = useProviders();
 
   function handleNewConversation() {
     const id = createConversation();
@@ -76,7 +77,7 @@ export function Sidebar() {
         type="button"
         onClick={handleNewConversation}
         title="New conversation"
-        className="flex size-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-white/10 hover:text-foreground"
+        className="flex size-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-overlay-hover hover:text-foreground"
       >
         <MessageSquarePlus className="size-4" />
       </button>
@@ -84,7 +85,7 @@ export function Sidebar() {
         type="button"
         onClick={toggleLeftCollapsed}
         title="Chats"
-        className="flex size-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-white/10 hover:text-foreground"
+        className="flex size-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-overlay-hover hover:text-foreground"
       >
         <MessagesSquare className="size-4" />
       </button>
@@ -92,7 +93,7 @@ export function Sidebar() {
         type="button"
         onClick={toggleLeftCollapsed}
         title="Generation"
-        className="flex size-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-white/10 hover:text-foreground"
+        className="flex size-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-overlay-hover hover:text-foreground"
       >
         <Settings2 className="size-4" />
       </button>
@@ -138,8 +139,8 @@ export function Sidebar() {
                 className={cn(
                   "group flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2.5 text-left text-sm transition-colors",
                   isActive
-                    ? "bg-white/[0.08] text-foreground"
-                    : "text-muted-foreground hover:bg-white/[0.05] hover:text-foreground",
+                    ? "bg-overlay-strong text-foreground"
+                    : "text-muted-foreground hover:bg-overlay-hover hover:text-foreground",
                 )}
               >
                 <span className="min-w-0 flex-1">
@@ -159,7 +160,7 @@ export function Sidebar() {
                         }
                       }}
                       onBlur={() => handleCommitEdit(conv.id)}
-                      className="block w-full rounded-md border border-white/10 bg-white/[0.06] px-1.5 py-0.5 text-sm text-foreground outline-none focus:border-primary/50"
+                      className="block w-full rounded-md border border-border bg-overlay-strong px-1.5 py-0.5 text-sm text-foreground outline-none focus:border-primary/50"
                     />
                   ) : (
                     <span className="block truncate">{conv.title}</span>
@@ -181,7 +182,7 @@ export function Sidebar() {
                         e.preventDefault();
                         handleCommitEdit(conv.id);
                       }}
-                      className="rounded-md p-1 text-muted-foreground hover:bg-white/10 hover:text-foreground"
+                      className="rounded-md p-1 text-muted-foreground hover:bg-overlay-hover hover:text-foreground"
                       aria-label="Save name"
                     >
                       <Check className="size-3.5" />
@@ -191,7 +192,7 @@ export function Sidebar() {
                       role="button"
                       tabIndex={0}
                       onClick={(e) => handleStartEdit(e, conv.id, conv.title)}
-                      className="rounded-md p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-white/10 hover:text-foreground group-hover:opacity-100"
+                      className="rounded-md p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-overlay-hover hover:text-foreground group-hover:opacity-100"
                       aria-label="Rename conversation"
                     >
                       <Pencil className="size-3.5" />
@@ -202,7 +203,7 @@ export function Sidebar() {
                     tabIndex={0}
                     onClick={(e) => handleDelete(e, conv.id)}
                     className={cn(
-                      "rounded-md p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-white/10 hover:text-destructive group-hover:opacity-100",
+                      "rounded-md p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-overlay-hover hover:text-destructive group-hover:opacity-100",
                       isEditing && "hidden",
                     )}
                     aria-label="Delete conversation"
@@ -215,11 +216,22 @@ export function Sidebar() {
           })}
         </nav>
       </section>
-      <div className="mx-3 border-t border-white/10" />
+      <div className="mx-3 border-t border-border" />
       <section className="flex h-[fit-content] max-h-[50%] min-h-0 flex-col pt-3">
         <SidebarSectionHeader icon={Settings2} label="Generation" />
         <div className="h-[fit-content] max-h-full min-h-0 overflow-y-auto pb-4">
-          {activeConversation ? (
+          {activeConversation && providersLoading ? (
+            <div className="space-y-4 px-3">
+              <Skeleton className="h-4 w-24" />
+              <Skeleton className="h-9 w-full" />
+              <Skeleton className="h-4 w-20" />
+              <div className="grid grid-cols-3 gap-1.5">
+                <Skeleton className="h-14 w-full" />
+                <Skeleton className="h-14 w-full" />
+                <Skeleton className="h-14 w-full" />
+              </div>
+            </div>
+          ) : activeConversation ? (
             <ResponseModeSection
               conversation={activeConversation}
               providers={providersData}

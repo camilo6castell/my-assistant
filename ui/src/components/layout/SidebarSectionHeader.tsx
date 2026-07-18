@@ -23,7 +23,7 @@ export function SidebarSectionHeader({
         <div className="ml-auto">
           <Button
             variant="secondary"
-            className="w-full justify-start gap-2 bg-white/[0.06] hover:bg-white/[0.1]"
+            className="w-full justify-start gap-2 bg-overlay-strong hover:bg-overlay-hover"
             onClick={actionHandler}
           >
             <MessageSquarePlus className="size-4" />

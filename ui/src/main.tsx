@@ -4,10 +4,19 @@ import { createRoot } from "react-dom/client"
 import { BrowserRouter } from "react-router-dom"
 import App from "./App.tsx"
 import "./index.css"
+import { applyTheme, type Theme } from "./stores/uiStore"
 
-// UI en modo oscuro fijo -- no hay toggle claro/oscuro por ahora, a
-// propósito (pedido explícito: "colores preferiblemente oscuros").
-document.documentElement.classList.add("dark")
+// Aplica el theme persistido (o "system" si es la primera visita) ANTES
+// del primer render, leyendo directo de localStorage en vez de esperar
+// a que zustand/persist hidrate -- si no, hay un flash del tema
+// contrario mientras React monta. Misma key que uiStore ("myassistant-ui").
+try {
+  const raw = localStorage.getItem("myassistant-ui")
+  const theme: Theme = raw ? (JSON.parse(raw).state?.theme ?? "system") : "system"
+  applyTheme(theme)
+} catch {
+  applyTheme("system")
+}
 
 const queryClient = new QueryClient({
   defaultOptions: {

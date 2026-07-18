@@ -6,7 +6,7 @@ export function ChatToolbar({ conversation }: { conversation: Conversation }) {
     conversation.activeCollections.length > 0 || conversation.useWebSearch
 
   return (
-    <div className="relative z-10 flex flex-wrap items-center justify-between gap-2 border-b border-white/10 bg-white/[0.02] px-4 py-2.5 backdrop-blur-xl">
+    <div className="relative z-10 flex flex-wrap items-center justify-between gap-2 border-b border-border bg-overlay px-4 py-2.5 backdrop-blur-xl">
       <div className="flex flex-wrap items-center gap-1.5">
         {DEMO_MODE ? (
           <span className="text-xs text-muted-foreground">

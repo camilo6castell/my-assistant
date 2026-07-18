@@ -21,7 +21,7 @@ function CheckboxIndicator({
         "flex shrink-0 items-center justify-center rounded border transition-colors",
         size,
         state === "none"
-          ? "border-white/20 bg-transparent"
+          ? "border-border bg-transparent"
           : "border-primary/50 bg-primary/20",
       )}
     >
@@ -112,10 +112,10 @@ export function CollectionsPicker({
         return (
           <div
             key={group.namespace}
-            className="overflow-hidden rounded-md border border-white/10"
+            className="overflow-hidden rounded-md border border-border"
           >
             {/* Header: chevron (expandir/colapsar) + checkbox (seleccionar grupo) */}
-            <div className="flex items-center gap-1 bg-white/[0.03] pr-2">
+            <div className="flex items-center gap-1 bg-overlay pr-2">
               <button
                 type="button"
                 disabled={disabled}
@@ -134,7 +134,7 @@ export function CollectionsPicker({
                 type="button"
                 disabled={disabled}
                 onClick={() => toggleGroup(group.items, state)}
-                className="group flex min-w-0 flex-1 items-center gap-2 rounded-md py-1.5 text-left text-sm text-foreground transition-colors hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-40"
+                className="group flex min-w-0 flex-1 items-center gap-2 rounded-md py-1.5 text-left text-sm text-foreground transition-colors hover:bg-overlay-hover disabled:cursor-not-allowed disabled:opacity-40"
               >
                 <CheckboxIndicator state={state} />
                 <span className="min-w-0 flex-1 truncate font-medium">
@@ -157,7 +157,7 @@ export function CollectionsPicker({
               )}
             >
               <div className="overflow-hidden">
-                <div className="ml-4 flex flex-col gap-0.5 border-l border-white/10 py-1 pl-2.5 pr-2">
+                <div className="ml-4 flex flex-col gap-0.5 border-l border-border py-1 pl-2.5 pr-2">
                   {group.items.map((item) => {
                     const isActive = active.includes(item);
                     return (
@@ -170,7 +170,7 @@ export function CollectionsPicker({
                           "flex w-full items-center gap-2 rounded-md px-2 py-1 text-left text-xs transition-colors disabled:cursor-not-allowed disabled:opacity-40",
                           isActive
                             ? "text-foreground"
-                            : "text-muted-foreground hover:bg-white/5 hover:text-foreground",
+                            : "text-muted-foreground hover:bg-overlay-hover hover:text-foreground",
                         )}
                       >
                         <CheckboxIndicator

@@ -37,7 +37,7 @@ export function MessageInput({
 
   return (
     <div className="mx-auto w-full max-w-3xl px-4 pb-6">
-      <div className="flex items-end gap-2 rounded-2xl border border-white/10 bg-white/[0.05] p-2 shadow-2xl backdrop-blur-2xl">
+      <div className="flex items-end gap-2 rounded-2xl border border-border bg-overlay-strong p-2 shadow-2xl backdrop-blur-2xl">
         <Textarea
           ref={textareaRef}
           value={value}
