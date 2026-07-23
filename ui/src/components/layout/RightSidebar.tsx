@@ -57,6 +57,8 @@ export function RightSidebar() {
   const rightCollapsed = useUiStore((s) => s.rightCollapsed)
   const setRightWidth = useUiStore((s) => s.setRightWidth)
   const toggleRightCollapsed = useUiStore((s) => s.toggleRightCollapsed)
+  const rightMobileOpen = useUiStore((s) => s.rightMobileOpen)
+  const closeMobileSidebars = useUiStore((s) => s.closeMobileSidebars)
 
   const attachments = useAttachments(conversationId ?? null)
   const ephemeralFiles = useEphemeralFiles(conversationId ?? null)
@@ -108,6 +110,8 @@ export function RightSidebar() {
         collapsed={rightCollapsed}
         onToggleCollapsed={toggleRightCollapsed}
         onResize={setRightWidth}
+        mobileOpen={rightMobileOpen}
+        onMobileClose={closeMobileSidebars}
         collapsedContent={collapsedContent}
       >
         <p className="px-3 py-6 text-center text-xs text-muted-foreground">
@@ -124,6 +128,8 @@ export function RightSidebar() {
       collapsed={rightCollapsed}
       onToggleCollapsed={toggleRightCollapsed}
       onResize={setRightWidth}
+      mobileOpen={rightMobileOpen}
+      onMobileClose={closeMobileSidebars}
       collapsedContent={collapsedContent}
     >
       <div className="flex min-h-0 flex-1 flex-col">

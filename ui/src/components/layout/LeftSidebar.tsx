@@ -37,12 +37,17 @@ export function Sidebar() {
   const leftCollapsed = useUiStore((s) => s.leftCollapsed);
   const setLeftWidth = useUiStore((s) => s.setLeftWidth);
   const toggleLeftCollapsed = useUiStore((s) => s.toggleLeftCollapsed);
+  const leftMobileOpen = useUiStore((s) => s.leftMobileOpen);
+  const closeMobileSidebars = useUiStore((s) => s.closeMobileSidebars);
 
   const { data: providersData, isLoading: providersLoading } = useProviders();
 
   function handleNewConversation() {
     const id = createConversation();
     navigate(`/c/${id}`);
+    // Sin efecto en desktop (no hay drawer que cerrar ahí) -- en mobile
+    // vuelve al chat después de crear la conversación, como se espera.
+    closeMobileSidebars();
   }
 
   function handleDelete(e: React.MouseEvent, id: string) {
@@ -107,6 +112,8 @@ export function Sidebar() {
       collapsed={leftCollapsed}
       onToggleCollapsed={toggleLeftCollapsed}
       onResize={setLeftWidth}
+      mobileOpen={leftMobileOpen}
+      onMobileClose={closeMobileSidebars}
       collapsedContent={collapsedContent}
     >
       <section className="flex min-h-0 flex-1 flex-col pt-1">
@@ -130,10 +137,15 @@ export function Sidebar() {
                 key={conv.id}
                 role="button"
                 tabIndex={0}
-                onClick={() => !isEditing && navigate(`/c/${conv.id}`)}
+                onClick={() => {
+                  if (isEditing) return;
+                  navigate(`/c/${conv.id}`);
+                  closeMobileSidebars();
+                }}
                 onKeyDown={(e) => {
                   if (!isEditing && (e.key === "Enter" || e.key === " ")) {
                     navigate(`/c/${conv.id}`);
+                    closeMobileSidebars();
                   }
                 }}
                 className={cn(

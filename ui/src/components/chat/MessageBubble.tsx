@@ -1,4 +1,5 @@
-import { AlertCircle, Globe, Layers, Sparkles, Trash2 } from "lucide-react"
+import { AlertCircle, Check, Copy, Globe, Layers, Sparkles, Trash2 } from "lucide-react"
+import { useState, type ComponentProps } from "react"
 import ReactMarkdown from "react-markdown"
 import rehypeHighlight from "rehype-highlight"
 import remarkGfm from "remark-gfm"
@@ -18,6 +19,80 @@ function ThinkingDots({ label }: { label?: string }) {
   )
 }
 
+/**
+ * Botón compartido para "copiar" (mensaje completo o bloque de código):
+ * icono que rota a un check por 1.5s como confirmación, sin depender de
+ * un toast externo -- consistente con el resto de la UI, que ya evita
+ * dependencias extra para micro-feedback (ver ThemeToggle, Skeleton).
+ */
+function CopyButton({
+  getText,
+  className,
+  label = "Copy",
+}: {
+  getText: () => string
+  className?: string
+  label?: string
+}) {
+  const [copied, setCopied] = useState(false)
+
+  async function handleCopy() {
+    try {
+      await navigator.clipboard.writeText(getText())
+      setCopied(true)
+      window.setTimeout(() => setCopied(false), 1500)
+    } catch {
+      // Clipboard API puede fallar (permisos, contexto no seguro) --
+      // silencioso, no vale la pena un mensaje de error para esto.
+    }
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={handleCopy}
+      aria-label={copied ? "Copied" : label}
+      title={copied ? "Copied!" : label}
+      className={cn(
+        "inline-flex items-center justify-center rounded-md p-1 text-muted-foreground transition-colors hover:bg-overlay-hover hover:text-foreground",
+        className
+      )}
+    >
+      {copied ? <Check className="size-3.5 text-emerald-500" /> : <Copy className="size-3.5" />}
+    </button>
+  )
+}
+
+/**
+ * Reemplaza el <pre> que genera ReactMarkdown/rehype-highlight por una
+ * versión con botón de copiar propio -- visible siempre en mobile (no
+ * hay hover táctil) y solo al pasar el mouse en desktop.
+ */
+function CodeBlock({ children, className, ...props }: ComponentProps<"pre">) {
+  return (
+    <div className="group/code relative">
+      <CopyButton
+        getText={() => extractText(children)}
+        label="Copy code"
+        className="absolute right-2 top-2 z-10 bg-overlay-strong opacity-70 backdrop-blur-sm lg:opacity-0 lg:group-hover/code:opacity-100"
+      />
+      <pre className={className} {...props}>
+        {children}
+      </pre>
+    </div>
+  )
+}
+
+/** Extrae el texto plano de los children de React (para copiar el código sin markup de highlight.js). */
+function extractText(node: React.ReactNode): string {
+  if (typeof node === "string" || typeof node === "number") return String(node)
+  if (Array.isArray(node)) return node.map(extractText).join("")
+  if (node && typeof node === "object" && "props" in node) {
+    return extractText((node as { props: { children?: React.ReactNode } }).props.children)
+  }
+  return ""
+}
+
 export function MessageBubble({
   message,
   onDelete,
@@ -27,29 +102,36 @@ export function MessageBubble({
   onDelete?: () => void
 }) {
   const isUser = message.role === "user"
+  const showActions = !message.isPending && !message.isError
 
-  return (
-    <div className={cn("group flex w-full items-start gap-1.5", isUser ? "justify-end" : "justify-start")}>
-      {/* Botón de borrar del lado del avatar/margen -- del lado izquierdo
-          para mensajes de usuario (que están alineados a la derecha) y
-          del lado derecho para mensajes del assistant, para no quedar
-          nunca pegado al texto de la burbuja. Oculto hasta hover de la
-          fila (mismo patrón que los botones de renombrar/borrar chat en
-          LeftSidebar.tsx) para no ensuciar la lectura normal. */}
-      {onDelete && !message.isPending && isUser && (
+  const actions = (
+    <span
+      className={cn(
+        "mt-2.5 flex shrink-0 items-center gap-0.5 self-start opacity-0 transition-opacity group-hover:opacity-100",
+        "max-lg:opacity-100" // en mobile no hay hover: siempre visibles
+      )}
+    >
+      {showActions && <CopyButton getText={() => message.content} label="Copy message" />}
+      {onDelete && showActions && (
         <button
           type="button"
           onClick={onDelete}
           aria-label="Delete message"
           title="Delete message"
-          className="order-first mt-2.5 shrink-0 self-start rounded-md p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-overlay-hover hover:text-destructive group-hover:opacity-100"
+          className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-overlay-hover hover:text-destructive"
         >
           <Trash2 className="size-3.5" />
         </button>
       )}
+    </span>
+  )
+
+  return (
+    <div className={cn("group flex w-full items-start gap-1.5", isUser ? "justify-end" : "justify-start")}>
+      {isUser && actions}
       <div
         className={cn(
-          "max-w-[75ch] rounded-2xl px-4 py-3 text-sm leading-relaxed",
+          "max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-relaxed sm:max-w-[75ch]",
           isUser
             ? "bg-primary/90 text-primary-foreground"
             : "border border-border bg-overlay text-foreground backdrop-blur-xl",
@@ -59,10 +141,14 @@ export function MessageBubble({
         {message.isPending ? (
           <ThinkingDots label={message.pendingLabel} />
         ) : isUser ? (
-          <p className="whitespace-pre-wrap">{message.content}</p>
+          <p className="whitespace-pre-wrap break-words">{message.content}</p>
         ) : (
-          <div className="prose prose-sm dark:prose-invert max-w-none prose-p:leading-relaxed prose-pre:bg-transparent">
-            <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]}>
+          <div className="prose prose-sm dark:prose-invert max-w-none break-words prose-p:leading-relaxed prose-pre:bg-transparent prose-pre:p-0">
+            <ReactMarkdown
+              remarkPlugins={[remarkGfm]}
+              rehypePlugins={[rehypeHighlight]}
+              components={{ pre: CodeBlock }}
+            >
               {message.content}
             </ReactMarkdown>
           </div>
@@ -117,18 +203,7 @@ export function MessageBubble({
           </div>
         )}
       </div>
-
-      {onDelete && !message.isPending && !isUser && (
-        <button
-          type="button"
-          onClick={onDelete}
-          aria-label="Delete message"
-          title="Delete message"
-          className="mt-2.5 shrink-0 self-start rounded-md p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-overlay-hover hover:text-destructive group-hover:opacity-100"
-        >
-          <Trash2 className="size-3.5" />
-        </button>
-      )}
+      {!isUser && actions}
     </div>
   )
 }

@@ -28,12 +28,26 @@ interface UiState {
   rightWidth: number
   rightCollapsed: boolean
   theme: Theme
+  /**
+   * Estado de los drawers en mobile (< lg): independiente de
+   * leftCollapsed/rightCollapsed, que son un concepto de desktop (rail
+   * de íconos vs. panel ancho). En mobile cada sidebar es un overlay a
+   * pantalla completa que está abierto o cerrado, nunca "colapsado" --
+   * ver SidebarShell.tsx. Deliberadamente NO persistido (ver
+   * partialize abajo): reabrir la app en el celular siempre debe
+   * arrancar con los drawers cerrados.
+   */
+  leftMobileOpen: boolean
+  rightMobileOpen: boolean
 
   setLeftWidth: (width: number) => void
   toggleLeftCollapsed: () => void
   setRightWidth: (width: number) => void
   toggleRightCollapsed: () => void
   setTheme: (theme: Theme) => void
+  openLeftMobile: () => void
+  openRightMobile: () => void
+  closeMobileSidebars: () => void
 }
 
 export const useUiStore = create<UiState>()(
@@ -44,6 +58,8 @@ export const useUiStore = create<UiState>()(
       rightWidth: SIDEBAR_DEFAULT_WIDTH,
       rightCollapsed: false,
       theme: "system",
+      leftMobileOpen: false,
+      rightMobileOpen: false,
 
       setLeftWidth: (width) => set({ leftWidth: width }),
       toggleLeftCollapsed: () => set((s) => ({ leftCollapsed: !s.leftCollapsed })),
@@ -59,7 +75,23 @@ export const useUiStore = create<UiState>()(
           document.documentElement.classList.remove("theme-transition")
         }, 200)
       },
+      // Solo un drawer mobile a la vez (mismo patrón que apps de chat
+      // de referencia): abrir uno cierra el otro en vez de apilarse.
+      openLeftMobile: () => set({ leftMobileOpen: true, rightMobileOpen: false }),
+      openRightMobile: () => set({ rightMobileOpen: true, leftMobileOpen: false }),
+      closeMobileSidebars: () => set({ leftMobileOpen: false, rightMobileOpen: false }),
     }),
-    { name: "myassistant-ui" }
+    {
+      name: "myassistant-ui",
+      // leftMobileOpen/rightMobileOpen quedan afuera a propósito -- ver
+      // el comentario en la interfaz de arriba.
+      partialize: (state) => ({
+        leftWidth: state.leftWidth,
+        leftCollapsed: state.leftCollapsed,
+        rightWidth: state.rightWidth,
+        rightCollapsed: state.rightCollapsed,
+        theme: state.theme,
+      }),
+    }
   )
 )

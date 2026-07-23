@@ -36,7 +36,10 @@ export function MessageInput({
   }
 
   return (
-    <div className="mx-auto w-full max-w-3xl px-4 pb-6">
+    <div
+      className="mx-auto w-full max-w-3xl px-3 pb-4 sm:px-4 sm:pb-6"
+      style={{ paddingBottom: "max(1rem, env(safe-area-inset-bottom))" }}
+    >
       <div className="flex items-end gap-2 rounded-2xl border border-border bg-overlay-strong p-2 shadow-2xl backdrop-blur-2xl">
         <Textarea
           ref={textareaRef}
@@ -45,7 +48,7 @@ export function MessageInput({
           onKeyDown={handleKeyDown}
           placeholder="Type your question..."
           rows={1}
-          className="max-h-[200px] flex-1 px-2 py-2"
+          className="max-h-[200px] flex-1 px-2 py-2 text-base sm:text-sm"
           disabled={disabled}
         />
         <Button
