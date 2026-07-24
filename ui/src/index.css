@@ -26,7 +26,7 @@
    * an arbitrary new one. Used sparingly: primary actions, focus
    * rings, active/selected state. Everything else stays neutral gray.
    * ----------------------------------------------------------------- */
-  --background: oklch(1 0 0);
+  --background: oklch(78.677% 0.00858 278.529 / 0.203);
   --foreground: oklch(0.16 0.006 264);
 
   --card: oklch(1 0 0);
@@ -35,23 +35,23 @@
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.16 0.006 264);
 
-  --primary: oklch(0.5 0.19 264);
+  --primary: oklch(60.248% 0.00361 16.213); /* main */
   --primary-foreground: oklch(0.98 0.005 264);
 
-  --secondary: oklch(0.96 0.004 264);
+  --secondary: oklch(89.017% 0.00266 230.265);
   --secondary-foreground: oklch(0.24 0.01 264);
 
   --muted: oklch(0.96 0.004 264);
   --muted-foreground: oklch(0.5 0.014 264);
 
-  --accent: oklch(0.94 0.02 264);
+  --accent: oklch(70.23% 0.00319 264.709);
   --accent-foreground: oklch(0.3 0.05 264);
 
   --destructive: oklch(0.577 0.245 27.325);
 
   --border: oklch(0.16 0.006 264 / 9%);
   --input: oklch(0.16 0.006 264 / 12%);
-  --ring: oklch(0.58 0.18 264);
+  --ring: oklch(87.937% 0.00859 271.323);
 
   --chart-1: oklch(0.6 0.19 264);
   --chart-2: oklch(0.65 0.15 200);
@@ -76,10 +76,10 @@
    * y se resuelven distinto por tema (negro semi-transparente en claro,
    * blanco semi-transparente en oscuro) en vez de romperse en uno de
    * los dos como pasaba antes. */
-  --overlay: oklch(0.16 0.006 264 / 3%);
+  --overlay: oklch(100% 0.00011 271.152);
   --overlay-hover: oklch(0.16 0.006 264 / 6%);
-  --overlay-strong: oklch(0.16 0.006 264 / 9%);
-  --overlay-border: oklch(0.16 0.006 264 / 8%);
+  --overlay-strong: oklch(13.979% 0.00002 271.152 / 0.155);
+  --overlay-border: oklch(42.388% 0.23304 263.731 / 0.08);
 }
 
 html,
@@ -94,7 +94,7 @@ body {
 
 @theme inline {
   --font-heading: var(--font-sans);
-  --font-sans: 'Geist Variable', sans-serif;
+  --font-sans: "Geist Variable", sans-serif;
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -149,7 +149,7 @@ body {
   --popover: oklch(0.205 0 0);
   --popover-foreground: oklch(0.985 0 0);
 
-  --primary: oklch(0.72 0.16 264);
+  --primary: oklch(74.928% 0.04541 106.046); /* main */
   --primary-foreground: oklch(0.16 0.02 264);
 
   --secondary: oklch(0.269 0 0);
@@ -162,7 +162,7 @@ body {
 
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.72 0.16 264);
+  --ring: oklch(45.908% 0.00631 106.78);
 
   --chart-1: oklch(0.72 0.16 264);
   --chart-2: oklch(0.7 0.13 200);

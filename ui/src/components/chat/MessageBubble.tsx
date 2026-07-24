@@ -1,23 +1,19 @@
-import { AlertCircle, Check, Copy, Globe, Layers, Sparkles, Trash2 } from "lucide-react"
-import { useState, type ComponentProps } from "react"
-import ReactMarkdown from "react-markdown"
-import rehypeHighlight from "rehype-highlight"
-import remarkGfm from "remark-gfm"
-import { cn } from "@/lib/utils"
-import type { ChatMessage } from "@/types/chat"
-
-function ThinkingDots({ label }: { label?: string }) {
-  return (
-    <span className="inline-flex items-center gap-2">
-      {label && <span className="text-xs text-muted-foreground">{label}</span>}
-      <span className="inline-flex items-center gap-1">
-        <span className="size-1.5 animate-bounce rounded-full bg-muted-foreground [animation-delay:-0.3s]" />
-        <span className="size-1.5 animate-bounce rounded-full bg-muted-foreground [animation-delay:-0.15s]" />
-        <span className="size-1.5 animate-bounce rounded-full bg-muted-foreground" />
-      </span>
-    </span>
-  )
-}
+import {
+  AlertCircle,
+  Check,
+  Copy,
+  Globe,
+  Layers,
+  Sparkles,
+  Trash2,
+} from "lucide-react";
+import { useState, type ComponentProps } from "react";
+import ReactMarkdown from "react-markdown";
+import rehypeHighlight from "rehype-highlight";
+import remarkGfm from "remark-gfm";
+import { ThinkingOrb } from "thinking-orbs";
+import { cn } from "@/lib/utils";
+import type { ChatMessage } from "@/types/chat";
 
 /**
  * Botón compartido para "copiar" (mensaje completo o bloque de código):
@@ -30,17 +26,17 @@ function CopyButton({
   className,
   label = "Copy",
 }: {
-  getText: () => string
-  className?: string
-  label?: string
+  getText: () => string;
+  className?: string;
+  label?: string;
 }) {
-  const [copied, setCopied] = useState(false)
+  const [copied, setCopied] = useState(false);
 
   async function handleCopy() {
     try {
-      await navigator.clipboard.writeText(getText())
-      setCopied(true)
-      window.setTimeout(() => setCopied(false), 1500)
+      await navigator.clipboard.writeText(getText());
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1500);
     } catch {
       // Clipboard API puede fallar (permisos, contexto no seguro) --
       // silencioso, no vale la pena un mensaje de error para esto.
@@ -55,12 +51,16 @@ function CopyButton({
       title={copied ? "Copied!" : label}
       className={cn(
         "inline-flex items-center justify-center rounded-md p-1 text-muted-foreground transition-colors hover:bg-overlay-hover hover:text-foreground",
-        className
+        className,
       )}
     >
-      {copied ? <Check className="size-3.5 text-emerald-500" /> : <Copy className="size-3.5" />}
+      {copied ? (
+        <Check className="size-3.5 text-emerald-500" />
+      ) : (
+        <Copy className="size-3.5" />
+      )}
     </button>
-  )
+  );
 }
 
 /**
@@ -80,38 +80,42 @@ function CodeBlock({ children, className, ...props }: ComponentProps<"pre">) {
         {children}
       </pre>
     </div>
-  )
+  );
 }
 
 /** Extrae el texto plano de los children de React (para copiar el código sin markup de highlight.js). */
 function extractText(node: React.ReactNode): string {
-  if (typeof node === "string" || typeof node === "number") return String(node)
-  if (Array.isArray(node)) return node.map(extractText).join("")
+  if (typeof node === "string" || typeof node === "number") return String(node);
+  if (Array.isArray(node)) return node.map(extractText).join("");
   if (node && typeof node === "object" && "props" in node) {
-    return extractText((node as { props: { children?: React.ReactNode } }).props.children)
+    return extractText(
+      (node as { props: { children?: React.ReactNode } }).props.children,
+    );
   }
-  return ""
+  return "";
 }
 
 export function MessageBubble({
   message,
   onDelete,
 }: {
-  message: ChatMessage
+  message: ChatMessage;
   /** Ausente = no se puede borrar este mensaje individualmente (no usado hoy, pero deja la puerta abierta). */
-  onDelete?: () => void
+  onDelete?: () => void;
 }) {
-  const isUser = message.role === "user"
-  const showActions = !message.isPending && !message.isError
+  const isUser = message.role === "user";
+  const showActions = !message.isPending && !message.isError;
 
   const actions = (
     <span
       className={cn(
         "mt-2.5 flex shrink-0 items-center gap-0.5 self-start opacity-0 transition-opacity group-hover:opacity-100",
-        "max-lg:opacity-100" // en mobile no hay hover: siempre visibles
+        "max-lg:opacity-100", // en mobile no hay hover: siempre visibles
       )}
     >
-      {showActions && <CopyButton getText={() => message.content} label="Copy message" />}
+      {showActions && (
+        <CopyButton getText={() => message.content} label="Copy message" />
+      )}
       {onDelete && showActions && (
         <button
           type="button"
@@ -124,10 +128,15 @@ export function MessageBubble({
         </button>
       )}
     </span>
-  )
+  );
 
   return (
-    <div className={cn("group flex w-full items-start gap-1.5", isUser ? "justify-end" : "justify-start")}>
+    <div
+      className={cn(
+        "group flex w-full items-start gap-1.5",
+        isUser ? "justify-end" : "justify-start",
+      )}
+    >
       {isUser && actions}
       <div
         className={cn(
@@ -135,11 +144,19 @@ export function MessageBubble({
           isUser
             ? "bg-primary/90 text-primary-foreground"
             : "border border-border bg-overlay text-foreground backdrop-blur-xl",
-          message.isError && "border-destructive/30 bg-destructive/10 text-destructive"
+          message.isError &&
+            "border-destructive/30 bg-destructive/10 text-destructive",
         )}
       >
         {message.isPending ? (
-          <ThinkingDots label={message.pendingLabel} />
+          <span className="inline-flex items-center gap-5">
+            <ThinkingOrb state="composing" size={64} speed={1.25} />
+            {message.pendingLabel && (
+              <span className="text-xs text-muted-foreground">
+                {message.pendingLabel}
+              </span>
+            )}
+          </span>
         ) : isUser ? (
           <p className="whitespace-pre-wrap break-words">{message.content}</p>
         ) : (
@@ -205,5 +222,5 @@ export function MessageBubble({
       </div>
       {!isUser && actions}
     </div>
-  )
+  );
 }

@@ -1,21 +1,21 @@
-import { Layers, Paperclip, Sparkles } from "lucide-react"
-import { useParams } from "react-router-dom"
-import { AttachmentsSection } from "@/components/chat/AttachmentsSection"
-import { FilesSection } from "@/components/chat/FilesSection"
-import { CollectionsPicker } from "@/components/layout/CollectionsPicker"
-import { Skeleton } from "@/components/ui/skeleton"
-import { useAttachments } from "@/hooks/useAttachments"
-import { useCollections } from "@/hooks/useCollections"
-import { useEphemeralFiles } from "@/hooks/useEphemeralFiles"
+import { Layers, Paperclip, Sparkles } from "lucide-react";
+import { useParams } from "react-router-dom";
+import { AttachmentsSection } from "@/components/chat/AttachmentsSection";
+import { FilesSection } from "@/components/chat/FilesSection";
+import { CollectionsPicker } from "@/components/layout/CollectionsPicker";
+import { Skeleton } from "@/components/ui/skeleton";
+import { useAttachments } from "@/hooks/useAttachments";
+import { useCollections } from "@/hooks/useCollections";
+import { useEphemeralFiles } from "@/hooks/useEphemeralFiles";
 import {
   DEMO_MODE,
   EPHEMERAL_COLLECTIONS_DEMO_EXPLANATION,
   SYSTEM_COLLECTIONS_DEMO_EXPLANATION,
-} from "@/lib/demo"
-import { useConversationsStore } from "@/stores/conversationsStore"
-import { useUiStore } from "@/stores/uiStore"
-import { SidebarSectionHeader } from "./SidebarSectionHeader"
-import { SidebarShell } from "./SidebarShell"
+} from "@/lib/demo";
+import { useConversationsStore } from "@/stores/conversationsStore";
+import { useUiStore } from "@/stores/uiStore";
+import { SidebarSectionHeader } from "./SidebarSectionHeader";
+import { SidebarShell } from "./SidebarShell";
 
 /**
  * Sidebar derecho: todo lo relacionado con CONOCIMIENTO, de más
@@ -47,26 +47,33 @@ import { SidebarShell } from "./SidebarShell"
  * useAttachments.ts.
  */
 export function RightSidebar() {
-  const { conversationId } = useParams<{ conversationId: string }>()
+  const { conversationId } = useParams<{ conversationId: string }>();
   const conversation = useConversationsStore((s) =>
-    s.conversations.find((c) => c.id === conversationId)
-  )
-  const setActiveCollections = useConversationsStore((s) => s.setActiveCollections)
+    s.conversations.find((c) => c.id === conversationId),
+  );
+  const setActiveCollections = useConversationsStore(
+    (s) => s.setActiveCollections,
+  );
 
-  const rightWidth = useUiStore((s) => s.rightWidth)
-  const rightCollapsed = useUiStore((s) => s.rightCollapsed)
-  const setRightWidth = useUiStore((s) => s.setRightWidth)
-  const toggleRightCollapsed = useUiStore((s) => s.toggleRightCollapsed)
-  const rightMobileOpen = useUiStore((s) => s.rightMobileOpen)
-  const closeMobileSidebars = useUiStore((s) => s.closeMobileSidebars)
+  const rightWidth = useUiStore((s) => s.rightWidth);
+  const rightCollapsed = useUiStore((s) => s.rightCollapsed);
+  const setRightWidth = useUiStore((s) => s.setRightWidth);
+  const toggleRightCollapsed = useUiStore((s) => s.toggleRightCollapsed);
+  const rightMobileOpen = useUiStore((s) => s.rightMobileOpen);
+  const closeMobileSidebars = useUiStore((s) => s.closeMobileSidebars);
 
-  const attachments = useAttachments(conversationId ?? null)
-  const ephemeralFiles = useEphemeralFiles(conversationId ?? null)
-  const { data: collectionsData, isLoading: collectionsLoading } = useCollections()
+  const attachments = useAttachments(conversationId ?? null);
+  const ephemeralFiles = useEphemeralFiles(conversationId ?? null);
+  const { data: collectionsData, isLoading: collectionsLoading } =
+    useCollections();
 
-  const attachmentCount = attachments.data?.files.length ?? 0
-  const ephemeralCount = DEMO_MODE ? 0 : (ephemeralFiles.data?.files.length ?? 0)
-  const systemCollectionCount = DEMO_MODE ? 0 : (collectionsData?.collections.length ?? 0)
+  const attachmentCount = attachments.data?.files.length ?? 0;
+  const ephemeralCount = DEMO_MODE
+    ? 0
+    : (ephemeralFiles.data?.files.length ?? 0);
+  const systemCollectionCount = DEMO_MODE
+    ? 0
+    : (collectionsData?.collections.length ?? 0);
 
   const collapsedContent = (
     <>
@@ -100,7 +107,7 @@ export function RightSidebar() {
         <Layers className="size-4" />
       </button>
     </>
-  )
+  );
 
   if (!conversation) {
     return (
@@ -118,7 +125,7 @@ export function RightSidebar() {
           Pick or create a conversation to see its files and collections.
         </p>
       </SidebarShell>
-    )
+    );
   }
 
   return (
@@ -137,7 +144,11 @@ export function RightSidebar() {
         <div className="flex min-h-0 flex-1 flex-col">
           {/* 1. Archivos adjuntos -- ad-hoc, de un solo envío. Funciona igual en demo mode. */}
           <section className="flex min-h-0 flex-1 flex-col pt-2">
-            <SidebarSectionHeader icon={Paperclip} label="Attachments" count={attachmentCount} />
+            <SidebarSectionHeader
+              icon={Paperclip}
+              label="Attachments"
+              count={attachmentCount}
+            />
             <div className="min-h-0 flex-1 overflow-y-auto pb-3">
               {attachments.isLoading ? (
                 <ListSkeleton />
@@ -158,7 +169,9 @@ export function RightSidebar() {
             />
             <div className="min-h-0 flex-1 overflow-y-auto pb-3">
               {DEMO_MODE ? (
-                <DemoUnavailableNotice text={EPHEMERAL_COLLECTIONS_DEMO_EXPLANATION} />
+                <DemoUnavailableNotice
+                  text={EPHEMERAL_COLLECTIONS_DEMO_EXPLANATION}
+                />
               ) : ephemeralFiles.isLoading ? (
                 <ListSkeleton />
               ) : (
@@ -179,7 +192,9 @@ export function RightSidebar() {
           />
           <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-3">
             {DEMO_MODE ? (
-              <DemoUnavailableNotice text={SYSTEM_COLLECTIONS_DEMO_EXPLANATION} />
+              <DemoUnavailableNotice
+                text={SYSTEM_COLLECTIONS_DEMO_EXPLANATION}
+              />
             ) : collectionsLoading ? (
               <ListSkeleton />
             ) : (
@@ -193,7 +208,7 @@ export function RightSidebar() {
         </section>
       </div>
     </SidebarShell>
-  )
+  );
 }
 
 function ListSkeleton() {
@@ -202,7 +217,7 @@ function ListSkeleton() {
       <Skeleton className="h-8 w-full" />
       <Skeleton className="h-8 w-5/6" />
     </div>
-  )
+  );
 }
 
 function DemoUnavailableNotice({ text }: { text: string }) {
@@ -210,5 +225,5 @@ function DemoUnavailableNotice({ text }: { text: string }) {
     <p className="rounded-lg border border-border bg-overlay px-3 py-3 text-center text-[11px] leading-relaxed text-muted-foreground">
       {text}
     </p>
-  )
+  );
 }

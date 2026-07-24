@@ -95,15 +95,20 @@ export function SidebarShell({
         >
           {side === "left" && !effectiveCollapsed && (
             <>
-              <LogoIcon className="mx-1.5 size-6" />
-              <div className="group flex w-full items-center justify-center gap-2 rounded-lg px-3 py-4 text-left text-sm transition-colors">
+              {/* <LogoIcon className="mx-1.5 size-6" /> */}
+              <a
+                className="group flex w-full items-center justify-center gap-2 rounded-lg px-3 py-4 text-left text-sm transition-colors"
+                href="https://github.com/camilo6castell"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
                 <span className="truncate text-sm font-bold text-foreground">
                   My assistant
                 </span>
                 <span className="truncate text-xs font-normal text-muted-foreground/80">
                   RAG by camilo6castell
                 </span>
-              </div>
+              </a>
             </>
           )}
 
@@ -135,10 +140,17 @@ export function SidebarShell({
 
         {effectiveCollapsed ? (
           <div className="flex flex-1 flex-col items-center gap-1 overflow-y-auto px-1.5 pb-3">
-            {side === "left" && (
-              <LogoIcon className="mb-1 size-6" />
-            )}
             {collapsedContent}
+            {side === "left" && (
+              <a
+                href="https://github.com/camilo6castell"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-auto flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-overlay-hover hover:text-foreground"
+              >
+                <LogoIcon className="mb-1 size-6" />
+              </a>
+            )}
           </div>
         ) : (
           <div className="flex min-h-0 flex-1 flex-col">{children}</div>
