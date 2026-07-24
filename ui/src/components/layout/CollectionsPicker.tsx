@@ -1,5 +1,5 @@
 import { Check, ChevronRight, Minus } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { cn } from "@/lib/utils";
 import {
   type GroupSelectionState,
@@ -48,22 +48,22 @@ export function CollectionsPicker({
 }) {
   const groups = groupCollections(collections);
 
-  // Abiertos por defecto: los grupos que ya tienen algo seleccionado
-  const [openGroups, setOpenGroups] = useState<Set<string>>(() => new Set());
-  const [initialized, setInitialized] = useState(false);
-
-  useMemo(() => {
-    if (initialized) return;
-    setOpenGroups(
+  // Abiertos por defecto: los grupos que ya tienen algo seleccionado.
+  // El inicializador de useState (la función de abajo) solo se evalúa
+  // una vez, en el primer render -- por eso alcanza para lograr el
+  // "calcular una sola vez al montar" que antes se intentaba armar a
+  // mano con useMemo + setState (lo cual React desaconseja: llamar
+  // setState dentro de useMemo puede disparar un loop infinito, porque
+  // cada llamada cambia el estado que a su vez puede volver a evaluar
+  // el memo). Ver https://react.dev/reference/react/useState#avoiding-recreating-the-initial-state
+  const [openGroups, setOpenGroups] = useState<Set<string>>(
+    () =>
       new Set(
         groups
           .filter((g) => groupSelectionState(g, active) !== "none")
           .map((g) => g.namespace),
       ),
-    );
-    setInitialized(true);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialized]);
+  );
 
   function toggleOpen(namespace: string) {
     setOpenGroups((prev) => {
