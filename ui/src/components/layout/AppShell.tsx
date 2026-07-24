@@ -1,4 +1,5 @@
 import { Menu, PanelRight } from "lucide-react";
+import { LogoIcon } from "./LogoIcon";
 import { Outlet } from "react-router-dom";
 import { useThemeSync } from "@/hooks/useThemeSync";
 import { useUiStore } from "@/stores/uiStore";
@@ -38,7 +39,7 @@ export function AppShell() {
         </button>
 
         <div className="flex min-w-0 items-center gap-1.5">
-          <img className="size-5 shrink-0" src="/favicon.svg" alt="" />
+          <LogoIcon className="size-5 shrink-0" />
           <span className="truncate text-sm font-bold">My assistant</span>
         </div>
 

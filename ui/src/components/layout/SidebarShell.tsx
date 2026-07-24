@@ -1,5 +1,6 @@
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
 import type { ReactNode } from "react";
+import { LogoIcon } from "./LogoIcon";
 import { useIsDesktop } from "@/hooks/useMediaQuery";
 import { useResizableWidth } from "@/hooks/useResizableWidth";
 import { cn } from "@/lib/utils";
@@ -94,7 +95,7 @@ export function SidebarShell({
         >
           {side === "left" && !effectiveCollapsed && (
             <>
-              <img className="mx-1.5 size-6" src="/favicon.svg" alt="" />
+              <LogoIcon className="mx-1.5 size-6" />
               <div className="group flex w-full items-center justify-center gap-2 rounded-lg px-3 py-4 text-left text-sm transition-colors">
                 <span className="truncate text-sm font-bold text-foreground">
                   My assistant
@@ -135,7 +136,7 @@ export function SidebarShell({
         {effectiveCollapsed ? (
           <div className="flex flex-1 flex-col items-center gap-1 overflow-y-auto px-1.5 pb-3">
             {side === "left" && (
-              <img className="mb-1 size-6" src="/favicon.svg" alt="" />
+              <LogoIcon className="mb-1 size-6" />
             )}
             {collapsedContent}
           </div>
