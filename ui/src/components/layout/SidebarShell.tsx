@@ -8,7 +8,6 @@ import {
   SIDEBAR_MAX_WIDTH,
   SIDEBAR_MIN_WIDTH,
 } from "@/stores/uiStore";
-import { ThemeToggle } from "./ThemeToggle";
 
 export function SidebarShell({
   side,
@@ -87,14 +86,23 @@ export function SidebarShell({
               ),
         )}
       >
-        <div className={cn("flex place-content-between gap-1 px-2 py-2")}>
+        <div
+          className={cn(
+            "flex items-center gap-1 px-2 py-2",
+            side === "left" ? "justify-end" : "justify-start",
+          )}
+        >
           {side === "left" && !effectiveCollapsed && (
             <>
-              <div className="flex items-center gap-1.5">
-                <img className="size-5 shrink-0" src="/favicon.svg" alt="" />
-                <span className="truncate text-sm font-bold">My assistant</span>
+              <img className="mx-1.5 size-6" src="/favicon.svg" alt="" />
+              <div className="group flex w-full items-center justify-center gap-2 rounded-lg px-3 py-4 text-left text-sm transition-colors">
+                <span className="truncate text-sm font-bold text-foreground">
+                  My assistant
+                </span>
+                <span className="truncate text-xs font-normal text-muted-foreground/80">
+                  RAG by camilo6castell
+                </span>
               </div>
-              <ThemeToggle />
             </>
           )}
 
@@ -118,7 +126,7 @@ export function SidebarShell({
             type="button"
             onClick={onMobileClose}
             aria-label="Close panel"
-            className="flex rounded-md p-1.5 text-muted-foreground hover:bg-overlay-hover hover:text-foreground lg:hidden"
+            className="ml-auto flex rounded-md p-1.5 text-muted-foreground hover:bg-overlay-hover hover:text-foreground lg:hidden"
           >
             <X className="size-5" />
           </button>
@@ -130,7 +138,6 @@ export function SidebarShell({
               <img className="mb-1 size-6" src="/favicon.svg" alt="" />
             )}
             {collapsedContent}
-            {side === "left" && <ThemeToggle className="mt-auto flex-col" />}
           </div>
         ) : (
           <div className="flex min-h-0 flex-1 flex-col">{children}</div>

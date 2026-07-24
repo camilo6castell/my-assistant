@@ -7,9 +7,9 @@ import { useConversationsStore } from "@/stores/conversationsStore"
 import { useDemoAttachmentsStore, selectDemoFiles } from "@/stores/demoAttachmentsStore"
 import type { ChatMessage } from "@/types/chat"
 import type { QueryResponse } from "@/types/api"
-import { ChatToolbar } from "./ChatToolbar"
 import { MessageInput } from "./MessageInput"
 import { MessageList } from "./MessageList"
+import { ThemeToggle } from "@/components/layout/ThemeToggle"
 
 function toHistory(messages: ChatMessage[]): { user: string; assistant: string }[] {
   const history: { user: string; assistant: string }[] = []
@@ -166,9 +166,18 @@ export function ChatView() {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <ChatToolbar conversation={conversation} />
-      <MessageList messages={conversation.messages} onDeleteMessage={handleDeleteMessage} />
-      <MessageInput onSend={handleSend} disabled={sendMutation.isPending} />
+      <div className="relative flex min-h-0 flex-1 flex-col">
+        {/* Antes vivía acá el ChatToolbar (colecciones activas / estado de
+            conexión) -- ahora ese contenido se apiló detrás del input, ver
+            MessageInput.tsx. Este espacio, que quedó libre y sentía a un
+            header vacío, es un buen lugar para un control liviano y
+            centrado que no compite con la conversación. */}
+        <div className="pointer-events-none absolute inset-x-0 top-3 z-20 flex justify-center">
+          <ThemeToggle className="pointer-events-auto bg-overlay-strong shadow-lg backdrop-blur-2xl" />
+        </div>
+        <MessageList messages={conversation.messages} onDeleteMessage={handleDeleteMessage} />
+      </div>
+      <MessageInput conversation={conversation} onSend={handleSend} disabled={sendMutation.isPending} />
     </div>
   )
 }

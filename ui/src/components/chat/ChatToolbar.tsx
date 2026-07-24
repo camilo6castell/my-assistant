@@ -1,34 +1,44 @@
-import type { Conversation } from "@/types/chat"
-import { DEMO_MODE } from "@/lib/demo"
-import { ConnectionStatus } from "@/components/layout/ConnectionStatus"
+import type { Conversation } from "@/types/chat";
+import { DEMO_MODE } from "@/lib/demo";
+import { ConnectionStatus } from "@/components/layout/ConnectionStatus";
 
+/**
+ * Solo el contenido informativo (colecciones activas, web search, modo
+ * demo) -- la tarjeta que lo envuelve visualmente vive en
+ * MessageInput.tsx, apilada detrás del cuadro de texto. Se mantiene
+ * como componente aparte porque la lógica de qué mensaje mostrar no
+ * tiene nada que ver con el layout que lo contiene.
+ */
 export function ChatToolbar({ conversation }: { conversation: Conversation }) {
   const hasContextSource =
-    conversation.activeCollections.length > 0 || conversation.useWebSearch
+    conversation.activeCollections.length > 0 || conversation.useWebSearch;
+
+  let text: string;
+  let title: string | undefined;
+
+  if (DEMO_MODE) {
+    text = "Demo mode -- talking directly to Gemini, no retrieval";
+  } else if (hasContextSource) {
+    const parts: string[] = [];
+    if (conversation.activeCollections.length > 0) {
+      parts.push(
+        `${conversation.activeCollections.length} active collection(s)`,
+      );
+    }
+    if (conversation.useWebSearch) parts.push("web search active");
+    text = parts.join(" · ");
+  } else {
+    text = "No active collections -- answering directly, without RAG";
+    title =
+      "No active collections -- the model answers directly, without RAG (you can attach a one-off file in the right-hand panel)";
+  }
 
   return (
-    <div className="relative z-10 flex flex-wrap items-center justify-between gap-2 border-b border-border bg-overlay px-3 py-2.5 backdrop-blur-xl sm:px-4">
-      <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-        {DEMO_MODE ? (
-          <span className="text-xs text-muted-foreground">
-            Demo mode -- chatting directly with Gemini, no retrieval behind it
-          </span>
-        ) : hasContextSource ? (
-          <span className="text-xs text-muted-foreground">
-            {conversation.activeCollections.length > 0 &&
-              `${conversation.activeCollections.length} active collection(s)`}
-            {conversation.activeCollections.length > 0 && conversation.useWebSearch && " · "}
-            {conversation.useWebSearch && "web search active"}
-          </span>
-        ) : (
-          <span className="text-xs text-muted-foreground">
-            No active collections -- the model answers directly, without RAG
-            (you can attach a one-off file in the right-hand panel)
-          </span>
-        )}
-      </div>
-
-      <ConnectionStatus className="hidden sm:inline-flex" />
+    <div className="flex min-w-0 items-center justify-between gap-2 text-white/75">
+      <span className="truncate text-xs" title={title}>
+        {text}
+      </span>
+      <ConnectionStatus className="hidden shrink-0 sm:inline-flex" />
     </div>
-  )
+  );
 }
