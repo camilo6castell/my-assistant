@@ -63,7 +63,11 @@ export function SidebarShell({
       )}
 
       <aside
-        style={isDesktop ? { width: effectiveCollapsed ? SIDEBAR_COLLAPSED_WIDTH : width } : undefined}
+        style={
+          isDesktop
+            ? { width: effectiveCollapsed ? SIDEBAR_COLLAPSED_WIDTH : width }
+            : undefined
+        }
         className={cn(
           "flex h-full shrink-0 flex-col bg-sidebar backdrop-blur-2xl transition-transform duration-300 ease-out lg:bg-overlay lg:transition-none",
           // Mobile: overlay fijo a pantalla completa (ancho propio, fuera
@@ -74,31 +78,21 @@ export function SidebarShell({
             ? cn(
                 "left-0 border-r border-border",
                 mobileOpen ? "translate-x-0" : "-translate-x-full",
-                "lg:translate-x-0"
+                "lg:translate-x-0",
               )
             : cn(
                 "right-0 border-l border-border",
                 mobileOpen ? "translate-x-0" : "translate-x-full",
-                "lg:translate-x-0"
-              )
+                "lg:translate-x-0",
+              ),
         )}
       >
-        <div
-          className={cn(
-            "flex items-center gap-1 px-2 py-2",
-            side === "left" ? "justify-end" : "justify-start",
-          )}
-        >
+        <div className={cn("flex place-content-between gap-1 px-2 py-2")}>
           {side === "left" && !effectiveCollapsed && (
             <>
-              <img className="mx-1.5 size-6" src="/favicon.svg" alt="" />
-              <div className="group flex w-full items-center justify-center gap-2 rounded-lg px-3 py-4 text-left text-sm transition-colors">
-                <span className="truncate text-sm font-bold text-foreground">
-                  My assistant
-                </span>
-                <span className="truncate text-xs font-normal text-muted-foreground/80">
-                  RAG by camilo6castell
-                </span>
+              <div className="flex items-center gap-1.5">
+                <img className="size-5 shrink-0" src="/favicon.svg" alt="" />
+                <span className="truncate text-sm font-bold">My assistant</span>
               </div>
               <ThemeToggle />
             </>
@@ -124,7 +118,7 @@ export function SidebarShell({
             type="button"
             onClick={onMobileClose}
             aria-label="Close panel"
-            className="ml-auto flex rounded-md p-1.5 text-muted-foreground hover:bg-overlay-hover hover:text-foreground lg:hidden"
+            className="flex rounded-md p-1.5 text-muted-foreground hover:bg-overlay-hover hover:text-foreground lg:hidden"
           >
             <X className="size-5" />
           </button>
