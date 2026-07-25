@@ -85,8 +85,8 @@ export function AppShell() {
             className="h-full w-full"
             sparks={0.8}
             sparkDensity={1.8}
-            smoke={0.7}
-            glow={1.4}
+            smoke={1.2}
+            glow={2}
           >
             <div className="h-full w-full bg-background" />
           </Blaze>

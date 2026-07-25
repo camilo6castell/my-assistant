@@ -1,9 +1,9 @@
-import { FileText, Sparkles, Search, Globe } from "lucide-react"
-import { useNavigate } from "react-router-dom"
-import { Button } from "@/components/ui/button"
-import { DEMO_MODE } from "@/lib/demo"
-import { useConversationsStore } from "@/stores/conversationsStore"
-import { cn } from "@/lib/utils"
+import { FileText, Sparkles, Search, Globe } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { Button } from "@/components/ui/button";
+import { DEMO_MODE } from "@/lib/demo";
+import { useConversationsStore } from "@/stores/conversationsStore";
+import { cn } from "@/lib/utils";
 
 const SUGGESTIONS = [
   {
@@ -21,15 +21,15 @@ const SUGGESTIONS = [
     label: "Deep research",
     description: "Agent mode with verification",
   },
-]
+];
 
 export function EmptyState() {
-  const navigate = useNavigate()
-  const createConversation = useConversationsStore((s) => s.createConversation)
+  const navigate = useNavigate();
+  const createConversation = useConversationsStore((s) => s.createConversation);
 
   function handleStart() {
-    const id = createConversation()
-    navigate(`/c/${id}`)
+    const id = createConversation();
+    navigate(`/c/${id}`);
   }
 
   return (
@@ -87,5 +87,5 @@ export function EmptyState() {
         )}
       </div>
     </div>
-  )
+  );
 }
