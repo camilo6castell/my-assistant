@@ -88,7 +88,7 @@ export function SidebarShell({
         >
           {side === "left" && !effectiveCollapsed && (
             <a
-              className="flex items-center gap-2 rounded-lg py-1 text-left transition-opacity hover:opacity-80"
+              className="flex w-full items-center justify-center gap-2 rounded-lg py-1 text-left transition-opacity hover:opacity-80"
               href="https://github.com/camilo6castell"
               target="_blank"
               rel="noopener noreferrer"
@@ -100,23 +100,12 @@ export function SidebarShell({
             </a>
           )}
 
-          {side === "left" && effectiveCollapsed && (
-            <a
-              href="https://github.com/camilo6castell"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex size-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-overlay-hover hover:text-foreground transition-colors"
-            >
-              <LogoIcon className="size-5" />
-            </a>
-          )}
-
           {/* Desktop collapse toggle */}
           <button
             type="button"
             onClick={onToggleCollapsed}
             aria-label={collapsed ? "Expand panel" : "Collapse panel"}
-            className="hidden rounded-lg p-1.5 text-muted-foreground hover:bg-overlay-hover hover:text-foreground transition-colors lg:flex"
+            className="hidden rounded-lg p-1.5 text-muted-foreground hover:bg-overlay-hover hover:text-foreground transition-colors lg:flex mr-auto"
           >
             {collapsed ? (
               <ExpandIcon className="size-4" />
@@ -139,6 +128,16 @@ export function SidebarShell({
         {effectiveCollapsed ? (
           <div className="flex flex-1 flex-col items-center gap-1 overflow-y-auto px-1.5 pb-3">
             {collapsedContent}
+            {side === "left" && effectiveCollapsed && (
+              <a
+                href="https://github.com/camilo6castell"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex mt-auto size-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-overlay-hover hover:text-foreground transition-colors"
+              >
+                <LogoIcon className="size-8" />
+              </a>
+            )}
           </div>
         ) : (
           <div className="flex min-h-0 flex-1 flex-col">{children}</div>

@@ -264,7 +264,7 @@ export function Sidebar() {
             <ThemeToggle />
           </div>
         ) : (
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-center gap-2">
             <span className="text-[11px] text-muted-foreground/50">Theme</span>
             <ThemeToggle />
           </div>
