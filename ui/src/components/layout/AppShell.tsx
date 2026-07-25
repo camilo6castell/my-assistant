@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { Menu, PanelRight } from "lucide-react";
 import { Outlet } from "react-router-dom";
 import { Blaze } from "@/components/canvasui/Blaze";
@@ -15,6 +16,50 @@ function useIsDarkTheme() {
   return theme === "dark" || (theme === "system" && prefersDark);
 }
 
+/**
+ * The Frost component listens for pointer events on its own root div,
+ * which sits at z-0 behind all UI. Pointer events are captured by
+ * higher-z elements and never reach the Frost. This hook listens on
+ * `document` and forwards events to the Frost's root div so the melt
+ * effect works even though the canvas is visually behind everything.
+ */
+function useFrostMelt(
+  containerRef: React.RefObject<HTMLDivElement | null>,
+  enabled: boolean,
+) {
+  useEffect(() => {
+    if (!enabled) return;
+    const wrapper = containerRef.current;
+    if (!wrapper) return;
+    const frostRoot = wrapper.firstElementChild;
+    if (!frostRoot) return;
+
+    const events = ["pointermove", "pointerdown"] as const;
+
+    function forward(e: Event) {
+      const pe = e as PointerEvent;
+      frostRoot!.dispatchEvent(
+        new PointerEvent(pe.type, {
+          bubbles: true,
+          clientX: pe.clientX,
+          clientY: pe.clientY,
+          pointerId: pe.pointerId,
+          pointerType: pe.pointerType,
+        }),
+      );
+    }
+
+    for (const type of events) {
+      document.addEventListener(type, forward);
+    }
+    return () => {
+      for (const type of events) {
+        document.removeEventListener(type, forward);
+      }
+    };
+  }, [containerRef, enabled]);
+}
+
 export function AppShell() {
   useThemeSync();
   const isDark = useIsDarkTheme();
@@ -22,14 +67,19 @@ export function AppShell() {
   const openLeftMobile = useUiStore((s) => s.openLeftMobile);
   const openRightMobile = useUiStore((s) => s.openRightMobile);
 
+  const frostRef = useRef<HTMLDivElement>(null);
+  useFrostMelt(frostRef, isDark);
+
   return (
     <div className="relative flex h-dvh w-full flex-col overflow-hidden bg-background text-foreground lg:flex-row">
       {/* Canvas background effect */}
       <div className="fixed inset-0 z-0">
         {isDark ? (
-          <Frost className="pointer-events-auto h-full w-full" opacity={0.4}>
-            <div className="h-full w-full bg-background" />
-          </Frost>
+          <div ref={frostRef} className="h-full w-full">
+            <Frost className="h-full w-full" opacity={0.4}>
+              <div className="h-full w-full bg-background" />
+            </Frost>
+          </div>
         ) : (
           <Blaze
             className="h-full w-full"
@@ -55,7 +105,9 @@ export function AppShell() {
         </button>
 
         <div className="flex min-w-0 items-center gap-1.5">
-          <span className="truncate text-sm font-semibold tracking-tight">My assistant</span>
+          <span className="truncate text-sm font-semibold tracking-tight">
+            My assistant
+          </span>
         </div>
 
         <div className="flex items-center gap-1">
