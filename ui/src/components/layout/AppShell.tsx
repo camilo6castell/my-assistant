@@ -76,7 +76,7 @@ export function AppShell() {
       <div className="fixed inset-0 z-0">
         {isDark ? (
           <div ref={frostRef} className="h-full w-full">
-            <Frost className="h-full w-full" opacity={0.4}>
+            <Frost className="h-full w-full" opacity={0.15}>
               <div className="h-full w-full bg-background" />
             </Frost>
           </div>
