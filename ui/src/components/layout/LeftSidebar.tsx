@@ -18,6 +18,7 @@ import { useConversationsStore } from "@/stores/conversationsStore";
 import { useUiStore } from "@/stores/uiStore";
 import { SidebarSectionHeader } from "./SidebarSectionHeader";
 import { SidebarShell } from "./SidebarShell";
+import { ThemeToggle } from "./ThemeToggle";
 
 export function Sidebar() {
   const navigate = useNavigate();
@@ -45,8 +46,6 @@ export function Sidebar() {
   function handleNewConversation() {
     const id = createConversation();
     navigate(`/c/${id}`);
-    // Sin efecto en desktop (no hay drawer que cerrar ahí) -- en mobile
-    // vuelve al chat después de crear la conversación, como se espera.
     closeMobileSidebars();
   }
 
@@ -82,7 +81,7 @@ export function Sidebar() {
         type="button"
         onClick={handleNewConversation}
         title="New conversation"
-        className="flex size-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-overlay-hover hover:text-foreground"
+        className="flex size-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-overlay-hover hover:text-foreground transition-colors"
       >
         <MessageSquarePlus className="size-4" />
       </button>
@@ -90,7 +89,7 @@ export function Sidebar() {
         type="button"
         onClick={toggleLeftCollapsed}
         title="Chats"
-        className="flex size-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-overlay-hover hover:text-foreground"
+        className="flex size-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-overlay-hover hover:text-foreground transition-colors"
       >
         <MessagesSquare className="size-4" />
       </button>
@@ -98,7 +97,7 @@ export function Sidebar() {
         type="button"
         onClick={toggleLeftCollapsed}
         title="Generation"
-        className="flex size-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-overlay-hover hover:text-foreground"
+        className="flex size-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-overlay-hover hover:text-foreground transition-colors"
       >
         <Settings2 className="size-4" />
       </button>
@@ -123,9 +122,9 @@ export function Sidebar() {
           count={conversations.length}
           actionHandler={handleNewConversation}
         />
-        <nav className="min-h-0 flex-1 space-y-1 overflow-y-auto px-3 pb-2">
+        <nav className="min-h-0 flex-1 space-y-0.5 overflow-y-auto px-2 pb-2">
           {conversations.length === 0 && (
-            <p className="px-2 py-4 text-center text-xs text-muted-foreground">
+            <p className="px-3 py-6 text-center text-xs text-muted-foreground/60">
               No conversations yet.
             </p>
           )}
@@ -149,9 +148,9 @@ export function Sidebar() {
                   }
                 }}
                 className={cn(
-                  "group flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2.5 text-left text-sm transition-colors",
+                  "group flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2.5 text-left text-sm transition-colors cursor-pointer",
                   isActive
-                    ? "bg-overlay-strong text-foreground"
+                    ? "bg-overlay-strong text-foreground font-medium"
                     : "text-muted-foreground hover:bg-overlay-hover hover:text-foreground",
                 )}
               >
@@ -177,7 +176,7 @@ export function Sidebar() {
                   ) : (
                     <span className="block truncate">{conv.title}</span>
                   )}
-                  <span className="block truncate text-[11px] text-muted-foreground/70">
+                  <span className="block truncate text-[11px] text-muted-foreground/50 mt-0.5">
                     {formatDistanceToNow(conv.createdAt, {
                       addSuffix: true,
                       locale: enUS,
@@ -194,7 +193,7 @@ export function Sidebar() {
                         e.preventDefault();
                         handleCommitEdit(conv.id);
                       }}
-                      className="rounded-md p-1 text-muted-foreground hover:bg-overlay-hover hover:text-foreground"
+                      className="rounded-md p-1 text-muted-foreground hover:bg-overlay-hover hover:text-foreground transition-colors"
                       aria-label="Save name"
                     >
                       <Check className="size-3.5" />
@@ -228,12 +227,14 @@ export function Sidebar() {
           })}
         </nav>
       </section>
+
       <div className="mx-3 border-t border-border" />
+
       <section className="flex h-[fit-content] max-h-[50%] min-h-0 flex-col pt-3">
         <SidebarSectionHeader icon={Settings2} label="Generation" />
         <div className="h-[fit-content] max-h-full min-h-0 overflow-y-auto pb-4">
           {activeConversation && providersLoading ? (
-            <div className="space-y-4 px-3">
+            <div className="space-y-4 px-4">
               <Skeleton className="h-4 w-24" />
               <Skeleton className="h-9 w-full" />
               <Skeleton className="h-4 w-20" />
@@ -249,12 +250,26 @@ export function Sidebar() {
               providers={providersData}
             />
           ) : (
-            <p className="px-3 py-4 text-center text-xs text-muted-foreground">
+            <p className="px-4 py-4 text-center text-xs text-muted-foreground/60">
               Pick or create a conversation to configure the response mode.
             </p>
           )}
         </div>
       </section>
+
+      {/* Theme toggle + collapse footer */}
+      <div className="shrink-0 border-t border-border px-3 py-2.5">
+        {leftCollapsed ? (
+          <div className="flex justify-center">
+            <ThemeToggle />
+          </div>
+        ) : (
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] text-muted-foreground/50">Theme</span>
+            <ThemeToggle />
+          </div>
+        )}
+      </div>
     </SidebarShell>
   );
 }

@@ -41,24 +41,17 @@ export function MessageInput({
 
   return (
     <div
-      className="mx-auto w-full max-w-3xl px-3 pb-4 sm:px-4 sm:pb-6"
+      className="mx-auto w-full max-w-3xl px-4 pb-4 sm:px-6 sm:pb-6"
       style={{ paddingBottom: "max(1rem, env(safe-area-inset-bottom))" }}
     >
-      <div className="relative">
-        {/* Tarjeta de contexto: mismo tamaño/forma que el cuadro de texto de
-            abajo, pero apilada detrás -- un glass oscuro que no depende del
-            tema (siempre oscuro, como un chip flotante) para distinguirse
-            claramente como una capa "detrás" del input. El padding inferior
-            extra (pb-9) es a propósito: es lo que el input de abajo tapa. */}
-        <div className="relative z-0 rounded-2xl border border-white/10 bg-neutral-950/75 px-4 pt-3 pb-9 shadow-xl backdrop-blur-2xl">
+      <div className="relative overflow-hidden rounded-2xl border border-border bg-card shadow-sm transition-shadow focus-within:shadow-md focus-within:border-primary/20">
+        {/* Context toolbar -- subtle info strip above the textarea */}
+        <div className="border-b border-border/50 px-3 py-2">
           <ChatToolbar conversation={conversation} />
         </div>
 
-        {/* Cuadro de texto: se monta -mt-7 sobre la tarjeta de arriba,
-            tapando su mitad inferior. Lo que sobra por encima (el segmento
-            con la info de colecciones / estado de conexión) queda visible
-            como una pestaña que asoma detrás. */}
-        <div className="relative z-10 -mt-7 flex items-end gap-2 rounded-2xl border border-border bg-overlay-strong p-2 shadow-2xl backdrop-blur-2xl">
+        {/* Textarea + send button */}
+        <div className="flex items-end gap-2 p-3">
           <Textarea
             ref={textareaRef}
             value={value}
@@ -66,7 +59,7 @@ export function MessageInput({
             onKeyDown={handleKeyDown}
             placeholder="Type your question..."
             rows={1}
-            className="max-h-[200px] flex-1 px-2 py-2 text-base sm:text-sm"
+            className="max-h-[200px] flex-1 border-0 bg-transparent px-1 py-1 text-[15px] leading-relaxed sm:text-sm focus-visible:ring-0 focus-visible:ring-offset-0"
             disabled={disabled}
           />
           <Button
@@ -74,8 +67,9 @@ export function MessageInput({
             onClick={handleSubmit}
             disabled={disabled || !value.trim()}
             aria-label="Send message"
+            className="shrink-0 rounded-xl"
           >
-            <ArrowUp className="size-4" />
+            <ArrowUp className="size-4" strokeWidth={2.5} />
           </Button>
         </div>
       </div>

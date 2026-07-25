@@ -4,9 +4,6 @@ import { Button } from "@/components/ui/button"
 import { apiErrorMessage } from "@/lib/api/client"
 import type { useAttachments } from "@/hooks/useAttachments"
 
-// Espejo de SUPPORTED_SUFFIXES en src/context/attachments.py -- si
-// agregás una extensión ahí, agregala acá también para que el selector
-// de archivos del navegador no la oculte.
 const ACCEPTED_EXTENSIONS =
   ".txt,.md,.json,.py,.js,.ts,.tsx,.jsx,.java,.yaml,.yml,.toml,.csv,.sql,.sh,.env,.cfg,.ini,.xml,.css,.html"
 
@@ -15,15 +12,6 @@ function formatSize(bytes: number): string {
   return `${(bytes / 1024).toFixed(1)} KB`
 }
 
-/**
- * Archivos que se inyectan enteros en la PRÓXIMA query -- ver
- * src/context/attachments.py. Se aplican sin importar el modo de
- * respuesta: con colecciones activas, sin ninguna (ver _answer_raw en
- * el backend), o con búsqueda web. Una vez enviados, el backend los
- * consume (los borra) y esta lista vuelve a estar vacía -- por eso
- * ChatView.tsx invalida la query de useAttachments después de cada
- * envío exitoso.
- */
 export function AttachmentsSection({
   attachments,
 }: {
@@ -46,9 +34,8 @@ export function AttachmentsSection({
 
   return (
     <div className="space-y-3 px-3">
-      <p className="text-[11px] leading-snug text-muted-foreground/70">
-        Sent whole with your next message -- no search, no summaries.
-        Once sent, they're no longer attached.
+      <p className="text-[11px] leading-snug text-muted-foreground/50">
+        Sent whole with your next message. Once sent, they're consumed.
       </p>
 
       <input
@@ -76,20 +63,20 @@ export function AttachmentsSection({
       )}
 
       {fileCount === 0 ? (
-        <p className="py-2 text-center text-xs text-muted-foreground">
+        <p className="py-2 text-center text-xs text-muted-foreground/40">
           No pending attachments.
         </p>
       ) : (
-        <ul className="space-y-1">
+        <ul className="space-y-0.5">
           {attachments.data?.files.map((f) => (
             <li
               key={f.file_id}
-              className="flex items-center justify-between gap-2 rounded-md px-2 py-1.5 hover:bg-overlay-hover"
+              className="flex items-center justify-between gap-2 rounded-lg px-2 py-1.5 hover:bg-overlay-hover transition-colors"
             >
               <span className="flex min-w-0 items-center gap-1.5 truncate text-xs">
-                <FileCode2 className="size-3.5 shrink-0 text-muted-foreground" />
+                <FileCode2 className="size-3.5 shrink-0 text-muted-foreground/60" />
                 <span className="truncate">{f.filename}</span>
-                <span className="shrink-0 text-muted-foreground">
+                <span className="shrink-0 text-muted-foreground/40">
                   ({formatSize(f.size_bytes)})
                 </span>
               </span>
@@ -97,7 +84,7 @@ export function AttachmentsSection({
                 type="button"
                 aria-label={`Remove ${f.filename}`}
                 onClick={() => attachments.remove.mutate(f.file_id)}
-                className="shrink-0 rounded p-1 text-muted-foreground hover:bg-overlay-hover hover:text-destructive"
+                className="shrink-0 rounded-md p-1 text-muted-foreground/40 hover:bg-overlay-hover hover:text-destructive transition-colors"
               >
                 <Trash2 className="size-3.5" />
               </button>

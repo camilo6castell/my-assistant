@@ -26,10 +26,8 @@ export function SidebarShell({
   collapsed: boolean;
   onToggleCollapsed: () => void;
   onResize: (width: number) => void;
-  /** Drawer abierto/cerrado en mobile (< lg) -- independiente de `collapsed`, ver uiStore.ts. */
   mobileOpen: boolean;
   onMobileClose: () => void;
-  /** Iconos a mostrar cuando está colapsada en desktop (cada uno debería expandir al hacer click). */
   collapsedContent: ReactNode;
   children: ReactNode;
 }) {
@@ -46,19 +44,16 @@ export function SidebarShell({
   const CollapseIcon = side === "left" ? ChevronLeft : ChevronRight;
   const ExpandIcon = side === "left" ? ChevronRight : ChevronLeft;
 
-  // En mobile el panel siempre se muestra "expandido" (nunca el rail de
-  // íconos colapsado: no tiene sentido dentro de un drawer a pantalla
-  // completa que de por sí está oculto por completo cuando no se usa).
   const effectiveCollapsed = isDesktop && collapsed;
 
   return (
     <>
-      {/* Backdrop del drawer -- solo existe en mobile y solo mientras está abierto. */}
+      {/* Mobile backdrop */}
       {mobileOpen && (
         <div
           aria-hidden
           onClick={onMobileClose}
-          className="fixed inset-0 z-40 bg-black/50 backdrop-blur-[2px] duration-200 animate-in fade-in lg:hidden"
+          className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm duration-200 animate-in fade-in lg:hidden"
         />
       )}
 
@@ -69,11 +64,8 @@ export function SidebarShell({
             : undefined
         }
         className={cn(
-          "flex h-full shrink-0 flex-col bg-sidebar backdrop-blur-2xl transition-transform duration-300 ease-out lg:bg-overlay lg:transition-none",
-          // Mobile: overlay fijo a pantalla completa (ancho propio, fuera
-          // del flujo). Desktop (lg+): vuelve al comportamiento original,
-          // estático dentro del flex row de AppShell.
-          "fixed inset-y-0 z-50 w-[86vw] max-w-[320px] lg:static lg:z-10 lg:w-auto lg:max-w-none",
+          "flex h-full shrink-0 flex-col bg-sidebar transition-all duration-200 ease-out",
+          "fixed inset-y-0 z-50 w-[86vw] max-w-[320px] lg:static lg:z-10 lg:w-auto lg:max-w-none lg:transition-none",
           side === "left"
             ? cn(
                 "left-0 border-r border-border",
@@ -87,38 +79,44 @@ export function SidebarShell({
               ),
         )}
       >
+        {/* Sidebar header */}
         <div
           className={cn(
-            "flex items-center gap-1 px-2 py-2",
-            side === "left" ? "justify-end" : "justify-start",
+            "flex shrink-0 items-center px-3 py-2.5",
+            side === "left" ? "justify-between" : "justify-end",
           )}
         >
           {side === "left" && !effectiveCollapsed && (
-            <>
-              {/* <LogoIcon className="mx-1.5 size-6" /> */}
-              <a
-                className="group flex w-full items-center justify-center gap-2 rounded-lg px-3 py-4 text-left text-sm transition-colors"
-                href="https://github.com/camilo6castell"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                <span className="truncate text-sm font-bold text-foreground">
-                  My assistant
-                </span>
-                <span className="truncate text-xs font-normal text-muted-foreground/80">
-                  RAG by camilo6castell
-                </span>
-              </a>
-            </>
+            <a
+              className="flex items-center gap-2 rounded-lg py-1 text-left transition-opacity hover:opacity-80"
+              href="https://github.com/camilo6castell"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <LogoIcon className="size-5 shrink-0" />
+              <span className="text-sm font-semibold tracking-tight text-foreground">
+                My assistant
+              </span>
+            </a>
           )}
 
-          {/* Desktop: colapsar a rail de íconos. Oculto en mobile -- ahí el
-              control equivalente es cerrar el drawer por completo (botón X). */}
+          {side === "left" && effectiveCollapsed && (
+            <a
+              href="https://github.com/camilo6castell"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex size-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-overlay-hover hover:text-foreground transition-colors"
+            >
+              <LogoIcon className="size-5" />
+            </a>
+          )}
+
+          {/* Desktop collapse toggle */}
           <button
             type="button"
             onClick={onToggleCollapsed}
             aria-label={collapsed ? "Expand panel" : "Collapse panel"}
-            className="hidden rounded-md p-1.5 text-muted-foreground hover:bg-overlay-hover hover:text-foreground lg:flex"
+            className="hidden rounded-lg p-1.5 text-muted-foreground hover:bg-overlay-hover hover:text-foreground transition-colors lg:flex"
           >
             {collapsed ? (
               <ExpandIcon className="size-4" />
@@ -127,12 +125,12 @@ export function SidebarShell({
             )}
           </button>
 
-          {/* Mobile: cerrar el drawer. Oculto en desktop. */}
+          {/* Mobile close */}
           <button
             type="button"
             onClick={onMobileClose}
             aria-label="Close panel"
-            className="ml-auto flex rounded-md p-1.5 text-muted-foreground hover:bg-overlay-hover hover:text-foreground lg:hidden"
+            className="flex rounded-lg p-1.5 text-muted-foreground hover:bg-overlay-hover hover:text-foreground transition-colors lg:hidden"
           >
             <X className="size-5" />
           </button>
@@ -141,25 +139,12 @@ export function SidebarShell({
         {effectiveCollapsed ? (
           <div className="flex flex-1 flex-col items-center gap-1 overflow-y-auto px-1.5 pb-3">
             {collapsedContent}
-            {side === "left" && (
-              <a
-                href="https://github.com/camilo6castell"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="mt-auto flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-overlay-hover hover:text-foreground"
-              >
-                <LogoIcon className="mb-1 size-6" />
-              </a>
-            )}
           </div>
         ) : (
           <div className="flex min-h-0 flex-1 flex-col">{children}</div>
         )}
 
-        {/* Handle de resize: franja invisible sobre todo el borde (fácil de
-            agarrar), con un pill visible solo al hacer hover para indicar
-            que se puede arrastrar. Solo desktop -- en mobile el ancho del
-            drawer es fijo (86vw), no tiene sentido redimensionarlo. */}
+        {/* Resize handle -- desktop only */}
         {!effectiveCollapsed && (
           <div
             onPointerDown={onPointerDown}
@@ -168,7 +153,7 @@ export function SidebarShell({
               side === "left" ? "-right-1.5" : "-left-1.5",
             )}
           >
-            <div className="absolute top-1/2 left-1/2 h-12 w-1 -translate-x-1/2 -translate-y-1/2 rounded-full bg-transparent transition-colors group-hover:bg-primary/50" />
+            <div className="absolute top-1/2 left-1/2 h-10 w-0.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-transparent transition-colors group-hover:bg-primary/40" />
           </div>
         )}
       </aside>

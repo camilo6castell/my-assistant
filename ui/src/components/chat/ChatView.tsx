@@ -21,7 +21,6 @@ import type { ChatMessage } from "@/types/chat";
 import type { QueryResponse } from "@/types/api";
 import { MessageInput } from "./MessageInput";
 import { MessageList } from "./MessageList";
-import { ThemeToggle } from "@/components/layout/ThemeToggle";
 
 function toHistory(
   messages: ChatMessage[],
@@ -59,17 +58,6 @@ export function ChatView() {
   );
   const clearDemoAttachments = useDemoAttachmentsStore((s) => s.clearFiles);
 
-  // Un solo camino de envío para toda conversación -- /query decide
-  // internamente entre raw/web-only/RAG según haya o no colecciones/
-  // archivos efímeros/web_search (ver _answer_raw en
-  // src/api/routers/chat.py). Sin colecciones activas ni web_search, el
-  // usuario puede seguir preguntando: la pregunta (más los archivos
-  // adjuntos, si los hay) va directo al LLM sin ningún system prompt.
-  //
-  // En VITE_DEMO_MODE no hay backend: se llama directo a Gemini desde el
-  // navegador (ver lib/demo.ts) con los adjuntos demo (si hay) inyectados
-  // como contexto -- misma semántica que los adjuntos reales, solo que el
-  // "backend" que los inyecta es esta función.
   const sendMutation = useMutation<QueryResponse | DemoAnswer, unknown, string>(
     {
       mutationFn: (text: string) => {
@@ -102,8 +90,6 @@ export function ChatView() {
     },
   );
 
-  // El hook de arriba no puede ser condicional -- por eso el early return
-  // va después de declarar todos los hooks, no antes.
   if (!conversationId || !conversation) {
     return <Navigate to="/" replace />;
   }
@@ -124,7 +110,6 @@ export function ChatView() {
       createdAt: Date.now(),
       isPending: true,
       pendingLabel: !DEMO_MODE ? "compacting the response" : undefined,
-      // pendingLabel: !DEMO_MODE && conversation.useWebSearch ? "" : undefined,
     };
 
     addMessage(conversation.id, userMsg);
@@ -137,8 +122,6 @@ export function ChatView() {
             content: data.answer,
             isPending: false,
           });
-          // Espejo de _consume_attachments en el backend real: se
-          // consumen (borran) al enviarlos exitosamente.
           clearDemoAttachments(conversation.id);
           return;
         }
@@ -152,17 +135,9 @@ export function ChatView() {
           webSources: data.web_sources ?? undefined,
           isPending: false,
         });
-        // Caso B silencioso (ver _supplement_with_web en el backend): la
-        // respuesta principal se generó igual, pero el complemento web
-        // se omitió por cuota agotada -- el mensaje no lo refleja, así
-        // que esta es la única señal.
         if (data.web_search_quota_exceeded) {
           setWebSearchQuotaExceeded(true);
         }
-        // Los archivos adjuntos, si había, se consumieron en el backend
-        // al procesar esta query (ver _consume_attachments en
-        // src/api/routers/chat.py) -- se refresca la lista para que el
-        // sidebar derecho refleje que ya no están adjuntos.
         queryClient.invalidateQueries({
           queryKey: ["attachments", conversation.id],
         });
@@ -174,15 +149,9 @@ export function ChatView() {
           isError: true,
         });
         if (DEMO_MODE) return;
-        // Caso A (ver _answer_web_only en el backend): sin colecciones,
-        // la búsqueda web falló por cuota agotada y el 422 lo comunica
-        // en el detail estructurado.
         if (isWebSearchQuotaExceededError(error)) {
           setWebSearchQuotaExceeded(true);
         }
-        // 413 del guard de contexto (src/llm/context_guard.py) llega acá
-        // también: apiErrorMessage() ya arma el mensaje legible (tokens
-        // estimados/límite) a partir del detail estructurado.
       },
     });
   }
@@ -195,14 +164,6 @@ export function ChatView() {
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="relative flex min-h-0 flex-1 flex-col">
-        {/* Antes vivía acá el ChatToolbar (colecciones activas / estado de
-            conexión) -- ahora ese contenido se apiló detrás del input, ver
-            MessageInput.tsx. Este espacio, que quedó libre y sentía a un
-            header vacío, es un buen lugar para un control liviano y
-            centrado que no compite con la conversación. */}
-        <div className="pointer-events-none absolute inset-x-0 top-3 z-20 flex justify-center">
-          <ThemeToggle className="pointer-events-auto bg-overlay-strong shadow-lg backdrop-blur-2xl" />
-        </div>
         <MessageList
           messages={conversation.messages}
           onDeleteMessage={handleDeleteMessage}

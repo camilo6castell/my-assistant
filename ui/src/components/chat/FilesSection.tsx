@@ -30,7 +30,7 @@ export function FilesSection({ files }: { files: ReturnType<typeof useEphemeralF
   return (
     <div className="space-y-3 px-3">
       <label className="flex items-center justify-between">
-        <span className="text-xs text-muted-foreground">Attach to permanent collection</span>
+        <span className="text-xs text-muted-foreground/70">Attach to permanent collection</span>
         <Switch checked={attachToCollection} onCheckedChange={setAttachToCollection} />
       </label>
 
@@ -39,7 +39,7 @@ export function FilesSection({ files }: { files: ReturnType<typeof useEphemeralF
           value={collectionName}
           onChange={(e) => setCollectionName(e.target.value)}
           placeholder="namespace/collection"
-          className="w-full rounded-lg border border-border bg-overlay px-2.5 py-1.5 text-xs outline-none placeholder:text-muted-foreground focus-visible:border-ring"
+          className="w-full rounded-lg border border-border bg-overlay px-2.5 py-1.5 text-xs outline-none placeholder:text-muted-foreground/40 focus-visible:border-ring transition-colors"
         />
       )}
 
@@ -66,25 +66,25 @@ export function FilesSection({ files }: { files: ReturnType<typeof useEphemeralF
       )}
 
       {fileCount === 0 ? (
-        <p className="py-2 text-center text-xs text-muted-foreground">
+        <p className="py-2 text-center text-xs text-muted-foreground/40">
           No ephemeral files in this conversation.
         </p>
       ) : (
-        <ul className="space-y-1">
+        <ul className="space-y-0.5">
           {files.data?.files.map((f) => (
             <li
               key={f.file_id}
-              className="flex items-center justify-between gap-2 rounded-md px-2 py-1.5 hover:bg-overlay-hover"
+              className="flex items-center justify-between gap-2 rounded-lg px-2 py-1.5 hover:bg-overlay-hover transition-colors"
             >
               <span className="min-w-0 truncate text-xs">
                 {f.filename}
-                <span className="ml-1 text-muted-foreground">({f.chunk_count} chunks)</span>
+                <span className="ml-1 text-muted-foreground/40">({f.chunk_count} chunks)</span>
               </span>
               <button
                 type="button"
                 aria-label={`Delete ${f.filename}`}
                 onClick={() => files.remove.mutate(f.file_id)}
-                className="shrink-0 rounded p-1 text-muted-foreground hover:bg-overlay-hover hover:text-destructive"
+                className="shrink-0 rounded-md p-1 text-muted-foreground/40 hover:bg-overlay-hover hover:text-destructive transition-colors"
               >
                 <Trash2 className="size-3.5" />
               </button>

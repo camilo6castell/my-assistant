@@ -1,5 +1,4 @@
 import { Menu, PanelRight } from "lucide-react";
-import { LogoIcon } from "./LogoIcon";
 import { Outlet } from "react-router-dom";
 import { useThemeSync } from "@/hooks/useThemeSync";
 import { useUiStore } from "@/stores/uiStore";
@@ -15,32 +14,19 @@ export function AppShell() {
 
   return (
     <div className="relative flex h-dvh w-full flex-col overflow-hidden bg-background text-foreground lg:flex-row">
-      {/* Glow de fondo sutil -- lo que le da el aire "glass" sin recargar la UI */}
-      <div
-        aria-hidden
-        className="pointer-events-none absolute -top-40 left-1/3 h-[32rem] w-[32rem] rounded-full bg-primary/10 blur-[120px]"
-      />
-      <div
-        aria-hidden
-        className="pointer-events-none absolute bottom-0 right-0 h-[24rem] w-[24rem] rounded-full bg-accent/20 blur-[100px]"
-      />
-
-      {/* Barra superior mobile -- reemplaza el acceso directo a los
-          sidebars (visibles siempre en desktop) por dos botones que
-          abren cada uno como drawer. Oculta desde `lg`. */}
-      <header className="relative z-20 flex shrink-0 items-center justify-between gap-2 border-b border-border bg-overlay px-3 py-2.5 backdrop-blur-xl lg:hidden">
+      {/* Mobile top bar */}
+      <header className="relative z-20 flex shrink-0 items-center justify-between gap-2 border-b border-border bg-background px-3 py-2.5 lg:hidden">
         <button
           type="button"
           onClick={openLeftMobile}
           aria-label="Open chats and settings"
-          className="flex size-9 items-center justify-center rounded-lg text-foreground hover:bg-overlay-hover"
+          className="flex size-9 items-center justify-center rounded-lg text-foreground hover:bg-overlay-hover transition-colors"
         >
           <Menu className="size-5" />
         </button>
 
         <div className="flex min-w-0 items-center gap-1.5">
-          <LogoIcon className="size-5 shrink-0" />
-          <span className="truncate text-sm font-bold">My assistant</span>
+          <span className="truncate text-sm font-semibold tracking-tight">My assistant</span>
         </div>
 
         <div className="flex items-center gap-1">
@@ -49,7 +35,7 @@ export function AppShell() {
             type="button"
             onClick={openRightMobile}
             aria-label="Open files and collections"
-            className="flex size-9 items-center justify-center rounded-lg text-foreground hover:bg-overlay-hover"
+            className="flex size-9 items-center justify-center rounded-lg text-foreground hover:bg-overlay-hover transition-colors"
           >
             <PanelRight className="size-5" />
           </button>

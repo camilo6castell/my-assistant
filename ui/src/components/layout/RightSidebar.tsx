@@ -17,35 +17,6 @@ import { useUiStore } from "@/stores/uiStore";
 import { SidebarSectionHeader } from "./SidebarSectionHeader";
 import { SidebarShell } from "./SidebarShell";
 
-/**
- * Sidebar derecho: todo lo relacionado con CONOCIMIENTO, de más
- * puntual a más permanente --
- *
- *   1. Archivos adjuntos   -- ad-hoc, de un solo envío (ver
- *                              src/context/attachments.py)
- *   2. Colecciones efímeras -- indexadas, viven mientras dure la
- *                              conversación (ver src/context/ephemeral.py)
- *   3. Colecciones de sistema -- indexadas con `python -m src.ingest`,
- *                              permanentes, compartidas entre conversaciones
- *
- * El sidebar izquierdo (ver LeftSidebar.tsx) es todo lo relacionado con
- * la CONVERSACIÓN en sí: historial de chats y modo de respuesta.
- *
- * No hay una sección de "ajustes avanzados" (Turnos de historial / Top
- * K): esos parámetros pasaron a ser exclusivamente de .env (ver
- * GenerationOptions en src/api/schemas/chat.py) -- sin override por
- * conversación, así que no hay nada que la UI necesite mostrar o dejar
- * tocar acá.
- *
- * En demo mode (ver lib/demo.ts), las secciones 2 y 3 dependen del
- * pipeline de indexado local (embeddings + FAISS) que no existe en un
- * deploy estático sin backend -- se mantiene el header de cada una
- * (nombre + ícono) pero el contenido se reemplaza por un aviso
- * explicando por qué, en vez de intentar listar algo que no puede
- * existir acá. La sección 1 (adjuntos) sigue funcionando igual: nunca
- * se indexó, siempre fue texto crudo inyectado en el prompt -- ver
- * useAttachments.ts.
- */
 export function RightSidebar() {
   const { conversationId } = useParams<{ conversationId: string }>();
   const conversation = useConversationsStore((s) =>
@@ -81,7 +52,7 @@ export function RightSidebar() {
         type="button"
         onClick={toggleRightCollapsed}
         title="Attachments"
-        className="relative flex size-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-overlay-hover hover:text-foreground"
+        className="relative flex size-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-overlay-hover hover:text-foreground transition-colors"
       >
         <Paperclip className="size-4" />
         {attachmentCount > 0 && (
@@ -94,7 +65,7 @@ export function RightSidebar() {
         type="button"
         onClick={toggleRightCollapsed}
         title="Ephemeral collections"
-        className="flex size-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-overlay-hover hover:text-foreground"
+        className="flex size-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-overlay-hover hover:text-foreground transition-colors"
       >
         <Sparkles className="size-4" />
       </button>
@@ -102,7 +73,7 @@ export function RightSidebar() {
         type="button"
         onClick={toggleRightCollapsed}
         title="System collections"
-        className="flex size-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-overlay-hover hover:text-foreground"
+        className="flex size-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-overlay-hover hover:text-foreground transition-colors"
       >
         <Layers className="size-4" />
       </button>
@@ -121,7 +92,7 @@ export function RightSidebar() {
         onMobileClose={closeMobileSidebars}
         collapsedContent={collapsedContent}
       >
-        <p className="px-3 py-6 text-center text-xs text-muted-foreground">
+        <p className="px-4 py-8 text-center text-xs text-muted-foreground/60">
           Pick or create a conversation to see its files and collections.
         </p>
       </SidebarShell>
@@ -140,10 +111,9 @@ export function RightSidebar() {
       collapsedContent={collapsedContent}
     >
       <div className="flex min-h-0 flex-1 flex-col">
-        {/* Bloque superior: secciones 1 y 2 se reparten el espacio restante al 50/50 */}
         <div className="flex min-h-0 flex-1 flex-col">
-          {/* 1. Archivos adjuntos -- ad-hoc, de un solo envío. Funciona igual en demo mode. */}
-          <section className="flex min-h-0 flex-1 flex-col pt-2">
+          {/* 1. Attachments */}
+          <section className="flex min-h-0 flex-1 flex-col pt-1">
             <SidebarSectionHeader
               icon={Paperclip}
               label="Attachments"
@@ -160,8 +130,8 @@ export function RightSidebar() {
 
           <div className="mx-3 shrink-0 border-t border-border" />
 
-          {/* 2. Colecciones efímeras -- indexadas, alcance de esta conversación */}
-          <section className="flex min-h-0 flex-1 flex-col pt-3">
+          {/* 2. Ephemeral collections */}
+          <section className="flex min-h-0 flex-1 flex-col pt-2">
             <SidebarSectionHeader
               icon={Sparkles}
               label="Ephemeral collections"
@@ -183,8 +153,8 @@ export function RightSidebar() {
 
         <div className="mx-3 shrink-0 border-t border-border" />
 
-        {/* 3. Colecciones de sistema -- pegada abajo, máx 50% de altura, scroll propio */}
-        <section className="flex max-h-[50%] min-h-0 shrink-0 flex-col pt-3 pb-3">
+        {/* 3. System collections */}
+        <section className="flex max-h-[50%] min-h-0 shrink-0 flex-col pt-2 pb-3">
           <SidebarSectionHeader
             icon={Layers}
             label="System collections"
@@ -213,7 +183,7 @@ export function RightSidebar() {
 
 function ListSkeleton() {
   return (
-    <div className="space-y-1.5 px-3">
+    <div className="space-y-2 px-3">
       <Skeleton className="h-8 w-full" />
       <Skeleton className="h-8 w-5/6" />
     </div>
@@ -222,7 +192,7 @@ function ListSkeleton() {
 
 function DemoUnavailableNotice({ text }: { text: string }) {
   return (
-    <p className="rounded-lg border border-border bg-overlay px-3 py-3 text-center text-[11px] leading-relaxed text-muted-foreground">
+    <p className="mx-3 rounded-lg border border-border bg-overlay px-3 py-3 text-center text-[11px] leading-relaxed text-muted-foreground/60">
       {text}
     </p>
   );

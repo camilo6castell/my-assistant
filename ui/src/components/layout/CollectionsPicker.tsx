@@ -18,11 +18,11 @@ function CheckboxIndicator({
   return (
     <span
       className={cn(
-        "flex shrink-0 items-center justify-center rounded border transition-colors",
+        "flex shrink-0 items-center justify-center rounded-md border transition-colors",
         size,
         state === "none"
           ? "border-border bg-transparent"
-          : "border-primary/50 bg-primary/20",
+          : "border-primary/50 bg-primary/15",
       )}
     >
       {state === "all" && (
@@ -48,14 +48,6 @@ export function CollectionsPicker({
 }) {
   const groups = groupCollections(collections);
 
-  // Abiertos por defecto: los grupos que ya tienen algo seleccionado.
-  // El inicializador de useState (la función de abajo) solo se evalúa
-  // una vez, en el primer render -- por eso alcanza para lograr el
-  // "calcular una sola vez al montar" que antes se intentaba armar a
-  // mano con useMemo + setState (lo cual React desaconseja: llamar
-  // setState dentro de useMemo puede disparar un loop infinito, porque
-  // cada llamada cambia el estado que a su vez puede volver a evaluar
-  // el memo). Ver https://react.dev/reference/react/useState#avoiding-recreating-the-initial-state
   const [openGroups, setOpenGroups] = useState<Set<string>>(
     () =>
       new Set(
@@ -79,7 +71,6 @@ export function CollectionsPicker({
     if (state === "all") {
       for (const item of items) next.delete(item);
     } else {
-      // "some" o "none" -> completar el grupo entero
       for (const item of items) next.add(item);
     }
     onChange(Array.from(next));
@@ -94,14 +85,14 @@ export function CollectionsPicker({
 
   if (groups.length === 0) {
     return (
-      <p className="px-2 py-6 text-center text-xs text-muted-foreground">
+      <p className="px-2 py-6 text-center text-xs text-muted-foreground/60">
         No collections available.
       </p>
     );
   }
 
   return (
-    <div className="space-y-1.5">
+    <div className="space-y-1">
       {groups.map((group) => {
         const state = groupSelectionState(group, active);
         const isOpen = openGroups.has(group.namespace);
@@ -112,10 +103,9 @@ export function CollectionsPicker({
         return (
           <div
             key={group.namespace}
-            className="overflow-hidden rounded-md border border-border"
+            className="overflow-hidden rounded-lg border border-border/60"
           >
-            {/* Header: chevron (expandir/colapsar) + checkbox (seleccionar grupo) */}
-            <div className="flex items-center gap-1 bg-overlay pr-2">
+            <div className="flex items-center gap-1 bg-overlay/50 pr-2">
               <button
                 type="button"
                 disabled={disabled}
@@ -124,7 +114,7 @@ export function CollectionsPicker({
               >
                 <ChevronRight
                   className={cn(
-                    "size-3.5 transition-transform duration-200",
+                    "size-3.5 transition-transform duration-150",
                     isOpen && "rotate-90",
                   )}
                 />
@@ -137,22 +127,21 @@ export function CollectionsPicker({
                 className="group flex min-w-0 flex-1 items-center gap-2 rounded-md py-1.5 text-left text-sm text-foreground transition-colors hover:bg-overlay-hover disabled:cursor-not-allowed disabled:opacity-40"
               >
                 <CheckboxIndicator state={state} />
-                <span className="min-w-0 flex-1 truncate font-medium">
+                <span className="min-w-0 flex-1 truncate font-medium text-[13px]">
                   {group.namespace}
                 </span>
               </button>
 
               {selectedCount > 0 && (
-                <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">
+                <span className="shrink-0 text-[10px] tabular-nums text-muted-foreground/50">
                   {selectedCount}/{group.items.length}
                 </span>
               )}
             </div>
 
-            {/* Cuerpo colapsable, altura animada con grid-template-rows */}
             <div
               className={cn(
-                "grid transition-[grid-template-rows] duration-200 ease-in-out",
+                "grid transition-[grid-template-rows] duration-150 ease-in-out",
                 isOpen ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
               )}
             >

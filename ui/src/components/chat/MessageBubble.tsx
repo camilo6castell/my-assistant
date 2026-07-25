@@ -4,6 +4,7 @@ import {
   Copy,
   Globe,
   Layers,
+  ChevronDown,
   Sparkles,
   Trash2,
 } from "lucide-react";
@@ -16,10 +17,8 @@ import { cn } from "@/lib/utils";
 import type { ChatMessage } from "@/types/chat";
 
 /**
- * Botón compartido para "copiar" (mensaje completo o bloque de código):
- * icono que rota a un check por 1.5s como confirmación, sin depender de
- * un toast externo -- consistente con el resto de la UI, que ya evita
- * dependencias extra para micro-feedback (ver ThemeToggle, Skeleton).
+ * Shared copy button -- icon rotates to check for 1.5s as confirmation,
+ * no external toast dependency.
  */
 function CopyButton({
   getText,
@@ -38,8 +37,7 @@ function CopyButton({
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1500);
     } catch {
-      // Clipboard API puede fallar (permisos, contexto no seguro) --
-      // silencioso, no vale la pena un mensaje de error para esto.
+      // Clipboard API can fail (permissions, insecure context)
     }
   }
 
@@ -50,7 +48,7 @@ function CopyButton({
       aria-label={copied ? "Copied" : label}
       title={copied ? "Copied!" : label}
       className={cn(
-        "inline-flex items-center justify-center rounded-md p-1 text-muted-foreground transition-colors hover:bg-overlay-hover hover:text-foreground",
+        "inline-flex items-center justify-center rounded-lg p-1.5 text-muted-foreground transition-all hover:bg-overlay-hover hover:text-foreground",
         className,
       )}
     >
@@ -64,9 +62,7 @@ function CopyButton({
 }
 
 /**
- * Reemplaza el <pre> que genera ReactMarkdown/rehype-highlight por una
- * versión con botón de copiar propio -- visible siempre en mobile (no
- * hay hover táctil) y solo al pasar el mouse en desktop.
+ * Custom <pre> with copy button -- always visible on mobile, hover-only on desktop.
  */
 function CodeBlock({ children, className, ...props }: ComponentProps<"pre">) {
   return (
@@ -74,7 +70,7 @@ function CodeBlock({ children, className, ...props }: ComponentProps<"pre">) {
       <CopyButton
         getText={() => extractText(children)}
         label="Copy code"
-        className="absolute right-2 top-2 z-10 bg-overlay-strong opacity-70 backdrop-blur-sm lg:opacity-0 lg:group-hover/code:opacity-100"
+        className="absolute right-2 top-2 z-10 bg-overlay-strong opacity-70 backdrop-blur-sm lg:opacity-0 lg:group-hover/code:opacity-100 transition-opacity"
       />
       <pre className={className} {...props}>
         {children}
@@ -83,7 +79,7 @@ function CodeBlock({ children, className, ...props }: ComponentProps<"pre">) {
   );
 }
 
-/** Extrae el texto plano de los children de React (para copiar el código sin markup de highlight.js). */
+/** Extract plain text from React children for clipboard copy. */
 function extractText(node: React.ReactNode): string {
   if (typeof node === "string" || typeof node === "number") return String(node);
   if (Array.isArray(node)) return node.map(extractText).join("");
@@ -95,12 +91,69 @@ function extractText(node: React.ReactNode): string {
   return "";
 }
 
+/**
+ * Metadata footer for assistant messages. Collapsible to reduce visual
+ * noise -- expanded by default for the latest message, collapsed for
+ * older ones.
+ */
+function MessageMetadata({ message }: { message: ChatMessage }) {
+  const [expanded, setExpanded] = useState(false);
+
+  const hasMetadata =
+    message.confidence !== undefined ||
+    !!message.collectionsUsed?.length ||
+    message.usedWebSearch ||
+    message.reformulated;
+
+  if (!hasMetadata) return null;
+
+  return (
+    <div className="mt-2">
+      <button
+        type="button"
+        onClick={() => setExpanded((e) => !e)}
+        className="flex items-center gap-1 text-[11px] text-muted-foreground/50 hover:text-muted-foreground transition-colors"
+      >
+        <ChevronDown
+          className={cn(
+            "size-3 transition-transform duration-150",
+            expanded && "rotate-180",
+          )}
+        />
+        <span>Details</span>
+      </button>
+      {expanded && (
+        <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground/60">
+          {message.confidence !== undefined && (
+            <span className="inline-flex items-center gap-1">
+              <Sparkles className="size-3" />
+              {(message.confidence * 100).toFixed(0)}% confidence
+            </span>
+          )}
+          {!!message.collectionsUsed?.length && (
+            <span className="inline-flex items-center gap-1">
+              <Layers className="size-3" />
+              {message.collectionsUsed.join(", ")}
+            </span>
+          )}
+          {message.usedWebSearch && (
+            <span className="inline-flex items-center gap-1">
+              <Globe className="size-3" />
+              web search
+            </span>
+          )}
+          {message.reformulated && <span>reformulated</span>}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function MessageBubble({
   message,
   onDelete,
 }: {
   message: ChatMessage;
-  /** Ausente = no se puede borrar este mensaje individualmente (no usado hoy, pero deja la puerta abierta). */
   onDelete?: () => void;
 }) {
   const isUser = message.role === "user";
@@ -109,8 +162,8 @@ export function MessageBubble({
   const actions = (
     <span
       className={cn(
-        "mt-2.5 flex shrink-0 items-center gap-0.5 self-start opacity-0 transition-opacity group-hover:opacity-100",
-        "max-lg:opacity-100", // en mobile no hay hover: siempre visibles
+        "mt-1 flex shrink-0 items-center gap-0.5 self-start opacity-0 transition-opacity duration-150 group-hover:opacity-100",
+        "max-lg:opacity-100",
       )}
     >
       {showActions && (
@@ -122,7 +175,7 @@ export function MessageBubble({
           onClick={onDelete}
           aria-label="Delete message"
           title="Delete message"
-          className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-overlay-hover hover:text-destructive"
+          className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-overlay-hover hover:text-destructive"
         >
           <Trash2 className="size-3.5" />
         </button>
@@ -133,7 +186,7 @@ export function MessageBubble({
   return (
     <div
       className={cn(
-        "group flex w-full items-start gap-1.5",
+        "group flex w-full items-start gap-2 message-enter",
         isUser ? "justify-end" : "justify-start",
       )}
     >
@@ -142,10 +195,10 @@ export function MessageBubble({
         className={cn(
           "max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-relaxed sm:max-w-[75ch]",
           isUser
-            ? "bg-primary/90 text-primary-foreground"
-            : "border border-border bg-overlay text-foreground backdrop-blur-xl",
+            ? "bg-primary text-primary-foreground rounded-br-md"
+            : "bg-transparent text-foreground",
           message.isError &&
-            "border-destructive/30 bg-destructive/10 text-destructive",
+            "border border-destructive/20 bg-destructive/5 text-destructive",
         )}
       >
         {message.isPending ? (
@@ -172,31 +225,11 @@ export function MessageBubble({
         )}
 
         {!isUser && !message.isPending && !message.isError && (
-          <div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-border pt-2 text-[11px] text-muted-foreground">
-            {message.confidence !== undefined && (
-              <span className="inline-flex items-center gap-1">
-                <Sparkles className="size-3" />
-                confidence {(message.confidence * 100).toFixed(0)}%
-              </span>
-            )}
-            {!!message.collectionsUsed?.length && (
-              <span className="inline-flex items-center gap-1">
-                <Layers className="size-3" />
-                {message.collectionsUsed.join(", ")}
-              </span>
-            )}
-            {message.usedWebSearch && (
-              <span className="inline-flex items-center gap-1">
-                <Globe className="size-3" />
-                includes web search
-              </span>
-            )}
-            {message.reformulated && <span>· question reformulated</span>}
-          </div>
+          <MessageMetadata message={message} />
         )}
 
         {!!message.webSources?.length && (
-          <div className="mt-2 flex flex-wrap gap-1.5">
+          <div className="mt-3 flex flex-wrap gap-1.5">
             {message.webSources.map((source) => (
               <a
                 key={source.url}
@@ -204,7 +237,7 @@ export function MessageBubble({
                 target="_blank"
                 rel="noopener noreferrer"
                 title={source.url}
-                className="inline-flex max-w-[220px] items-center gap-1 truncate rounded-full border border-border bg-overlay px-2 py-0.5 text-[11px] text-muted-foreground transition-colors hover:bg-overlay-hover hover:text-foreground"
+                className="inline-flex max-w-[220px] items-center gap-1 truncate rounded-lg border border-border bg-overlay px-2 py-1 text-[11px] text-muted-foreground transition-colors hover:bg-overlay-hover hover:text-foreground"
               >
                 <Globe className="size-3 shrink-0" />
                 <span className="truncate">{source.title}</span>

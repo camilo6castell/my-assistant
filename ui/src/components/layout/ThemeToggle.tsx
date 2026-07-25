@@ -8,10 +8,6 @@ const OPTIONS: { value: Theme; icon: typeof Sun; label: string }[] = [
   { value: "dark", icon: Moon, label: "Dark theme" },
 ]
 
-/**
- * Control segmentado de 3 estados (light / system / dark), mismo
- * lenguaje visual que el toggle "Soft/Strict" de ResponseModeSection.
- */
 export function ThemeToggle({ className }: { className?: string }) {
   const theme = useUiStore((s) => s.theme)
   const setTheme = useUiStore((s) => s.setTheme)
@@ -34,7 +30,7 @@ export function ThemeToggle({ className }: { className?: string }) {
           title={label}
           onClick={() => setTheme(value)}
           className={cn(
-            "flex size-6 items-center justify-center rounded-md transition-colors",
+            "flex size-7 items-center justify-center rounded-md transition-all duration-150",
             theme === value
               ? "bg-background text-foreground shadow-sm"
               : "text-muted-foreground hover:text-foreground"
