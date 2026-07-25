@@ -25,13 +25,19 @@ export function AppShell() {
   return (
     <div className="relative flex h-dvh w-full flex-col overflow-hidden bg-background text-foreground lg:flex-row">
       {/* Canvas background effect */}
-      <div className="pointer-events-none fixed inset-0 z-0">
+      <div className="fixed inset-0 z-0">
         {isDark ? (
-          <Frost className="h-full w-full" opacity={0.4}>
+          <Frost className="pointer-events-auto h-full w-full" opacity={0.4}>
             <div className="h-full w-full bg-background" />
           </Frost>
         ) : (
-          <Blaze className="h-full w-full" sparks={0} smoke={0.2} glow={0.6}>
+          <Blaze
+            className="h-full w-full"
+            sparks={0.8}
+            sparkDensity={1.8}
+            smoke={0.7}
+            glow={1.4}
+          >
             <div className="h-full w-full bg-background" />
           </Blaze>
         )}

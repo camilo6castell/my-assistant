@@ -64,7 +64,7 @@ export function SidebarShell({
             : undefined
         }
         className={cn(
-          "flex h-full shrink-0 flex-col bg-sidebar transition-all duration-200 ease-out",
+          "flex h-full shrink-0 flex-col bg-sidebar/70 backdrop-blur-xl transition-all duration-200 ease-out",
           "fixed inset-y-0 z-50 w-[86vw] max-w-[320px] lg:static lg:z-10 lg:w-auto lg:max-w-none lg:transition-none",
           side === "left"
             ? cn(
