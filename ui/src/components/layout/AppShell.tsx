@@ -1,19 +1,42 @@
 import { Menu, PanelRight } from "lucide-react";
 import { Outlet } from "react-router-dom";
+import { Blaze } from "@/components/canvasui/Blaze";
+import { Frost } from "@/components/canvasui/Frost";
+import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { useThemeSync } from "@/hooks/useThemeSync";
 import { useUiStore } from "@/stores/uiStore";
 import { ConnectionStatus } from "./ConnectionStatus";
 import { RightSidebar } from "./RightSidebar";
 import { Sidebar } from "./LeftSidebar";
 
+function useIsDarkTheme() {
+  const theme = useUiStore((s) => s.theme);
+  const prefersDark = useMediaQuery("(prefers-color-scheme: dark)");
+  return theme === "dark" || (theme === "system" && prefersDark);
+}
+
 export function AppShell() {
   useThemeSync();
+  const isDark = useIsDarkTheme();
 
   const openLeftMobile = useUiStore((s) => s.openLeftMobile);
   const openRightMobile = useUiStore((s) => s.openRightMobile);
 
   return (
     <div className="relative flex h-dvh w-full flex-col overflow-hidden bg-background text-foreground lg:flex-row">
+      {/* Canvas background effect */}
+      <div className="pointer-events-none fixed inset-0 z-0">
+        {isDark ? (
+          <Frost className="h-full w-full" opacity={0.4}>
+            <div className="h-full w-full bg-background" />
+          </Frost>
+        ) : (
+          <Blaze className="h-full w-full" sparks={0} smoke={0.2} glow={0.6}>
+            <div className="h-full w-full bg-background" />
+          </Blaze>
+        )}
+      </div>
+
       {/* Mobile top bar */}
       <header className="relative z-20 flex shrink-0 items-center justify-between gap-2 border-b border-border bg-background px-3 py-2.5 lg:hidden">
         <button
