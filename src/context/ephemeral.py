@@ -49,12 +49,14 @@ from pydantic import BaseModel
 from src.config.settings import settings
 from src.context.manager import LoadedCollection
 from src.ingest.core import (
-    ChunkMetadata,
-    CollectionPaths,
     build_metadata,
     chunk_text,
-    create_faiss_index,
     encode_chunks,
+)
+from src.storage.faiss_store import (
+    ChunkMetadata,
+    CollectionPaths,
+    rebuild_index_from_vectors,
 )
 from src.utils.logger import logger
 
@@ -111,10 +113,7 @@ def _placeholder_paths(conversation_id: str) -> CollectionPaths:
 
 
 def _rebuild_index(vectors: np.ndarray) -> FaissIndex:
-    dimension = vectors.shape[1]
-    index = create_faiss_index(dimension)
-    index.add(np.ascontiguousarray(vectors, dtype=np.float32))  # pyright: ignore[reportCallIssue]
-    return index
+    return rebuild_index_from_vectors(vectors)
 
 
 # ======================================================
@@ -218,7 +217,7 @@ class EphemeralStore:
             return True
 
         store.metadata = [store.metadata[i] for i in keep]
-        assert store.vectors is not None  # invariante: si hay metadata, hay vectors
+        assert store.vectors is not None  # invariant: metadata implies vectors
         store.vectors = store.vectors[keep]
         store.index = _rebuild_index(store.vectors)
         del store.files[file_id]

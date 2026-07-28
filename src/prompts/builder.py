@@ -29,7 +29,7 @@ Exported functions:
   build_correction_prompt   -> Repair prompt after a failed review.
 """
 
-from src.cli.modes import ChatMode
+from src.domain.models import ChatMode
 
 
 def build_system_prompt() -> str:
@@ -114,8 +114,8 @@ REQUIREMENTS:
 def build_web_supplement_system_prompt() -> str:
     """
     System prompt for the web supplement call (see
-    build_web_supplement_prompt() and ask_llm_supplement() in
-    src/llm/generate.py).
+    build_web_supplement_prompt() and ask_llm_internal() in
+    src/nlp/llm/generate.py).
 
     The instruction to treat web fragments as untrusted material, never
     as instructions, is the primary mitigation against indirect prompt

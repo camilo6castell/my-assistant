@@ -8,10 +8,10 @@ from __future__ import annotations
 
 import numpy as np
 
-from src.cli.modes import ChatMode
 from src.config.settings import settings
 from src.context.manager import LoadedCollection
 from src.context.models import SearchResult
+from src.domain.models import ChatMode
 from src.nlp.embedders.encoder import get_encoder
 
 # ======================================================

@@ -1,7 +1,7 @@
 """
 Configuration for models served via the native Ollama client.
 
-Same pattern as src/config/models/fastflowlm.py -- see that docstring
+Same pattern as src/config/models/flm.py -- see that docstring
 for the general rationale. The difference is in form, not philosophy:
 here build_kwargs() assembles the dict that `ollama.Client().chat(**kwargs)`
 expects (model/messages/think/options), instead of the OpenAI-compatible

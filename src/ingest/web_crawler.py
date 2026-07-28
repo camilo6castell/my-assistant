@@ -1,4 +1,4 @@
-# python -m src.ingest.web_crawler react https://sitio.com
+# python -m src.ingest.web_crawler <category> <collection> <start_url>
 
 import sys
 import time
@@ -7,42 +7,21 @@ from urllib.parse import ParseResult, urljoin, urlparse
 import numpy as np
 import requests
 from bs4 import BeautifulSoup
-from readability import Document
 
 from src.config.settings import settings
 from src.ingest.core import (
-    ChunkMetadata,
-    RawCollection,
     build_metadata,
     chunk_text,
     encode_chunks,
+)
+from src.ingest.http import extract_main_content
+from src.storage.faiss_store import (
+    ChunkMetadata,
+    RawCollection,
     load_collection,
     save_collection,
 )
 from src.utils.logger import logger
-
-
-def extract_main_content(url: str) -> str | None:
-    try:
-        logger.info(f"Downloading content: {url}")
-
-        response: requests.Response = requests.get(url, timeout=10)
-        response.raise_for_status()
-
-        doc: Document = Document(response.text)
-        soup: BeautifulSoup = BeautifulSoup(doc.summary(), "html.parser")
-        text: str = soup.get_text(separator="\n")
-
-        logger.info(f"Content extracted successfully: {url}")
-        return text
-
-    except requests.RequestException as e:
-        logger.error(f"HTTP error on {url}: {e}")
-        return None
-
-    except Exception as e:
-        logger.error(f"Error extracting content from {url}: {e}")
-        return None
 
 
 def get_links(url: str, domain: str) -> set[str]:
@@ -56,10 +35,6 @@ def get_links(url: str, domain: str) -> set[str]:
         links: set[str] = set()
 
         for a in soup.find_all("a", href=True):
-            # FIX: a["href"] retorna _AttributeValue = str | list[str].
-            # urljoin requires str. The isinstance guard discards the case
-            # where a list[str] (multiple values in an HTML attribute) is
-            # invalid for a URL and would also be a runtime bug.
             raw_href = a["href"]
             if not isinstance(raw_href, str):
                 continue

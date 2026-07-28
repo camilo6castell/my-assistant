@@ -44,11 +44,11 @@ from src.config.settings import settings
 from src.context.attachments import AttachmentStore
 from src.context.ephemeral import EphemeralStore
 from src.context.manager import ContextManager
+from src.domain.models import LLMRole
 from src.graph.state import RAGState
 from src.nlp.llm.context_guard import ContextLimitExceeded, check_context_fit
 from src.nlp.llm.generate import ask_llm
 from src.nlp.llm.providers import get_provider
-from src.nlp.llm.roles import LLMRole
 from src.prompts.builder import (
     build_prompt,
     build_system_prompt,

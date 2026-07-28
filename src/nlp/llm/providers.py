@@ -64,10 +64,10 @@ from dataclasses import dataclass, field
 from functools import cache
 
 from src.config.settings import settings
+from src.domain.models import LLMRole
 from src.nlp.llm.backends.base import LLMClient
 from src.nlp.llm.backends.ollama_native import OllamaNativeClient
 from src.nlp.llm.backends.openai_compat import OpenAICompatClient
-from src.nlp.llm.roles import LLMRole
 from src.utils.logger import logger
 
 

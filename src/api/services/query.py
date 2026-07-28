@@ -11,13 +11,12 @@ from __future__ import annotations
 from typing import Any, TypedDict
 
 from src.api.schemas.chat import GenerationOptions, QueryRequest, WebSource
-from src.cli.types import TurnMemory
 from src.context.attachments import AttachmentStore
 from src.context.ephemeral import EphemeralStore
 from src.context.manager import ContextManager, LoadedCollection
+from src.domain.models import LLMRole, TurnMemory
 from src.nlp.llm.context_guard import check_context_fit
 from src.nlp.llm.generate import ask_llm, ask_llm_internal
-from src.nlp.llm.roles import LLMRole
 from src.prompts.builder import (
     build_prompt,
     build_web_supplement_prompt,
@@ -119,8 +118,7 @@ def no_context_detail(web_status: WebSearchStatus | None) -> dict[str, Any] | st
     exhausted quota, returns a structured dict with
     web_search_quota_exceeded=True instead of a plain string -- the
     frontend distinguishes it from "no results for this particular
-    question" to warn the user and disable the web search button (see
-    apiErrorMessage() in ui/src/lib/api/client.ts).
+    question" to warn the user and disable the web search button.
     """
     if web_status == WebSearchStatus.QUOTA_EXCEEDED:
         return {

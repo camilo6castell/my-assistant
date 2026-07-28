@@ -35,15 +35,17 @@ from src.api.schemas.files import (
 )
 from src.context.ephemeral import EphemeralStore
 from src.ingest.core import (
-    ChunkMetadata,
-    RawCollection,
     build_metadata,
     chunk_text,
     encode_chunks,
+)
+from src.ingest.ingest import read_file
+from src.storage.faiss_store import (
+    ChunkMetadata,
+    RawCollection,
     load_collection,
     save_collection,
 )
-from src.ingest.ingest import read_file
 from src.utils.logger import logger
 
 router = APIRouter(prefix="/files", tags=["files"])

@@ -1,24 +1,5 @@
-# src/chat/types.py
+"""Backward-compatible re-export. Prefer src.domain.models.TurnMemory."""
 
-"""
-Shared types for the chat module.
+from src.domain.models import TurnMemory
 
-Defined in their own module so that session.py, generate.py, and
-builder.py can import them without creating circular dependencies.
-"""
-
-from pydantic import BaseModel, ConfigDict
-
-
-class TurnMemory(BaseModel):
-    """
-    A single turn in the conversation history.
-
-    frozen=True because turns are immutable once recorded:
-    history is an append-only list in ChatSession.
-    """
-
-    model_config = ConfigDict(frozen=True)
-
-    user: str
-    assistant: str
+__all__ = ["TurnMemory"]

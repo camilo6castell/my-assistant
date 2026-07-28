@@ -3,33 +3,20 @@
 import sys
 
 import numpy as np
-import requests
-from bs4 import BeautifulSoup
-from readability import Document
 
 from src.ingest.core import (
-    ChunkMetadata,
-    RawCollection,
     build_metadata,
     chunk_text,
     encode_chunks,
+)
+from src.ingest.http import extract_main_content
+from src.storage.faiss_store import (
+    ChunkMetadata,
+    RawCollection,
     load_collection,
     save_collection,
 )
 from src.utils.logger import logger
-
-
-def extract_main_content(url: str) -> str | None:
-    try:
-        logger.info(f"Downloading URL: {url}")
-        response: requests.Response = requests.get(url, timeout=10)
-        response.raise_for_status()
-        doc: Document = Document(response.text)
-        soup: BeautifulSoup = BeautifulSoup(doc.summary(), "html.parser")
-        return soup.get_text(separator="\n")
-    except Exception as e:
-        logger.error(f"Error extracting content from {url}: {e}")
-        return None
 
 
 def main() -> None:
@@ -42,7 +29,6 @@ def main() -> None:
 
     collection_data: RawCollection = load_collection(collection)
 
-    # Attribute access — ChunkMetadata is a BaseModel
     existing_sources: set[str] = {m.source for m in collection_data["metadata"]}
 
     if url in existing_sources:

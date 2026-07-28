@@ -17,7 +17,7 @@ from pathlib import Path
 from pydantic import Field, ValidationInfo, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from src.nlp.llm.roles import LLMRole
+from src.domain.models import LLMRole
 
 
 def _split_backend_model(raw: str, var_name: str) -> tuple[str, str]:

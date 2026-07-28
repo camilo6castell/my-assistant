@@ -6,7 +6,7 @@ Options 2-4 are read-only, with no state modification.
 
 from src.cli.session import ChatSession
 from src.config.settings import settings
-from src.nlp.llm.roles import LLMRole
+from src.domain.models import LLMRole
 
 # ======================================================
 # MAIN MENU

@@ -1,7 +1,7 @@
 """
 Preventive context-limit guard -- runs BEFORE calling the LLM, both in
-/query (src/api/routers/chat.py) and in /task/query
-(src/api/routers/task.py).
+/query (src/api/routers/chat.py) and in the LangGraph generate_node
+(src/graph/nodes.py).
 
 It does not truncate or rewrite anything automatically: if the request
 does not fit, it raises ContextLimitExceeded with the exact details so
@@ -13,9 +13,9 @@ out of space to finish it).
 
 from __future__ import annotations
 
-from src.cli.types import TurnMemory
 from src.config.models import get_context_window
 from src.config.settings import settings
+from src.domain.models import TurnMemory
 from src.nlp.llm.providers import get_client
 from src.utils.tokens import estimate_tokens
 

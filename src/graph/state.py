@@ -57,9 +57,9 @@ so it exists in the module namespace when LangGraph evaluates it.
 
 from typing import Any, TypedDict
 
-from src.cli.types import TurnMemory
 from src.context.manager import LoadedCollection
 from src.context.models import SearchResult
+from src.domain.models import TurnMemory
 
 
 class RAGState(TypedDict):

@@ -23,6 +23,8 @@ Token syntax:
 import warnings
 from typing import cast
 
+from langgraph.graph.state import CompiledStateGraph
+
 from src.cli.session import ChatSession
 from src.context.manager import LoadedCollection
 from src.context.models import SearchResult
@@ -32,6 +34,17 @@ from src.nlp.llm.generate import ask_llm
 from src.nlp.llm.roles import LLMRole
 from src.prompts.builder import build_prompt
 from src.retrieval.search import format_context_chunks, search
+
+# Compiled graph, cached once per process (same pattern as api/app.py lifespan).
+_compiled_graph = None
+
+
+def _get_graph() -> CompiledStateGraph[RAGState]:
+    global _compiled_graph
+    if _compiled_graph is None:
+        _compiled_graph = build_rag_graph()
+    return _compiled_graph
+
 
 warnings.filterwarnings(
     "ignore",
@@ -248,9 +261,8 @@ def _handle_agent_question(session: ChatSession, question: str) -> None:
 
     print("\n  [agent] Executing RAG graph...\n")
 
-    # The compiled graph is stored in the start_chat frame to avoid
-    # recompiling on every question. Accessed via the function's dict.
-    graph = build_rag_graph()
+    # The compiled graph is cached once per process (see _get_graph()).
+    graph = _get_graph()
 
     initial_state: RAGState = {
         "question": question,

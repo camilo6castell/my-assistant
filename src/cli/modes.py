@@ -1,6 +1,5 @@
-from enum import StrEnum
+"""Backward-compatible re-export. Prefer src.domain.models.ChatMode."""
 
+from src.domain.models import ChatMode
 
-class ChatMode(StrEnum):
-    SOFT = "SOFT"
-    HARD = "HARD"
+__all__ = ["ChatMode"]

@@ -51,7 +51,7 @@ from src.nlp.llm.backends.base import ChatTurn
 class _ModelBackend(Protocol):
     """
     Structural protocol that each backend file
-    (fastflowlm.py/gemini.py/ollama.py) must satisfy to register here --
+    (flm.py/gemini.py/ollama.py) must satisfy to register here --
     a module with these functions matches this Protocol without needing
     to inherit anything or an explicit cast (structural typing: mypy
     compares the module's real signature against this). It gives real

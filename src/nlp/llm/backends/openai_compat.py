@@ -17,7 +17,7 @@ class OpenAICompatClient:
     """
     Pure transport: knows nothing about concrete models or
     FastFlowLM/Gemini in particular -- serves any provider whose
-    ProviderConfig.client is "openai_compat" (see src/llm/providers.py).
+    ProviderConfig.client is "openai_compat" (see src/nlp/llm/providers.py).
     `kwargs` is already assembled by src.config.models.build_kwargs() with
     the model, messages, and any overrides already resolved.
     """

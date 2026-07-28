@@ -10,16 +10,6 @@ They use BaseModel with frozen=True because they are read-only objects:
 from pydantic import BaseModel, ConfigDict
 
 
-class ContextSource(BaseModel):
-    """Reference to an indexed data source."""
-
-    model_config = ConfigDict(frozen=True)
-
-    source_id: str
-    source_type: str
-    source_name: str
-
-
 class SearchResult(BaseModel):
     """
     Result of a semantic search.

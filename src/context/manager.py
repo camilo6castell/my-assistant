@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, TypedDict
 
 from src.config.settings import settings
 from src.context.selector import match_namespace
-from src.ingest.core import (
+from src.storage.faiss_store import (
     ChunkMetadata,
     CollectionPaths,
     RawCollection,

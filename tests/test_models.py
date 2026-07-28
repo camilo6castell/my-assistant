@@ -1,6 +1,6 @@
 """Tests for domain models (src/context/models.py)."""
 
-from src.context.models import ContextSource, SearchResult
+from src.context.models import SearchResult
 
 
 class TestSearchResult:
@@ -34,17 +34,3 @@ class TestSearchResult:
         # frozen=True BaseModel is hashable
         s: set[int] = {hash(r1), hash(r2)}
         assert len(s) == 2
-
-
-class TestContextSource:
-    def test_creation(self) -> None:
-        cs = ContextSource(source_id="abc", source_type="file", source_name="doc.pdf")
-        assert cs.source_id == "abc"
-
-    def test_frozen(self) -> None:
-        cs = ContextSource(source_id="abc", source_type="file", source_name="doc.pdf")
-        try:
-            cs.source_id = "xyz"
-            raise AssertionError("Should have raised")
-        except Exception:
-            pass

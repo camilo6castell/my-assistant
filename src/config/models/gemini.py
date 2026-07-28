@@ -1,7 +1,7 @@
 """
 Configuration for Gemini models, via their OpenAI-compatible endpoint.
 
-Same pattern as src/config/models/fastflowlm.py -- see that docstring
+Same pattern as src/config/models/flm.py -- see that docstring
 for the general rationale. Gemini (via this endpoint) does not expose an
 equivalent to enable_thinking/think today, so supports_thinking() is
 always False here.

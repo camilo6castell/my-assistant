@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-from src.cli.modes import ChatMode
-from src.cli.types import TurnMemory
 from src.context.manager import ContextManager, LoadedCollection
+from src.domain.models import ChatMode, TurnMemory
 
 
 class ChatSession:

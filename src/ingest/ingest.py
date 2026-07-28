@@ -1,4 +1,4 @@
-# python -m src.ingest.ingest <categoria> <coleccion>
+# python -m src.ingest.ingest <category> <collection>
 
 import sys
 from pathlib import Path
@@ -9,11 +9,13 @@ from pypdf import PdfReader
 
 from src.config.settings import settings
 from src.ingest.core import (
-    ChunkMetadata,
-    RawCollection,
     build_metadata,
     chunk_text,
     encode_chunks,
+)
+from src.storage.faiss_store import (
+    ChunkMetadata,
+    RawCollection,
     load_collection,
     save_collection,
 )
@@ -21,13 +23,13 @@ from src.utils.logger import logger
 
 
 def read_pdf(path: Path) -> list[tuple[int, str]]:
-    logger.info(f"Leyendo PDF: {path.name}")
+    logger.info(f"Reading PDF: {path.name}")
     pages: list[tuple[int, str]] = []
 
     try:
         reader: PdfReader = PdfReader(str(path))
     except Exception as e:
-        logger.error(f"No se pudo abrir PDF: {path.name} | {e}")
+        logger.error(f"Could not open PDF: {path.name} | {e}")
         return pages
 
     for i, page in enumerate(reader.pages):
@@ -36,23 +38,23 @@ def read_pdf(path: Path) -> list[tuple[int, str]]:
             if text and text.strip():
                 pages.append((i + 1, text))
             else:
-                logger.warning(f"Pagina vacia | {path.name} | page={i + 1}")
+                logger.warning(f"Empty page | {path.name} | page={i + 1}")
         except Exception as e:
-            logger.warning(f"No se pudo leer pagina | {path.name} | page={i + 1} | error={e}")
+            logger.warning(f"Could not read page | {path.name} | page={i + 1} | error={e}")
             continue
 
     return pages
 
 
 def read_html(path: Path) -> list[tuple[int, str]]:
-    logger.info(f"Leyendo HTML: {path.name}")
+    logger.info(f"Reading HTML: {path.name}")
     with open(path, encoding="utf-8") as f:
         soup: BeautifulSoup = BeautifulSoup(f, "html.parser")
     return [(1, soup.get_text(separator="\n"))]
 
 
 def read_txt(path: Path) -> list[tuple[int, str]]:
-    logger.info(f"Leyendo TXT: {path.name}")
+    logger.info(f"Reading TXT: {path.name}")
     with open(path, encoding="utf-8") as f:
         text: str = f.read()
     return [(1, text)]
@@ -66,7 +68,7 @@ def read_file(path: Path) -> list[tuple[int, str]]:
         return read_html(path)
     if suffix == ".txt":
         return read_txt(path)
-    logger.warning(f"Formato no soportado: {path.name}")
+    logger.warning(f"Unsupported format: {path.name}")
     return []
 
 
@@ -76,11 +78,10 @@ def main() -> None:
     collection_name: str = sys.argv[2]
     collection: str = f"{category}/{collection_name}"
 
-    logger.info(f"Iniciando ingest: {collection}")
+    logger.info(f"Starting ingest: {collection}")
 
     collection_data: RawCollection = load_collection(collection)
 
-    # Acceso por atributo — ChunkMetadata es BaseModel
     existing_sources: set[str] = {m.source for m in collection_data["metadata"]}
 
     new_chunks: list[str] = []
@@ -89,26 +90,26 @@ def main() -> None:
     files: list[Path] = list(settings.data_path.iterdir())
 
     if not files:
-        logger.warning("No hay archivos en data/")
-        print("No hay archivos en data/")
+        logger.warning("No files in data/")
+        print("No files in data/")
         return
 
     for file in files:
         if file.name in existing_sources:
-            logger.info(f"Omitiendo ya indexado: {file.name}")
+            logger.info(f"Skipping already indexed: {file.name}")
             continue
 
         pages: list[tuple[int, str]] = read_file(file)
 
         if not pages:
-            logger.warning(f"No se pudo extraer contenido: {file.name}")
+            logger.warning(f"Could not extract content: {file.name}")
             continue
 
-        logger.info(f"Procesando: {file.name}")
+        logger.info(f"Processing: {file.name}")
 
         for page_number, text in pages:
             chunks: list[str] = chunk_text(text)
-            logger.info(f"Chunks generados: {len(chunks)} | page={page_number}")
+            logger.info(f"Chunks generated: {len(chunks)} | page={page_number}")
 
             for i, chunk in enumerate(chunks):
                 new_chunks.append(chunk)
@@ -124,8 +125,8 @@ def main() -> None:
                 )
 
     if not new_chunks:
-        logger.warning("No hay contenido nuevo.")
-        print("No hay contenido nuevo.")
+        logger.warning("No new content.")
+        print("No new content.")
         return
 
     embeddings: np.ndarray = encode_chunks(new_chunks)
@@ -136,8 +137,8 @@ def main() -> None:
         new_metadata=new_metadata,
     )
 
-    logger.info(f"Ingest finalizado | chunks={len(new_chunks)}")
-    print(f"\nSe anadieron {len(new_chunks)} chunks a '{collection}'.\n")
+    logger.info(f"Ingest finished | chunks={len(new_chunks)}")
+    print(f"\nAdded {len(new_chunks)} chunks to '{collection}'.\n")
 
 
 if __name__ == "__main__":

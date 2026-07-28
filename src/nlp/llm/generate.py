@@ -36,16 +36,16 @@ OpenAI-compatible, `think` kwarg for Ollama). The LLMClient
 (src/llm/backends/) that actually sends it does not need to know about
 this mechanism. think_mode=None does NOT mean "off" -- it means "no
 override", and build_kwargs() leaves intact what is already written in
-_MODELS[model] for that model (see src/config/models/fastflowlm.py).
+_MODELS[model] for that model (see src/config/models/flm.py).
 """
 
 from __future__ import annotations
 
 from typing import Any
 
-from src.cli.types import TurnMemory
 from src.config.models import build_kwargs, get_supports
 from src.config.settings import settings
+from src.domain.models import TurnMemory
 from src.nlp.llm.backends.base import ChatTurn
 from src.nlp.llm.providers import ProviderConfig, get_client
 from src.prompts.builder import build_system_prompt
@@ -123,7 +123,7 @@ def _validate_think(think_mode: bool | None, config: ProviderConfig) -> None:
 
     think_mode=None (no override) never needs validation: it means "use
     the default already written in _MODELS[model] for this model" (see
-    src/config/models/fastflowlm.py -- Qwen3 already ships with
+    src/config/models/flm.py -- Qwen3 already ships with
     enable_thinking=False as part of its base config, so "no override"
     never leaves the field unset).
 
