@@ -1,126 +1,232 @@
-# Módulo 8 — Multi-Proveedor y Reviewer _(nuevo)_
+# Módulo 8 — Multi-Proveedor y Reviewer
 
-Este módulo documenta dos piezas que surgieron del mismo problema: el sistema original solo podía usar un modelo LLM a la vez. Para que `reformulate_node` use Gemini y `generate_node` use el modelo local, hacía falta una arquitectura de proveedores, no solo cambiar una variable de entorno.
+Este módulo documenta la arquitectura de proveedores LLM (provider-per-role) y el ciclo de auto-corrección review → correct. El sistema puede usar diferentes modelos para diferentes pasos del pipeline, todo configurado desde variables de entorno.
 
 ---
 
-## El problema original
+## El eje Backend y el eje Role
 
-El `client.py` original era esto:
+La arquitectura tiene dos ejes independientes:
+
+**Backend** — un runtime concreto: FastFlowLM (`flm`), Ollama (`ollama`), Gemini (`gemini`). Define dónde conectarse (base_url), con qué credencial (api_key), y qué implementación de `LLMClient` usar. Es mecánica de transporte puro, no sabe nada de modelos concretos. Se configura una vez en `.env.providers`.
+
+**Role** — cada paso del pipeline que necesita un LLM. El `LLMRole` identifica qué función cumple:
 
 ```python
-client = OpenAI(
-    base_url=settings.llm_base_url,   # un solo endpoint
-    api_key=settings.llm_api_key,
-)
+class LLMRole(StrEnum):
+    GENERATE      = "generate"       # genera la respuesta final
+    REFORMULATE   = "reformulate"    # reescribe la query para mejorar recall
+    REVIEW        = "review"         # evalúa grounding y citación
+    WEB_SUPPLEMENT = "web_supplement" # complementa con información de la web
 ```
 
-Un cliente global. Para usar Gemini, tenías que editar `.env` y reiniciar el proceso. No era posible tener dos modelos activos simultáneamente en el mismo grafo.
-
-El sistema también tenía `.env.gemini` con credenciales de Gemini en texto plano, y `.gitignore` solo excluía `.env` — no `.env.gemini` ni `.env.local`. Eso es un riesgo de seguridad real: un `git push` accidental hubiera expuesto la API key.
+Cada role elige, en `.env.providers`, qué backend + qué modelo lo sirve. Los dos ejes son independientes: dos roles pueden compartir backend con diferentes modelos, o compartir modelo con diferentes backends.
 
 ---
 
 ## `providers.py` — el registro de proveedores
 
+### `ProviderConfig` — la configuración de cada proveedor
+
 ```python
 @dataclass(frozen=True)
 class ProviderConfig:
-    name: str
-    base_url: str
-    api_key: str
-    model: str
+    name: str           # nombre del role que resolvió esta config (ej. "generate")
+    backend: str        # "flm" | "ollama" | "gemini"
+    base_url: str       # URL del backend
+    api_key: str        # credencial
+    model: str          # nombre del modelo
+    client: str         # "openai_compat" | "ollama_native"
+    capabilities: str   # key en src/config/models/ para las capacidades del modelo
 ```
 
-Cada proveedor es solo estas cuatro cosas. La configuración viene de `settings`, que lee `.env.providers`.
+Es un dataclass `frozen=True` (inmutable). El campo `name` tiene `compare=False`: dos roles con el mismo backend+modelo comparten el mismo cliente cacheado, independientemente de su nombre de role.
+
+### La tabla de backends
+
+Las URLs y credenciales se resuelven en funciones (no a nivel de módulo) para que los tests que muten `settings` vean valores actualizados:
 
 ```python
-def _build_provider_table() -> dict[str, ProviderConfig]:
+def _backend_url_table() -> dict[str, str]:
     return {
-        "local": ProviderConfig(
-            name="local",
-            base_url=settings.local_base_url,
-            api_key=settings.local_api_key,
-            model=settings.local_model,
-        ),
-        "gemini": ProviderConfig(
-            name="gemini",
-            base_url=settings.gemini_base_url,
-            api_key=settings.gemini_api_key,
-            model=settings.gemini_model,
-        ),
-        # Para agregar un tercer proveedor:
-        # "claude": ProviderConfig(
-        #     name="claude",
-        #     base_url=settings.claude_base_url,
-        #     api_key=settings.claude_api_key,
-        #     model=settings.claude_model,
-        # ),
+        "flm": settings.llm_flm_url,
+        "ollama": settings.llm_ollama_url,
+        "gemini": settings.llm_gemini_url,
+    }
+
+def _backend_api_key_table() -> dict[str, str]:
+    return {
+        "flm": "not-needed",      # FastFlowLM local no valida la key
+        "ollama": "not-needed",   # Ollama local no valida la key
+        "gemini": settings.gemini_api_key,  # Gemini sí necesita la real
     }
 ```
 
-La tabla se construye en una función (no a nivel de módulo) para que el test que mute `settings` vea los valores actualizados, no los del momento del import.
-
-**El cliente cacheado:**
+### El mapping backend → tipo de cliente
 
 ```python
-@lru_cache(maxsize=None)
-def _client_for(base_url: str, api_key: str) -> OpenAI:
-    return OpenAI(base_url=base_url, api_key=api_key)
+_BACKEND_CLIENT: dict[str, str] = {
+    "flm":     "openai_compat",    # FastFlowLM habla el protocolo OpenAI
+    "ollama":  "ollama_native",    # Ollama usa su cliente nativo
+    "gemini":  "openai_compat",    # Gemini tiene endpoint compatible con OpenAI
+}
 ```
 
-`@lru_cache` garantiza que se crea un único `OpenAI` client por `(base_url, api_key)` único — no uno por request, sino uno por proveedor para toda la vida del proceso. Crear un cliente HTTP tiene overhead (pool de conexiones, negociación TLS). Cachearlo es correcto.
-
-**La interfaz pública:**
+### Las fábricas de clientes
 
 ```python
-def get_client(name: str) -> tuple[OpenAI, ProviderConfig]:
+_CLIENT_FACTORIES: dict[str, Callable[[ProviderConfig], LLMClient]] = {
+    "openai_compat": lambda config: OpenAICompatClient(
+        base_url=config.base_url, api_key=config.api_key
+    ),
+    "ollama_native": lambda config: OllamaNativeClient(host=config.base_url),
+}
+```
+
+Agregar un nuevo tipo de cliente (ej. un cliente nativo de Claude) requiere: crear el archivo en `src/nlp/llm/backends/`, agregar una entrada aquí, y agregar la entrada en `_BACKEND_CLIENT`.
+
+### Construcción de la tabla por role
+
+```python
+def _build_provider_table() -> dict[str, ProviderConfig]:
+    return {role.value: _provider_config_for_role(role) for role in LLMRole}
+
+def _provider_config_for_role(role: LLMRole) -> ProviderConfig:
+    backend, model = settings.role_spec(role)
+    # ... resuelve base_url, api_key, client del backend ...
+    return ProviderConfig(
+        name=role.value,
+        backend=backend,
+        base_url=base_url,
+        api_key=api_key,
+        model=model,
+        client=client,
+        capabilities=backend,
+    )
+```
+
+`settings.role_spec(role)` lee el formato `"backend,model"` de `.env.providers`:
+
+```env
+LLM_ROL_GENERATE=flm,qwen3.5:9b
+LLM_ROL_REFORMULATE=gemini,gemini-2.0-flash
+LLM_ROL_REVIEW=gemini,gemini-2.0-flash
+LLM_ROL_SUPPLEMENT=flm,qwen3.5:2b
+```
+
+### El cliente cacheado
+
+```python
+@cache
+def _client_for(config: ProviderConfig) -> LLMClient:
+    factory = _CLIENT_FACTORIES.get(config.client)
+    if factory is None:
+        raise ValueError(f"Unknown LLM client type: {config.client!r} ...")
+    return factory(config)
+```
+
+`functools.cache` garantiza un único `LLMClient` por `(backend, base_url, api_key, model, client)`. El campo `name` no participa en la cache key (`compare=False` en el dataclass): dos roles con el mismo backend+modelo comparten una sola conexión.
+
+### La interfaz pública
+
+```python
+def get_provider(name: str) -> ProviderConfig:
+    """ Retorna la configuración para un role (ej. "generate"). """
+    table = _build_provider_table()
+    return table[name]
+
+def get_client(name: str) -> tuple[LLMClient, ProviderConfig]:
+    """ Retorna (client, config) listo para usar con LLMClient.complete(). """
     config = get_provider(name)
-    client = _client_for(config.base_url, config.api_key)
-    return client, config
+    return _client_for(config), config
 ```
 
-Los nodos del grafo no importan `providers.py` directamente — acceden a él a través de `ask_llm()` y `ask_llm_internal()`. Eso mantiene a `nodes.py` desacoplado de los detalles de la librería OpenAI.
+Los nodos del grafo no importan `providers.py` directamente — acceden a él a través de `ask_llm()` y `ask_llm_internal()` en `generate.py`. Esto mantiene a `nodes.py` desacoplado de los detalles del transporte.
 
 ---
 
-## Routing de proveedores por nodo
+## Routing de role por nodo
 
-La decisión de qué proveedor usa cada nodo vive en `.env.providers`:
-
-```env
-REFORMULATE_PROVIDER=gemini
-GENERATE_PROVIDER=local
-```
-
-Y en el código, cada nodo lo pasa explícitamente:
+Cada nodo pasa el role explícitamente al LLM:
 
 ```python
-# reformulate_node
-ask_llm_internal(prompt=..., provider=settings.reformulate_provider)
+# reformulate_node — usa el role REFORMULATE
+ask_llm_internal(
+    system_prompt=build_reformulation_system_prompt(),
+    prompt=reformulation_prompt,
+    provider=LLMRole.REFORMULATE.value,
+)
 
-# generate_node
-ask_llm(prompt=..., chat_memory=..., provider=settings.generate_provider)
+# generate_node — usa el role GENERATE
+ask_llm(
+    prompt=prompt,
+    chat_memory=state["chat_memory"],
+    provider=LLMRole.GENERATE.value,
+    ...
+)
 
-# review_node (mismo proveedor que reformulate: Gemini)
-ask_llm_internal(prompt=review_prompt, provider=settings.reformulate_provider)
+# review_node — usa el role REVIEW
+ask_llm_internal(
+    system_prompt=build_review_system_prompt(),
+    prompt=review_prompt,
+    provider=LLMRole.REVIEW.value,
+)
 
-# correct_node (mismo proveedor que generate: local)
-ask_llm(prompt=correction_prompt, chat_memory=..., provider=settings.generate_provider)
+# correct_node — usa el role GENERATE (misma generación que el nodo principal)
+ask_llm(
+    prompt=correction_prompt,
+    chat_memory=state["chat_memory"],
+    provider=LLMRole.GENERATE.value,
+    ...
+)
 ```
 
-El proveedor se pasa explícitamente en cada call para que el código sea legible sin necesidad de trazar la configuración: al leer `nodes.py` queda claro qué nodo usa qué modelo.
+**Por qué el role GENERATE siempre genera la respuesta final:** Los chunks de tus documentos indexados viajan en el prompt. Si ese nodo usara un proveedor externo, esos chunks — potencialmente privados — saldrían de tu máquina. El proveedor asignado a GENERATE garantiza que tus colecciones nunca se envían a un servicio externo (a menos que configures `LLM_ROL_GENERATE=gemini,...` deliberadamente).
 
-**Por qué el modelo local siempre genera la respuesta final:**
+---
 
-Los chunks de tus documentos indexados viajan en el prompt de `generate_node`. Si ese nodo usara Gemini, esos chunks — potencialmente privados (notas personales, libros, documentación interna) — saldrían de tu máquina. El modelo local garantiza que el contenido de tus colecciones nunca se envía a ningún proveedor externo.
+## `generate.py` — la capa de orquestación
 
-Gemini solo recibe:
+`generate.py` es el único módulo que importa `providers.py`. Construye los mensajes, valida overrides, y delega al cliente:
 
-- En `reformulate_node`: la pregunta del usuario (texto corto, sin contexto de documentos).
-- En `review_node`: la respuesta generada + los chunks (texto ya generado, no documentos crudos).
+```python
+def ask_llm(
+    prompt: str,
+    chat_memory: list[TurnMemory],
+    provider: str,
+    max_tokens: int | None = None,
+    think_mode: bool | None = None,
+    extra: ExtraFields | None = None,
+    system_prompt: str | None = None,
+) -> str:
+    messages = build_messages(
+        prompt=prompt,
+        chat_memory=chat_memory,
+        system_prompt=system_prompt,
+    )
+    content = _complete(
+        messages=messages,
+        provider_name=provider,
+        max_tokens=max_tokens,
+        think_mode=think_mode,
+        extra=extra,
+    )
+    return content if content is not None else "Model did not return a response."
+```
 
-Puedes ajustar este comportamiento para colecciones que no sean sensibles simplemente cambiando `GENERATE_PROVIDER=gemini` en `.env.providers` — sin tocar código.
+`ask_llm_internal()` es la variante para operaciones internas (reformulación, review): no tiene chat_memory, y si falla devuelve `None` en vez de un mensaje de error al usuario.
+
+```python
+def ask_llm_internal(
+    system_prompt: str,
+    prompt: str,
+    provider: str,
+    max_tokens: int | None = None,
+) -> str | None:
+    messages = build_messages(prompt=prompt, chat_memory=[], system_prompt=system_prompt)
+    content = _complete(messages=messages, provider_name=provider, ...)
+    return content
+```
 
 ---
 
@@ -128,119 +234,67 @@ Puedes ajustar este comportamiento para colecciones que no sean sensibles simple
 
 Este es el mecanismo de auto-corrección. El objetivo es reducir alucinaciones y forzar citación de fuentes sin que el usuario tenga que hacer seguimiento manual.
 
-**Qué evalúa `review_node`:**
+### Qué evalúa `review_node`
 
-1. **Anclaje:** ¿cada afirmación de la respuesta aparece en los chunks recuperados? Si el modelo dice algo que no está en el contexto, es una alucinación.
+1. **Anclaje (Grounding):** ¿cada afirmación de la respuesta aparece en los chunks recuperados? Si el modelo dice algo que no está en el contexto, es una alucinación.
 2. **Citas:** ¿la respuesta menciona de qué fuente viene la información? Un RAG que no cita no es útil para trabajo académico o de investigación.
+3. **Voz (Voice):** ¿expone el mecanismo de recuperación? Frases como "según el contexto proporcionado" violan la naturalidad.
 
-**El protocolo JSON:**
+### El protocolo JSON
+
+El reviewer responde con JSON puro:
 
 ```json
 {"passed": true}
-{"passed": false, "feedback": "La respuesta afirma que Freud publicó 1984, pero eso no aparece en el contexto."}
+{"passed": false, "reason": "grounding", "feedback": "La respuesta afirma que Freud publicó 1984, pero eso no aparece en el contexto."}
 ```
 
-Gemini recibe instrucción de responder solo con JSON, sin texto adicional. Pero Gemini a veces envuelve la respuesta en bloques de código Markdown (` ```json ... ``` `) aunque se le pida que no. `review_node` tiene una limpieza defensiva antes de parsear:
-
-````python
-clean = raw.strip() \
-    .removeprefix("```json") \
-    .removeprefix("```") \
-    .removesuffix("```") \
-    .strip()
-result = json.loads(clean)
-````
-
-**Fallo silencioso explícito:**
-
-Si Gemini devuelve un 503 (alta demanda del modelo), `ask_llm_internal` captura la excepción y devuelve el prompt completo como string (el fallback). Ese string no es JSON válido. `review_node` detecta el error de parsing y aprueba por defecto — el usuario recibe la respuesta sin revisar en vez de no recibir nada.
-
-Este comportamiento es intencional y está documentado en el código. El log deja evidencia:
-
-```
-[WARNING] [graph] review_node | no se pudo parsear JSON → aprobando por defecto
-```
-
-**`MAX_REVIEW_ATTEMPTS`:**
+### `MAX_REVIEW_ATTEMPTS`
 
 ```python
-MAX_REVIEW_ATTEMPTS = 1   # en nodes.py
+MAX_REVIEW_ATTEMPTS = settings.max_review_attempts  # default: 1
 ```
 
-Si el reviewer rechaza y `correct_node` corrige, el ciclo vuelve a `review_node`. Si esta segunda revisión también falla, el cap forza `review_passed=True` — el loop se rompe y la respuesta llega al usuario. Esto evita que un reviewer excesivamente estricto o un modelo local inconsistente bloqueen al usuario indefinidamente.
-
-El valor `1` significa: máximo un reintento. Si quieres dos correcciones posibles, sube a `2`. El costo es más latencia y más tokens.
+Si el reviewer rechaza y `correct_node` corrige, el ciclo vuelve a `review_node`. Si esta segunda revisión también falla, el cap fuerza `review_passed=True` — el loop se rompe y la respuesta llega al usuario. El valor `1` significa: máximo un reintento.
 
 ---
 
-## Gestión de secretos: qué cambió y por qué importa
+## Configuración en `.env.providers`
 
-El `.env.gemini` original tenía la API key en texto plano y no estaba excluido del repositorio. Se corrigió así:
+```env
+# Backends (URLs)
+LLM_FLM_URL=http://127.0.0.1:8080/v1
+LLM_OLLAMA_URL=http://127.0.0.1:11434
+LLM_GEMINI_URL=https://generativelanguage.googleapis.com/v1beta/openai
+GEMINI_API_KEY=AIza...
 
-**`.gitignore` ahora excluye todo `.env.*`:**
-
-```gitignore
-.env
-.env.*
-!.env.example
+# Roles (backend,model)
+LLM_ROL_GENERATE=flm,qwen3.5:9b
+LLM_ROL_REFORMULATE=gemini,gemini-2.0-flash
+LLM_ROL_REVIEW=gemini,gemini-2.0-flash
+LLM_ROL_SUPPLEMENT=flm,qwen3.5:2b
 ```
 
-La excepción `!.env.example` permite que el template sin credenciales sí esté en el repo.
-
-**`.env.providers` reemplaza a `.env.gemini`:**
-
-Un archivo dedicado a la configuración multi-proveedor, con un placeholder `REPLACE_ME_ROTATE_THIS_KEY` en lugar de la key real.
-
-**`.env.example` sin secretos:**
-
-Template que se puede commitear y usar como referencia de onboarding. No tiene ningún valor real — solo nombres de variables y comentarios.
-
-Si en algún momento commiteas accidentalmente un `.env.*` con credenciales reales, el daño mitigation es:
-
-1. Rotar la key inmediatamente en el dashboard del proveedor.
-2. Borrar el commit del historial de git (`git filter-branch` o `git rebase -i`).
-3. Verificar que el nuevo `.gitignore` previene que vuelva a ocurrir.
+El formato `backend,model` es parseado por `_split_backend_model()` en `settings.py`. El split es solo en la primera coma — el nombre del modelo puede contener `:` legítimamente (tags de Ollama/FastFlowLM como `qwen3.5:9b`).
 
 ---
 
-## Cómo agregar un tercer proveedor
+## Cómo agregar un nuevo modelo a un backend existente
 
-Supongamos que quieres agregar Claude de Anthropic como opción:
+Solo toca un archivo: `src/config/models/<backend>.py`. Agregar una entrada al diccionario `_MODELS` con el nombre, temperatura, y capacidades. Ningún otro archivo se modifica.
 
-**1. En `providers.py`:**
+---
 
-```python
-"claude": ProviderConfig(
-    name="claude",
-    base_url=settings.claude_base_url,
-    api_key=settings.claude_api_key,
-    model=settings.claude_model,
-),
-```
+## Cómo agregar un nuevo backend
 
-**2. En `settings.py`:**
+1. Agregar la URL en `settings.py` (`llm_<nuevo>_url`)
+2. Agregar la entrada en `_backend_url_table()` y `_backend_api_key_table()` en `providers.py`
+3. Agregar la entrada en `_BACKEND_CLIENT` (que tipo de cliente usa)
+4. Si el tipo de cliente es nuevo, crear el archivo en `src/nlp/llm/backends/` y agregar la fábrica en `_CLIENT_FACTORIES`
+5. Crear `src/config/models/<nuevo_backend>.py` con las capacidades de los modelos
+6. Configurar `LLM_ROL_*=<nuevo_backend>,<modelo>` en `.env.providers`
 
-```python
-claude_base_url: str = Field(default="https://api.anthropic.com/v1")
-claude_api_key: str = Field(default="")
-claude_model: str = Field(default="claude-opus-4-6")
-```
-
-**3. En `.env.providers`:**
-
-```env
-CLAUDE_BASE_URL=https://api.anthropic.com/v1
-CLAUDE_API_KEY=sk-ant-...
-CLAUDE_MODEL=claude-opus-4-6
-```
-
-**4. Para usarlo en un nodo:**
-
-```env
-REFORMULATE_PROVIDER=claude
-```
-
-Cero cambios en `graph.py`, `nodes.py`, ni `generate.py`. El proveedor nuevo es una entrada en una tabla y tres variables de entorno.
+Cero cambios en `graph.py`, `nodes.py`, ni `generate.py`.
 
 ---
 
@@ -248,16 +302,12 @@ Cero cambios en `graph.py`, `nodes.py`, ni `generate.py`. El proveedor nuevo es 
 
 **"¿Cómo manejas múltiples proveedores LLM?"**
 
-> Patrón provider-per-node: factory con caché de clientes, configuración por variables de entorno, cero cambios en la lógica del grafo al agregar un proveedor. El proveedor del nodo se pasa explícitamente para que sea legible sin trazar configuración.
+> Arquitectura provider-per-role: cada paso del pipeline (generate, reformulate, review, web_supplement) tiene su propio role configurado independientemente en `.env.providers`. El routing de role a backend+modelo se resuelve en `settings.role_spec()`, y los clientes se cachean por `(backend, url, key, model)` — no por role.
 
 **"¿Cómo evitas que los documentos privados salgan de tu máquina?"**
 
-> El proveedor que genera la respuesta final siempre es local. Los proveedores externos solo reciben la pregunta del usuario (reformulación) o el texto de la respuesta ya generada (review) — nunca los chunks de los documentos indexados.
+> El proveedor asignado a GENERATE es el único que recibe los chunks de los documentos indexados en su prompt. Los otros roles solo reciben la pregunta del usuario (reformulación) o la respuesta generada (review) — nunca los chunks crudos.
 
 **"¿Cómo manejas la posibilidad de que el reviewer falle?"**
 
-> Fallo silencioso explícito: si el proveedor externo devuelve un error o una respuesta no parseable, se aprueba por defecto. El log registra el evento. Un loop cap (`MAX_REVIEW_ATTEMPTS`) evita loops infinitos independientemente del resultado.
-
-**"¿Cómo manejas secretos en este proyecto?"**
-
-> `.gitignore` excluye todo `.env.*` salvo `.env.example`. Los archivos con credenciales reales nunca entran al repositorio. Hay un template sin valores reales para onboarding. Si una key se expone accidentalmente, el primer paso es rotarla en el dashboard del proveedor.
+> Fallo silencioso explícito: si el JSON no se puede parsear o el proveedor devuelve un error, se aprueba por defecto. Un loop cap (`MAX_REVIEW_ATTEMPTS`) evita loops infinitos. El log registra cada evento de fallback.

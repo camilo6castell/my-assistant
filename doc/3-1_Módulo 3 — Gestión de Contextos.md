@@ -21,17 +21,12 @@ El usuario puede querer chatear con `sociologia` y `psicoanalisis` al mismo tiem
 
 ## `models.py` — Los contratos de datos
 
-Antes de ver el manager, los dos tipos que viajan por todo el sistema:
+Antes de ver el manager, el tipo que viaja por todo el sistema:
 
 ```python
-@dataclass(slots=True)
-class ContextSource:
-    source_id: str
-    source_type: str
-    source_name: str
+class SearchResult(BaseModel):
+    model_config = ConfigDict(frozen=True)
 
-@dataclass(slots=True)
-class SearchResult:
     score: float
     text: str
     source: str
@@ -42,7 +37,40 @@ class SearchResult:
 
 `SearchResult` es el tipo que el sistema produce al final de una búsqueda — ya lo viste en el Módulo 2. Cada resultado contiene el texto del chunk, de dónde vino, y qué tan relevante fue (`score`).
 
-`slots=True` es un detalle de Python que vale la pena entender: normalmente cada instancia de una clase guarda sus atributos en un diccionario interno (`__dict__`). Con `slots=True`, Python reserva memoria fija para cada atributo en lugar de usar un dict. El resultado es acceso más rápido y menos memoria consumida — importante cuando tienes miles de `SearchResult` en memoria simultáneamente.
+`frozen=True` es una configuración de Pydantic que hace que la instancia sea **inmutable**. Una vez creado, no puedes modificar sus campos. Esto tiene dos ventajas prácticas:
+
+1. **Seguridad**: al viajar por múltiples módulos (retrieve → rerank → prompt), ningún componente puede alterar accidentalmente un resultado.
+2. **Hashing**: las instancias de Pydantic con `frozen=True` son hasheables, lo que las hace utilizables en sets y como claves de dict — útil para la deduplicación en `rerank()`.
+
+---
+
+## `faiss_store.py` — `ChunkMetadata`
+
+El otro tipo fundamental es `ChunkMetadata`, definido en `src/storage/faiss_store.py`:
+
+```python
+class ChunkMetadata(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    source: str
+    source_type: str
+    page: int
+    text: str
+    chunk_index: int
+    collection: str
+    file_id: str | None = None
+```
+
+Esta es la metadata que se persiste en disco junto con cada chunk. Cuando `retrieve()` busca en el índice FAISS, obtiene un índice numérico y lo reconecta con el texto legible accediendo a los atributos directamente:
+
+```python
+item = metadata[idx]
+text=item.text,
+source=item.source,
+page=item.page,
+```
+
+El campo `file_id` permite rastrear de qué archivo específico vino cada chunk — esencial para la eliminación de archivos efímeros que veremos en el Módulo 4-2.
 
 ---
 
@@ -54,7 +82,7 @@ El `ContextManager` es esencialmente un diccionario que actúa como caché de co
 class ContextManager:
 
     def __init__(self) -> None:
-        self.base_path: Path = Path(BASE_VECTOR_PATH)
+        self.base_path: Path = settings.vector_store_path_for_backend
         self.loaded_contexts: dict[str, LoadedCollection] = {}
 ```
 
@@ -85,6 +113,21 @@ loaded_contexts = {
 Cuando el usuario escribe `/context sociologia/debord`, esa colección se carga desde disco a este dict y **permanece en RAM** para todas las consultas siguientes de esa sesión. No se vuelve a leer disco hasta que se descarga o el proceso termina.
 
 Esto es un patrón clásico de caché — cargar una vez, usar muchas veces.
+
+### `LoadedCollection`
+
+El valor del dict es un `LoadedCollection`, definido como `TypedDict`:
+
+```python
+class LoadedCollection(TypedDict):
+    index: FaissIndex | None
+    metadata: list[ChunkMetadata]
+    vectors: np.ndarray | None
+    paths: CollectionPaths
+    collection_name: str
+```
+
+Es `TypedDict` y no `BaseModel` porque contiene `faiss.Index` y `np.ndarray` — objetos que Pydantic no puede validar. El campo `collection_name` se agrega al cargar la colección para que `retrieve()` sepa de qué colección viene cada resultado.
 
 ---
 
@@ -147,9 +190,10 @@ def activate(self, pattern: str) -> list[str]:
             )
 
             loaded.append(context_name)
+            logger.info(f"Context loaded: {context_name}")
 
         except Exception:
-            logger.exception(f"Error cargando contexto: {context_name}")
+            logger.exception(f"Error loading context: {context_name}")
 
     return loaded
 ```
@@ -202,7 +246,7 @@ Tres casos, con prioridad de arriba a abajo:
 
 El Caso 3 es azúcar sintáctico — existe para que el usuario no tenga que recordar la sintaxis `/*`.
 
-**`match_contexts()` — la versión multi-token:**
+### `match_contexts()` — la versión multi-token
 
 ```python
 def match_contexts(raw: str, available_contexts: list[str]) -> list[str]:
@@ -236,6 +280,107 @@ tokens = ["sociologia/debord", "react", "psicoanalisis"]
 ["psicoanalisis/freud", "react/hooks", "sociologia/debord"]
 ```
 
+El `ContextManager` usa `match_namespace()` (una función de compatibilidad que envuelve `_match_single` para un solo patrón), mientras que el CLI usa `match_contexts()` para soportar múltiples tokens en una sola llamada.
+
+---
+
+## `deactivate()` y `clear()` — Liberar memoria
+
+```python
+def deactivate(self, pattern: str) -> list[str]:
+    matches: list[str] = self.resolve_pattern(pattern)
+    removed: list[str] = []
+
+    for context_name in matches:
+        if context_name in self.loaded_contexts:
+            del self.loaded_contexts[context_name]
+            removed.append(context_name)
+
+    return removed
+
+def clear(self) -> None:
+    self.loaded_contexts.clear()
+```
+
+`deactivate` descarga colecciones específicas. `clear` descarga todo de una vez. Ambos son simplemente `del` sobre el dict — cuando Python elimina la referencia, el garbage collector libera la RAM que ocupaban el índice FAISS y la matriz numpy.
+
+---
+
+## `get_active()` y `get_loaded_collections()` — Inspección
+
+```python
+def get_active(self) -> list[str]:
+    return list(self.loaded_contexts.keys())
+
+def get_loaded_collections(self) -> list[LoadedCollection]:
+    return list(self.loaded_contexts.values())
+```
+
+`get_active()` devuelve los nombres de las colecciones en memoria. `get_loaded_collections()` devuelve las colecciones completas — es lo que `retrieve()` recibe como argumento para buscar.
+
+---
+
+## `delete.py` — Eliminación granular
+
+Mientras que `ContextManager` maneja la vida en memoria, `delete.py` maneja la eliminación en disco. Funciona como una capa de conveniencia sobre las primitivas de `faiss_store.py`:
+
+```python
+def delete_by_source(collection: str, source: str, *, rebuild: bool = True) -> int:
+    return delete_by_sources(collection, [source], rebuild=rebuild)
+
+def delete_urls(collection: str, urls: Sequence[str], *, rebuild: bool = True) -> int:
+    return delete_by_sources(collection, urls, rebuild=rebuild)
+
+def delete_url(collection: str, url: str, *, rebuild: bool = True) -> int:
+    return delete_by_source(collection, url, rebuild=rebuild)
+```
+
+`delete_by_source` y `delete_url` son aliases semánticos de `delete_by_sources` — todos terminan llamando a la misma función que filtra los chunks cuyo `source` está en la lista dada y reconstruye el índice.
+
+```python
+def clear_collection(collection: str) -> None:
+    clear_collection_files(collection)
+```
+
+`clear_collection` elimina los tres archivos de artefacto (`index.faiss`, `metadata.pkl`, `vectors.npy`) de una colección.
+
+### `list_sources()` — Inspeccionar el contenido
+
+```python
+class SourceSummary(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    source: str
+    source_type: str
+    chunks: int
+
+def list_sources(collection: str) -> list[SourceSummary]:
+    metadata, _ = load_raw(collection)
+
+    chunk_counts: dict[str, int] = {}
+    source_types: dict[str, str] = {}
+
+    for entry in metadata:
+        src: str = entry.source
+        chunk_counts[src] = chunk_counts.get(src, 0) + 1
+        if src not in source_types:
+            source_types[src] = entry.source_type
+
+    return sorted(
+        [
+            SourceSummary(
+                source=src,
+                source_type=source_types[src],
+                chunks=count,
+            )
+            for src, count in chunk_counts.items()
+        ],
+        key=lambda x: x.source,
+    )
+```
+
+`SourceSummary` es un `BaseModel` con `frozen=True` que resume cuántos chunks tiene cada fuente en una colección. `list_sources()` carga la metadata cruda (sin el índice FAISS) y agrupa por `source`. Útil para inspeccionar qué hay indexado antes de decidir eliminar algo.
+
 ---
 
 ## El ciclo de vida completo de un contexto
@@ -265,8 +410,6 @@ vector_stores/           loaded_contexts = {}
                               │
                          loaded_contexts = {}     RAM liberada
 ```
-
-`deactivate` y `clear` son simplemente `del` sobre el dict — cuando Python elimina la referencia, el garbage collector libera la RAM que ocupaban el índice FAISS y la matriz numpy.
 
 ---
 

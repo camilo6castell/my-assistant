@@ -9,7 +9,6 @@
 [![Python](https://img.shields.io/badge/Python_3.11-3776AB?style=flat-square&logo=python&logoColor=white)](https://www.python.org/)
 [![LangGraph](https://img.shields.io/badge/LangGraph-adaptive_retrieval-1f425f?style=flat-square)](https://github.com/langchain-ai/langgraph)
 [![FAISS](https://img.shields.io/badge/FAISS-IndexFlatIP-blue?style=flat-square)](https://github.com/facebookresearch/faiss)
-[![FlagEmbedding](https://img.shields.io/badge/FlagEmbedding-BAAI%2Fbge--small--en-orange?style=flat-square)](https://huggingface.co/BAAI/bge-small-en-v1.5)
 [![FastAPI](https://img.shields.io/badge/FastAPI-REST_API-009688?style=flat-square&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue?style=flat-square)](./LICENSE)
 
@@ -37,7 +36,7 @@
 
 ---
 
-## 📡 Overview
+## Overview
 
 MyAssistant is a **fully local, privacy-first Retrieval-Augmented Generation (RAG) system** designed as a personal semantic memory infrastructure. It allows querying multiple independent knowledge domains — psychoanalysis, philosophy, technical documentation, sociology, etc. — through an adaptive LangGraph pipeline that retrieves, evaluates, reformulates, generates, and reviews answers before returning them to the user.
 
@@ -53,7 +52,7 @@ MyAssistant is a **fully local, privacy-first Retrieval-Augmented Generation (RA
 
 ---
 
-## 🏛️ Architecture
+## Architecture
 
 ```
 ┌──────────────────────────────────────────────────────────────────────┐
@@ -75,8 +74,8 @@ MyAssistant is a **fully local, privacy-first Retrieval-Augmented Generation (RA
         ┌───────────────────────▼────────────────────────┐
         │                  retrieve_node                 │
         │  FAISS IndexFlatIP search, cosine similarity   │
-        │  HARD: top-15 → re-rank → top-5               │
-        │  SOFT: top-25 → re-rank → top-7               │
+        │  HARD: top-15 → re-rank → top-5                │
+        │  SOFT: top-25 → re-rank → top-7                │
         └───────────────────────┬────────────────────────┘
                                 │
         ┌───────────────────────▼────────────────────────┐
@@ -124,7 +123,7 @@ MyAssistant is a **fully local, privacy-first Retrieval-Augmented Generation (RA
 │   ├── psicoanalisis/
 │   │   └── Sigmund-Freud_La-interpretacion-de-los-suenos/
 │   │       ├── index.faiss      # FAISS IndexFlatIP
-│   │       ├── metadata.pkl     # [{source, page, text, collection}] per chunk
+│   │       ├── metadata.pkl     # ChunkMetadata list per chunk
 │   │       └── vectors.npy      # raw embeddings for re-ranking
 │   ├── sociologia/
 │   │   └── ...
@@ -137,9 +136,9 @@ Collections are fully independent. Loading one never affects another, and multip
 
 ---
 
-## 🔄 RAG Graph
+## RAG Graph
 
-The retrieval pipeline is implemented as a **LangGraph stateful graph** (`RAGState`). Each node receives the full state and returns only the fields it modifies — LangGraph merges them. Nodes have no knowledge of routing: that logic lives exclusively in the conditional edges.
+The retrieval pipeline is implemented as a **LangGraph stateful graph** (`RAGState`). Each node receives the full state and returns only the fields it modifies (`RAGStateUpdate`) — LangGraph merges them. Nodes have no knowledge of routing: that logic lives exclusively in the conditional edges.
 
 ### Nodes
 
@@ -166,24 +165,28 @@ correct_node   → review       (loop, capped)
 
 ```python
 class RAGState(TypedDict):
-    question: str  # current question (may be reformulated)
-    mode: str  # ChatMode.SOFT | ChatMode.HARD
+    question: str                    # current question (may be reformulated)
+    mode: str                        # ChatMode.SOFT | ChatMode.HARD
     collections: list[LoadedCollection]
-    chat_memory: list[TurnMemory]  # sliding window of N turns
-    results: list[SearchResult]  # retrieved chunks
-    confidence: float  # avg cosine score of top-K results
-    reformulated: bool  # True after one reformulation (prevents loops)
-    answer: str  # current generated answer
-    review_passed: bool  # True if reviewer approved
-    review_feedback: str  # rejection reason for correct_node
-    review_attempts: int  # increments per review cycle
+    chat_memory: list[TurnMemory]    # sliding window of N turns
+    results: list[SearchResult]      # retrieved chunks
+    confidence: float                # avg cosine score of top-K results
+    reformulated: bool               # True after one reformulation (prevents loops)
+    answer: str                      # current generated answer
+    review_passed: bool              # True if reviewer approved
+    review_feedback: str             # rejection reason for correct_node
+    review_attempts: int             # increments per review cycle
+    max_tokens: int | None           # optional max output tokens
+    think_mode: bool | None          # optional reasoning mode toggle
+    extra: dict[str, Any] | None     # optional extra provider parameters
+    attachments: list[tuple[str, str]]  # optional (filename, content) pairs
 ```
 
 ---
 
-## 🔀 Multi-Provider LLM
+## Multi-Provider LLM
 
-The system uses a **provider-per-role** architecture (`src/nlp/llm/providers.py`). Each role in the pipeline (`LLMRole` in `src/nlp/llm/roles.py`) can use a different backend + model without any change to `graph.py` or `nodes.py`. Backends and per-role model choices are configured in `.env.providers` and resolved at runtime from a cached factory.
+The system uses a **provider-per-role** architecture (`src/nlp/llm/providers.py`). Each role in the pipeline (`LLMRole` in `src/domain/models.py`) can use a different backend + model without any change to `graph.py` or `nodes.py`. Backends and per-role model choices are configured in `.env.providers` and resolved at runtime from a cached factory.
 
 ### Two independent axes
 
@@ -230,7 +233,7 @@ One entry in the registries at the top of `src/nlp/llm/providers.py` (`_backend_
 
 ---
 
-## 🔄 Ingestion Pipeline
+## Ingestion Pipeline
 
 All ingestion modes share the same pipeline: **extract → chunk → embed → normalize → index → persist**.
 
@@ -247,12 +250,12 @@ Source (file / URL / domain)
   └── chunk_overlap: 100 chars  (sliding window)
          │
          ▼
-  FlagModel.encode(chunks)        ← BAAI/bge-small-en-v1.5
+  get_encoder().encode(chunks)   ← pluggable (Ollama / FLM / SentenceTransformer)
   numpy float32 cast
-  faiss.normalize_L2(embeddings)  ← inner product → cosine similarity
+  faiss.normalize_L2(embeddings) ← inner product → cosine similarity
          │
          ▼
-  Append to existing index        ← always incremental, never rebuilds
+  Append to existing index       ← always incremental, never rebuilds
   Update vectors.npy
   Update metadata.pkl
   Write index.faiss
@@ -270,7 +273,7 @@ All modes skip already-indexed sources via `existing_sources` deduplication — 
 
 ---
 
-## 🎛️ Query Modes
+## Query Modes
 
 Toggle with `/mode` in the CLI or via the `mode` field in the REST API.
 
@@ -284,7 +287,7 @@ Toggle with `/mode` in the CLI or via the `mode` field in the REST API.
 
 ---
 
-## 🌐 REST API
+## REST API
 
 A FastAPI server exposes the full RAG pipeline as a REST endpoint.
 
@@ -293,7 +296,7 @@ python -m src.main api
 # Listening on http://127.0.0.1:8000
 ```
 
-### `POST /query/agent`
+### `POST /api/v1/query/agent`
 
 Runs the full LangGraph RAG pipeline (retrieve → evaluate → [reformulate →] generate → review → [correct]).
 
@@ -314,43 +317,68 @@ Response:
 {
   "answer": "...",
   "confidence": 0.8021,
+  "collections_used": ["psicoanalisis/Sigmund-Freud_La-interpretacion-de-los-suenos"],
   "reformulated": false,
-  "review_passed": true
+  "used_web_search": false,
+  "web_sources": null,
+  "web_search_quota_exceeded": false
 }
 ```
 
-### `POST /query`
+### `POST /api/v1/query`
 
 Direct RAG call — skips the LangGraph agent, single retrieve + generate pass.
 
-### `GET /collections`
+### `GET /api/v1/collections`
 
 Lists all available collections from the vectorstore directory.
 
+### `POST /api/v1/files`
+
+Upload a file for ephemeral use in a conversation or attach to a persisted collection.
+
+### `GET /api/v1/files/{conversation_id}`
+
+List ephemeral files for a conversation.
+
+### `DELETE /api/v1/files/{conversation_id}/{file_id}`
+
+Delete a single ephemeral file.
+
+### `DELETE /api/v1/files/{conversation_id}`
+
+Delete all ephemeral files for a conversation.
+
+### `GET /api/v1/config/providers`
+
+List provider capabilities (supports, default_think).
+
 ---
 
-## 🛠️ Tech Stack
+## Tech Stack
 
 | Component            | Technology                                            |
 | -------------------- | ----------------------------------------------------- |
 | Language             | Python 3.11                                           |
 | Orchestration        | LangGraph (stateful adaptive graph)                   |
-| Embedding model      | `BAAI/bge-small-en-v1.5` via FlagEmbedding            |
+| Embedding model      | Pluggable: Ollama (`bge-m3`), FLM, or SentenceTransformer |
 | Vector index         | FAISS `IndexFlatIP` (exact cosine similarity)         |
 | Vector normalization | L2 via `faiss.normalize_L2`                           |
 | Local LLM runtime    | Any OpenAI-compatible endpoint (FastFlowLM, Ollama)   |
-| Default local model  | `qwen3:8b`                                            |
-| External provider    | Gemini (`gemini-2.0-flash`) via OpenAI-compatible API |
+| External provider    | Gemini via OpenAI-compatible API                      |
+| LLM backends         | `openai_compat`, `ollama_native`                      |
 | REST API             | FastAPI + Uvicorn                                     |
 | Configuration        | Pydantic Settings + `.env` files                      |
 | PDF parsing          | pypdf                                                 |
 | HTML extraction      | BeautifulSoup4 + readability-lxml                     |
 | Numerical ops        | NumPy                                                 |
 | Persistence          | `.faiss` + `.pkl` + `.npy` (no database required)     |
+| Web search           | Tavily API (optional)                                 |
+| Token validation     | tiktoken + context guard                              |
 
 ---
 
-## 📁 Project Structure
+## Project Structure
 
 ```
 .
@@ -358,54 +386,76 @@ Lists all available collections from the vectorstore directory.
 ├── .env.providers            # LLM provider keys and routing (never commit)
 ├── .env.example              # template — copy to .env.providers
 ├── requirements.txt
-├── crewai_demo/              # standalone CrewAI reference demo (not production)
-│   ├── crew_demo.py
-│   └── requirements.txt
 └── src/
-    ├── main.py               # unified entry point (chat / api / ingest / crawl)
+    ├── main.py                # unified entry point (chat / api / ingest / crawl)
+    ├── domain/
+    │   └── models.py          # TurnMemory, ChatMode, LLMRole (shared types)
+    ├── storage/
+    │   └── faiss_store.py     # FAISS persistence (load/save/rebuild/vacuum/delete)
     ├── api/
-    │   ├── app.py            # FastAPI application
-    │   └── schemas.py        # request/response models
-    ├── chat/
-    │   ├── interface.py      # interactive CLI loop
-    │   ├── modes.py          # ChatMode enum (HARD / SOFT)
-    │   ├── session.py        # session state (mode, memory, collections)
-    │   └── types.py          # TurnMemory dataclass
+    │   ├── app.py             # FastAPI application + lifespan
+    │   ├── deps.py            # dependency injection (graph, stores, managers)
+    │   ├── routers/
+    │   │   ├── chat.py        # /query, /query/agent, /collections
+    │   │   ├── config.py      # /config/providers
+    │   │   ├── files.py       # /files (ephemeral upload)
+    │   │   └── attachments.py # /attachments
+    │   └── schemas/           # Pydantic request/response models
     ├── cli/
-    │   └── commands.py       # menu rendering and CLI helpers
+    │   ├── interface.py       # interactive CLI loop + graph caching
+    │   ├── session.py         # session state (mode, memory, collections)
+    │   ├── commands.py        # menu rendering and CLI helpers
+    │   ├── modes.py           # re-exports ChatMode from domain
+    │   └── types.py           # re-exports TurnMemory from domain
     ├── config/
-    │   └── settings.py       # Pydantic BaseSettings — all config in one place
+    │   ├── settings.py        # Pydantic BaseSettings — all config in one place
+    │   └── models/            # per-backend model capabilities (flm, ollama, gemini)
     ├── context/
-    │   ├── manager.py        # load/unload collections from vectorstore
-    │   └── models.py         # SearchResult, LoadedCollection types
+    │   ├── manager.py         # load/unload collections from vectorstore
+    │   ├── models.py          # SearchResult type
+    │   ├── selector.py        # pattern matching for collection names
+    │   ├── delete.py          # delete sources, URLs, clear collections
+    │   ├── ephemeral.py       # in-memory file store for API conversations
+    │   └── attachments.py     # persistent file attachments
     ├── graph/
-    │   ├── graph.py          # LangGraph wiring + conditional edges
-    │   ├── nodes.py          # retrieve, evaluate, reformulate, generate, review, correct
-    │   └── state.py          # RAGState TypedDict
+    │   ├── graph.py           # LangGraph wiring + conditional edges
+    │   ├── nodes.py           # retrieve, evaluate, reformulate, generate, review, correct
+    │   └── state.py           # RAGState + RAGStateUpdate TypedDicts
     ├── ingest/
-    │   ├── core.py           # shared chunking + embedding + FAISS persistence
-    │   ├── ingest.py         # local file ingestion (PDF / HTML / TXT)
-    │   ├── web_ingest.py     # single URL ingestion
-    │   └── web_crawler.py    # domain crawler (up to MAX_PAGES)
-    ├── llm/
-    │   ├── generate.py       # ask_llm() / ask_llm_internal() with provider param
-    │   └── providers.py      # provider registry + cached OpenAI client factory
+    │   ├── core.py            # chunk_text, encode_chunks, build_metadata
+    │   ├── ingest.py          # local file ingestion (PDF / HTML / TXT)
+    │   ├── web_ingest.py      # single URL ingestion
+    │   ├── web_crawler.py     # domain crawler (up to MAX_PAGES)
+    │   └── http.py            # shared URL content extraction (readability)
+    ├── nlp/
+    │   ├── embedders/
+    │   │   └── encoder.py     # pluggable embedder (Ollama / FLM / SentenceTransformer)
+    │   └── llm/
+    │       ├── generate.py    # ask_llm / ask_llm_internal / build_messages
+    │       ├── providers.py   # provider registry + cached client factory
+    │       ├── roles.py       # re-exports LLMRole from domain
+    │       ├── context_guard.py # token estimation + context window validation
+    │       └── backends/
+    │           ├── base.py           # LLMClient protocol
+    │           ├── openai_compat.py  # OpenAI-compatible client (FLM, Gemini)
+    │           └── ollama_native.py  # native Ollama client
     ├── prompts/
-    │   └── builder.py        # build_prompt / build_review_prompt / build_correction_prompt
+    │   └── builder.py         # prompt construction (system, review, correction, web)
     ├── retrieval/
-    │   └── search.py         # FAISS search + cosine re-ranking
+    │   └── search.py          # FAISS search + cosine re-ranking
     └── utils/
-        └── logger.py
+        ├── logger.py
+        └── tokens.py          # token estimation (tiktoken + heuristic fallback)
 ```
 
 ---
 
-## 🚀 Getting Started
+## Getting Started
 
 ### Prerequisites
 
 - Python 3.11+
-- A local OpenAI-compatible LLM runtime ([FastFlowLM](https://fastflowlm.com/), [Ollama](https://ollama.com/), or similar)
+- A local LLM runtime ([FastFlowLM](https://fastflowlm.com/), [Ollama](https://ollama.com/), or similar)
 - A Gemini API key for whichever roles you point at `gemini` in `.env.providers` (free tier sufficient; the example config below only uses it for answer review)
 
 ### Install
@@ -445,7 +495,7 @@ LLM_ROL_REVIEW=gemini,gemini-2.5-flash-lite
 LLM_ROL_SUPPLEMENT=flm,qwen3.5:9b
 ```
 
-See [Multi-Provider LLM](#-multi-provider-llm) above for the full model of backends vs. roles.
+See [Multi-Provider LLM](#multi-provider-llm) above for the full model of backends vs. roles.
 
 ### Create vectorstore directory
 
@@ -456,7 +506,7 @@ mkdir -p /srv/ai/data
 
 ---
 
-## 💻 Usage
+## Usage
 
 ### Ingest
 
@@ -482,8 +532,12 @@ python -m src.main chat
 | Command             | Action                                                |
 | ------------------- | ----------------------------------------------------- |
 | `/context <tokens>` | Load one or more collections (space-separated tokens) |
+| `/remove <tokens>`  | Unload one or more collections                        |
 | `/list`             | List all available collections                        |
+| `/active`           | Show active collections                               |
+| `/clear`            | Unload all collections                                |
 | `/mode`             | Toggle HARD / SOFT mode                               |
+| `/agent`            | Toggle LangGraph agent ON / OFF                       |
 | `/reset`            | Clear conversation memory                             |
 | `/help`             | Show all commands                                     |
 | `/exit` or `/bye`   | Exit                                                  |
@@ -514,7 +568,7 @@ python -m src.main
 
 ---
 
-## ⚙️ Configuration
+## Configuration
 
 All configuration is managed via Pydantic Settings (`src/config/settings.py`) and loaded from `.env` + `.env.providers`.
 
@@ -531,6 +585,7 @@ All configuration is managed via Pydantic Settings (`src/config/settings.py`) an
 | `SOFT_TOP_K_FINAL`     | `7`                                                        | Chunks passed to prompt in SOFT mode               |
 | `MAX_TURNS`            | `4`                                                        | Conversation turns kept in context window          |
 | `CONFIDENCE_LIMIT`     | `0.79`                                                     | Cosine threshold below which query is reformulated |
+| `MAX_REVIEW_ATTEMPTS`  | `1`                                                        | Review→correct loop cap                            |
 | `LLM_TIMEOUT`          | `600`                                                      | LLM call timeout in seconds                        |
 | `LLM_FLM_URL`          | `http://127.0.0.1:52625/v1`                                | FastFlowLM endpoint                                |
 | `LLM_OLLAMA_URL`       | `http://127.0.0.1:11434`                                   | Ollama endpoint                                    |
@@ -540,21 +595,24 @@ All configuration is managed via Pydantic Settings (`src/config/settings.py`) an
 | `LLM_ROL_REFORMULATE`  | —                                                           | `backend,model` for `reformulate_node`             |
 | `LLM_ROL_REVIEW`       | —                                                           | `backend,model` for `review_node`                  |
 | `LLM_ROL_SUPPLEMENT`   | —                                                           | `backend,model` for the web-supplement decision    |
+| `EMBEDDER_FLM_URL`     | —                                                           | FLM embedding endpoint                             |
+| `EMBEDDER_OLLAMA_URL`  | —                                                           | Ollama embedding endpoint                          |
+| `WEB_SEARCH_ENABLED`   | `False`                                                     | Enable Tavily web search                           |
+| `TAVILY_API_KEY`       | —                                                           | Tavily API key                                     |
 | `API_HOST`             | `127.0.0.1`                                                | FastAPI bind address                               |
 | `API_PORT`             | `8000`                                                     | FastAPI port                                       |
 
 ---
 
-## 🔒 Security Notes
+## Security Notes
 
 - **`.env.*` files are gitignored** (except `.env.example`). Never commit API keys.
-- If you cloned an earlier version of this repo, **rotate your Gemini API key** — `.env.gemini` was not excluded from git in versions prior to the multi-provider refactor.
 - Any role pointed at a local backend (`flm`/`ollama`) receives full document chunks in every request. Ensure your local runtime is not exposed on a public interface (`LLM_FLM_URL`/`LLM_OLLAMA_URL` should always bind to `127.0.0.1`).
 - The FastAPI server also defaults to `127.0.0.1`. Do not expose it publicly without authentication and TLS.
 
 ---
 
-## 🤝 Contributing
+## Contributing
 
 Contributions are welcome. Please open an issue before submitting a pull request.
 
@@ -565,7 +623,7 @@ Contributions are welcome. Please open an issue before submitting a pull request
 
 ---
 
-## 📄 License
+## License
 
 This project is licensed under the **MIT License** — see the [LICENSE](./LICENSE) file for details.
 

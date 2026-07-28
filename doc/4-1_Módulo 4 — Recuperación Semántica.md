@@ -1,6 +1,6 @@
-# Módulo 4 — Recuperación Semántica *(actualizado)*
+# Módulo 4 — Recuperación Semántica
 
-Este módulo documenta el estado actual de `src/retrieval/search.py`. Si leíste la versión anterior, los cambios principales son: modos renombrados a HARD/SOFT, `search()` ya no recibe `chat_memory`, y son 3 queries en SOFT en vez de 4.
+El Módulo 4 es el corazón del RAG: convierte una pregunta en texto en resultados concretos de chunks relevantes. Todo lo que viste hasta ahora — ingestar, almacenar, gestionar contextos — converge aquí.
 
 ---
 
@@ -11,10 +11,43 @@ def search(
     question: str,
     mode: str,
     collections: list[LoadedCollection],
+    top_k_initial: int | None = None,
+    top_k_final: int | None = None,
 ) -> tuple[list[SearchResult], float]:
 ```
 
-Notar que `chat_memory` ya **no** es un parámetro. En la versión anterior, el historial viajaba como una variante más de query en modo INTERPRETATIVO. Eso causaba que cada turno de la conversación influyera en la búsqueda vectorial, lo cual en la práctica añadía ruido. El historial ahora viaja solo como mensajes de API en `build_messages()` — impacta al LLM al generar la respuesta, pero no al buscar los chunks. El comportamiento resultante es más predecible.
+`search()` es la función pública que el grafo LangGraph llama desde `retrieve_node`. Recibe la pregunta, el modo de búsqueda, y la lista de colecciones activas (el `loaded_contexts` del Módulo 3).
+
+Los parámetros `top_k_initial` y `top_k_final` son opcionales — cuando llegan como `None` (el caso normal desde el API), se usan los valores configurados en `.env` según el modo:
+
+```python
+if mode == ChatMode.SOFT:
+    default_initial = settings.soft_top_k_initial
+    default_final = settings.soft_top_k_final
+else:
+    default_initial = settings.hard_top_k_initial
+    default_final = settings.hard_top_k_final
+
+top_k_initial = default_initial if top_k_initial is None else top_k_initial
+top_k_final = default_final if top_k_final is None else top_k_final
+```
+
+¿Por qué dos valores de `top_k`? Porque la búsqueda funciona en dos etapas: primero recoge un amplio pool de candidatos (`top_k_initial`), luego recorta a los mejores (`top_k_final`). Esto es el patrón **retrieve-then-rerank**.
+
+---
+
+## `ChatMode` — HARD vs SOFT
+
+```python
+class ChatMode(StrEnum):
+    SOFT = "SOFT"
+    HARD = "HARD"
+```
+
+`ChatMode` es un `StrEnum` — hereda de `str` y de `Enum`, lo que significa que sus valores son strings válidos y puedes compararlos directamente con `==`. No es una clase con constantes de tipo string; es una enumeración con semantics.
+
+- **HARD**: una sola query literal. Para búsquedas factuales donde la precisión importa más que el recall.
+- **SOFT**: tres variantes semánticas. Para búsquedas exploratorias donde quieres ampliar el recall.
 
 ---
 
@@ -27,12 +60,12 @@ def build_queries(question: str, mode: str) -> list[str]:
 
     return [
         question,
-        f"Explica el concepto: {question}",
-        f"Relaciona ideas sobre: {question}",
+        f"Explain the concept: {question}",
+        f"Relate ideas about: {question}",
     ]
 ```
 
-**Modo HARD:** una sola query, la pregunta literal. Para búsquedas factuales donde la precisión importa más que el recall.
+**Modo HARD:** una sola query, la pregunta literal. Directo y preciso.
 
 **Modo SOFT:** tres variantes. Esta es la técnica de **multi-query retrieval** — lanzar el mismo intento de búsqueda desde ángulos semánticos distintos para ampliar el pool de candidatos.
 
@@ -40,11 +73,13 @@ def build_queries(question: str, mode: str) -> list[str]:
 "¿Qué dice Freud sobre los sueños?"
 
 query 1: "¿Qué dice Freud sobre los sueños?"           → busca la pregunta literal
-query 2: "Explica el concepto: ¿Qué dice Freud..."     → sesga hacia definiciones
-query 3: "Relaciona ideas sobre: ¿Qué dice Freud..."   → sesga hacia conexiones
+query 2: "Explain the concept: ¿Qué dice Freud..."     → sesga hacia definiciones
+query 3: "Relate ideas about: ¿Qué dice Freud..."      → sesga hacia conexiones
 ```
 
 El costo: 3x el trabajo de embedding y búsqueda. Por eso solo se activa en SOFT.
+
+> **Nota:** el historial de la conversación **no** viaja como una variante de query. Viaja como mensajes de API al LLM durante la generación. Esto evita que cada turno influya en la búsqueda vectorial — que en la práctica añadía ruido.
 
 ---
 
@@ -52,13 +87,14 @@ El costo: 3x el trabajo de embedding y búsqueda. Por eso solo se activa en SOFT
 
 ```python
 def encode_queries(queries: list[str]) -> np.ndarray:
-    embeddings = model.encode(queries, normalize_embeddings=True)
-    return np.ascontiguousarray(embeddings, dtype=np.float32)
+    return get_encoder().encode(queries)
 ```
 
-El mismo modelo `BAAI/bge-small-en-v1.5` que se usó al ingestar los documentos. Esto es crítico: **la pregunta y los documentos deben pasar por el mismo modelo**. Si indexaste con modelo A y consultas con modelo B, los vectores viven en espacios distintos y las distancias no significan nada — como comparar coordenadas GPS con coordenadas de un mapa de fantasía.
+El módulo importa `get_encoder` de `src/nlp/embedders/encoder.py`. Esta función devuelve una instancia cacheada del backend de embeddings configurado (sentence_transformers, Ollama, o FastFlowLM).
 
-`np.ascontiguousarray` garantiza que la memoria esté organizada de forma contigua — un requisito técnico de los bindings C++ de FAISS.
+**Lo crítico**: la pregunta y los documentos deben pasar por el mismo modelo. Si indexaste con modelo A y consultas con modelo B, los vectores viven en espacios distintos y las distancias no significan nada — como comparar coordenadas GPS con coordenadas de un mapa de fantasía.
+
+`get_encoder().encode()` retorna vectores L2-normalizados en float32, C-contiguos — un requisito técnico de los bindings C++ de FAISS para que la similitud coseno funcione correctamente.
 
 ---
 
@@ -99,16 +135,20 @@ indices = [[47,   203,  891,  ...]]   # posiciones en metadata[]
 
 `idx == -1` es el caso borde: si el índice tiene menos vectores que `top_k_initial`, FAISS rellena con `-1`. Se descarta.
 
-`metadata[idx]` reconecta el número puro con texto legible. En la versión actual, `metadata` contiene instancias de `ChunkMetadata` (Pydantic BaseModel), por lo que el acceso es por atributo:
+`metadata[idx]` reconecta el número puro con texto legible. Como `ChunkMetadata` es un `BaseModel` de Pydantic, el acceso es por atributo:
 
 ```python
-# versión actual:
-text=item.text,
-source=item.source,
-page=item.page,
-
-# versión anterior usaba dict:
-text=item["text"],
+item = metadata[idx]
+results.append(
+    SearchResult(
+        score=float(score),
+        text=item.text,
+        source=item.source,
+        page=item.page,
+        collection=collection_name,
+        chunk_index=item.chunk_index,
+    )
+)
 ```
 
 ---
@@ -138,10 +178,35 @@ La clave de deduplicación es la tupla `(collection, source, chunk_index)` — e
 
 ---
 
+## Paso 5 — `format_context_chunks()`: de SearchResult a texto para el prompt
+
+```python
+def format_context_chunks(results: list[SearchResult]) -> list[str]:
+    return [
+        f"SOURCE: {r.source}\nCOLLECTION: {r.collection}\nPAGE: {r.page}\n\n{r.text}"
+        for r in results
+    ]
+```
+
+Convierte los `SearchResult` en strings formateados que el generador de prompts inserta directamente en el contexto. Cada chunk lleva encabezados de metadata (`FUENTE`, `COLECCIÓN`, `PÁGINA`) para que el LLM sepa de dónde viene cada fragmento.
+
+```
+SOURCE: freud_capitulo3.pdf
+COLLECTION: psicoanalisis/freud
+PAGE: 42
+
+La interpretación de los sueños requiere considerar...
+```
+
+---
+
 ## El cierre: top_k_final y confidence
 
 ```python
 final_results = results[:top_k_final]   # HARD: 5, SOFT: 7
+
+if not final_results:
+    return [], 0.0
 
 confidence = sum(r.score for r in final_results) / len(final_results)
 ```
@@ -149,7 +214,7 @@ confidence = sum(r.score for r in final_results) / len(final_results)
 `confidence` es el promedio de similitud coseno de los chunks que llegan al prompt. Es una heurística simple, no una probabilidad estadística. El grafo LangGraph la usa en `evaluate_node` para decidir si reformular la query:
 
 ```
-confidence < settings.confidence_limit  → reformulate_node (Gemini reescribe la query)
+confidence < settings.confidence_limit  → reformulate_node (LLM reescribe la query)
 confidence >= settings.confidence_limit → generate_node
 ```
 
@@ -166,7 +231,7 @@ question (str)
 [q1, q2, q3]  (SOFT) / [q1]  (HARD)
      │
      ▼  encode_queries()
-matriz (3, 384) de floats normalizados
+matriz (N, 384) de floats normalizados
      │
      ▼  retrieve(collections, top_k_initial)
        loop: colecciones × queries × FAISS.search()
@@ -178,8 +243,11 @@ matriz (3, 384) de floats normalizados
      ▼  [:top_k_final]
 final_results: list[SearchResult]  (5 o 7 chunks)
      │
+     ▼  format_context_chunks()
+["SOURCE: ...\n\n{text}", "SOURCE: ...\n{text}", ...]
+     │
      ▼
-(final_results, confidence: float)
+context_chunks → generate_node → prompt del LLM
 ```
 
-Estos chunks son lo que `generate_node` convierte en `context_chunks` para construir el prompt.
+¿Quieres ver cómo se almacenan archivos subidos por el usuario en memoria para usarlos como contexto efímero? Eso es el Módulo 4-2.
