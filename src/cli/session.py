@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from src.cli.modes import HARD, SOFT
+from src.cli.modes import ChatMode
 from src.cli.types import TurnMemory
 from src.context.manager import ContextManager, LoadedCollection
 
@@ -37,7 +37,7 @@ class ChatSession:
 
     @property
     def mode(self) -> str:
-        return SOFT if self.soft_mode else HARD
+        return ChatMode.SOFT if self.soft_mode else ChatMode.HARD
 
     def toggle_mode(self) -> str:
         self.soft_mode = not self.soft_mode
@@ -46,10 +46,6 @@ class ChatSession:
     # =====================================================
     # AGENT
     # =====================================================
-
-    # @property
-    # def agent(self) -> str:
-    #     return SOFT if self.soft_mode else HARD
 
     def toggle_agent(self) -> None:
         self.agent_active = not self.agent_active

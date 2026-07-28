@@ -1,38 +1,37 @@
 """
-Roles de LLM: cada punto del pipeline que llama a un modelo se identifica
-con uno de estos roles. El backend+modelo que atiende cada rol se
-configura de forma independiente (ver Settings.role_spec en
-src/config/settings.py) -- antes reformular, revisar, y evaluar el
-complemento web compartían el mismo "reformulate_provider" sin ninguna
-razón salvo que nunca se separaron; ahora cada rol tiene su propia env
-var, así se puede, por ejemplo, correr la respuesta final en un modelo
-local potente y las tareas cortas de apoyo en un modelo rápido en la
-nube, sin acoplar unas con otras.
+LLM roles: every pipeline point that calls a model is identified by one
+of these roles. The backend+model serving each role is configured
+independently (see Settings.role_spec in src/config/settings.py) --
+previously reformulate, review, and web supplement shared the same
+"reformulate_provider" for no reason other than they were never
+separated; now each role has its own env var, so you can for example
+run the final answer on a powerful local model and short support tasks
+on a fast cloud model, without coupling them together.
 
-Módulo separado, sin importar nada del resto del proyecto (ni siquiera
-settings), específicamente para poder importarse tanto desde
-src/config/settings.py como desde los call sites (src/llm/generate.py,
-src/graph/nodes.py, src/api/routers/chat.py, src/chat/interface.py) sin
-riesgo de import circular -- settings.py es de las cosas más
-tempranamente importadas del proyecto.
+Separate module, importing nothing from the rest of the project (not
+even settings), specifically so it can be imported from both
+src/config/settings.py and the call sites (src/llm/generate.py,
+src/graph/nodes.py, src/api/routers/chat.py, src/chat/interface.py)
+without circular import risk -- settings.py is one of the earliest
+imports in the project.
 """
 
 from enum import StrEnum
 
 
 class LLMRole(StrEnum):
-    """Un punto del pipeline que necesita un LLM."""
+    """A pipeline point that needs an LLM."""
 
-    # Genera la respuesta final de RAG -- generate_node/correct_node en
-    # el grafo, el pipeline lineal de /query, y el chat directo del CLI.
+    # Generates the final RAG answer -- generate_node/correct_node in
+    # the graph, the linear /query pipeline, and direct CLI chat.
     GENERATE = "generate"
-    # Reescribe la pregunta del usuario para mejorar el retrieval cuando
-    # la confidence inicial es baja -- reformulate_node.
+    # Rewrites the user's question to improve retrieval when initial
+    # confidence is low -- reformulate_node.
     REFORMULATE = "reformulate"
-    # Evalúa si la respuesta generada pasa control de calidad (grounding,
-    # atribución de fuentes) -- review_node.
+    # Evaluates whether the generated answer passes quality checks
+    # (grounding, source attribution) -- review_node.
     REVIEW = "review"
-    # Decide si una búsqueda web le agrega algo genuinamente nuevo a una
-    # respuesta ya generada desde contexto local -- ver
-    # _supplement_with_web en src/api/routers/chat.py.
+    # Decides whether a web search adds genuinely new information to
+    # an answer already generated from local context -- see
+    # _supplement_with_web in src/api/routers/chat.py.
     WEB_SUPPLEMENT = "web_supplement"

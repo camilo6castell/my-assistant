@@ -166,17 +166,17 @@ correct_node   → review       (loop, capped)
 
 ```python
 class RAGState(TypedDict):
-    question:         str                  # current question (may be reformulated)
-    mode:             str                  # ChatMode.SOFT | ChatMode.HARD
-    collections:      list[LoadedCollection]
-    chat_memory:      list[TurnMemory]     # sliding window of N turns
-    results:          list[SearchResult]   # retrieved chunks
-    confidence:       float                # avg cosine score of top-K results
-    reformulated:     bool                 # True after one reformulation (prevents loops)
-    answer:           str                  # current generated answer
-    review_passed:    bool                 # True if reviewer approved
-    review_feedback:  str                  # rejection reason for correct_node
-    review_attempts:  int                  # increments per review cycle
+    question: str  # current question (may be reformulated)
+    mode: str  # ChatMode.SOFT | ChatMode.HARD
+    collections: list[LoadedCollection]
+    chat_memory: list[TurnMemory]  # sliding window of N turns
+    results: list[SearchResult]  # retrieved chunks
+    confidence: float  # avg cosine score of top-K results
+    reformulated: bool  # True after one reformulation (prevents loops)
+    answer: str  # current generated answer
+    review_passed: bool  # True if reviewer approved
+    review_feedback: str  # rejection reason for correct_node
+    review_attempts: int  # increments per review cycle
 ```
 
 ---

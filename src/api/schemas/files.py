@@ -1,6 +1,6 @@
 """
-Schemas del dominio "files" -- subir archivos, adjuntarlos a una
-colección persistida o usarlos solo dentro de una conversación.
+Schemas for the "files" domain -- uploading files, attaching them to a
+persistent collection, or using them only within a conversation.
 """
 
 from __future__ import annotations
@@ -14,12 +14,12 @@ __all__ = ["EphemeralFileInfo", "FileUploadResponse", "EphemeralFilesResponse", 
 
 class FileUploadResponse(BaseModel):
     """
-    Respuesta de POST /api/v1/files.
+    Response for POST /api/v1/files.
 
-    attached_to_collection: nombre de la colección persistida si el
-    archivo se guardó en disco (attach_to_collection=True en el form).
-    None si el archivo quedó solo en la colección efímera de la
-    conversación.
+    attached_to_collection: name of the persistent collection if the
+    file was saved to disk (attach_to_collection=True in the form).
+    None if the file remained only in the ephemeral collection of the
+    conversation.
     """
 
     conversation_id: str
@@ -30,13 +30,13 @@ class FileUploadResponse(BaseModel):
 
 
 class EphemeralFilesResponse(BaseModel):
-    """Respuesta de GET /api/v1/files/{conversation_id}."""
+    """Response for GET /api/v1/files/{conversation_id}."""
 
     conversation_id: str
     files: list[EphemeralFileInfo]
 
 
 class DeleteResponse(BaseModel):
-    """Respuesta de los DELETE de este router."""
+    """Response for DELETE requests on this router."""
 
     deleted: bool

@@ -12,5 +12,5 @@ def normalize_embedding(embedding: np.ndarray | list[float]) -> np.ndarray:
     if norm == 0.0:
         return arr
 
-    # FIX #7: cast explícito — arr / norm produce Any en los stubs de numpy
+    # FIX #7: explicit cast -- arr / norm produces Any in numpy stubs
     return np.asarray(arr / norm, dtype=np.float32)

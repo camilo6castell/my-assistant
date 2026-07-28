@@ -1,15 +1,15 @@
 """
-Nota sobre # pyright: ignore[reportCallIssue] en llamadas a faiss:
-  Pylance lee stubs SWIG C++ de faiss (add(n, x, ...) / search(n, x, k, D, I, ...))
-  en lugar del wrapper Python (add(x) / search(x, k) -> (D, I)).
-  mypy tiene stubs correctos y no necesita supresion.
-  La directiva pyright: es ignorada por mypy, evitando el unused-ignore.
+Note on # pyright: ignore[reportCallIssue] in faiss calls:
+  Pylance reads SWIG C++ stubs for faiss (add(n, x, ...) / search(n, x, k, D, I, ...))
+  instead of the Python wrapper (add(x) / search(x, k) -> (D, I)).
+  mypy has correct stubs and does not need suppression.
+  The pyright: directive is ignored by mypy, avoiding unused-ignore.
 
-Nota sobre ChunkMetadata como BaseModel:
-  Al ser BaseModel, los metadatos se validan al crearse (build_metadata).
-  La serialización a pickle usa model_dump() para guardar dicts planos,
-  y model_validate() al cargar para reconstruir los modelos — esto
-  garantiza backward compatibility con pickles creados antes de esta migración.
+Note on ChunkMetadata as BaseModel:
+  Being a BaseModel, metadata is validated at creation time (build_metadata).
+  Pickle serialization uses model_dump() to save flat dicts,
+  and model_validate() when loading to reconstruct the models — this
+  ensures backward compatibility with pickles created before this migration.
 """
 
 from __future__ import annotations
@@ -31,12 +31,12 @@ if TYPE_CHECKING:
 
 
 # ======================================================
-# TIPOS
+# TYPES
 # ======================================================
 
 
 class CollectionPaths(TypedDict):
-    """Rutas en disco de los artefactos de una colección."""
+    """Disk paths for collection artifacts."""
 
     vector_path: Path
     index_file: Path
@@ -46,12 +46,12 @@ class CollectionPaths(TypedDict):
 
 class ChunkMetadata(BaseModel):
     """
-    Metadata de un chunk indexado.
+    Metadata for an indexed chunk.
 
-    BaseModel en lugar de TypedDict porque:
-      - Valida tipos al construirse (build_metadata).
-      - frozen=True garantiza que los chunks no se muten post-ingest.
-      - model_validate / model_dump manejan la serialización con pickle.
+    BaseModel instead of TypedDict because:
+      - Validates types at construction time (build_metadata).
+      - frozen=True ensures chunks are not mutated post-ingest.
+      - model_validate / model_dump handle pickle serialization.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -64,20 +64,20 @@ class ChunkMetadata(BaseModel):
     collection: str
     file_id: str | None = None
     """
-    Id del archivo de origen dentro de una colección efímera
-    (src/context/ephemeral.py). None en colecciones persistidas normales
-    -- default explícito para que los pickles viejos (sin esta clave)
-    sigan validando con model_validate() sin romperse.
+    Source file ID within an ephemeral collection
+    (src/context/ephemeral.py). None for normal persisted collections
+    -- explicit default so old pickles (without this key)
+    still validate with model_validate() without breaking.
     """
 
 
 class RawCollection(TypedDict):
     """
-    Estructura que devuelve load_collection antes de que
-    ContextManager agregue collection_name.
+    Structure returned by load_collection before ContextManager
+    adds collection_name.
 
-    TypedDict (no BaseModel) porque contiene faiss.Index y np.ndarray,
-    que Pydantic no puede validar.
+    TypedDict (not BaseModel) because it contains faiss.Index and np.ndarray,
+    which Pydantic cannot validate.
     """
 
     index: FaissIndex | None
@@ -92,7 +92,7 @@ class RawCollection(TypedDict):
 
 
 def _to_f32(arr: np.ndarray) -> np.ndarray:
-    """Convierte a float32 C-contiguo requerido por faiss en runtime."""
+    """Converts to float32 C-contiguous array required by faiss at runtime."""
     return np.ascontiguousarray(arr, dtype=np.float32)
 
 
@@ -148,26 +148,26 @@ def load_collection(collection: str) -> RawCollection:
     paths = get_collection_paths(collection)
 
     if paths["index_file"].exists():
-        logger.info(f"Cargando colección: {collection}")
+        logger.info(f"Loading collection: {collection}")
 
         index: FaissIndex | None = faiss.read_index(str(paths["index_file"]))
 
         with open(paths["metadata_file"], "rb") as f:
             raw: list[object] = pickle.load(f)
-            # model_validate maneja tanto dicts (pickles anteriores a esta
-            # migración) como instancias ChunkMetadata ya serializadas.
+            # model_validate handles both dicts (pickles from before this
+            # migration) and already-serialized ChunkMetadata instances.
             metadata: list[ChunkMetadata] = [ChunkMetadata.model_validate(m) for m in raw]
 
         vectors: np.ndarray | None = None
 
         if paths["vectors_file"].exists():
             vectors = np.load(paths["vectors_file"])
-            logger.info("Embeddings cargados.")
+            logger.info("Embeddings loaded.")
         else:
-            logger.warning("vectors.npy no encontrado.")
+            logger.warning("vectors.npy not found.")
 
     else:
-        logger.info(f"Creando nueva colección: {collection}")
+        logger.info(f"Creating new collection: {collection}")
         index = None
         metadata = []
         vectors = None
@@ -185,7 +185,7 @@ def save_collection(
     new_embeddings: np.ndarray,
     new_metadata: list[ChunkMetadata],
 ) -> None:
-    logger.info("Guardando colección...")
+    logger.info("Saving collection...")
 
     index = collection_data["index"]
     metadata = collection_data["metadata"]
@@ -207,11 +207,11 @@ def save_collection(
     faiss.write_index(index, str(paths["index_file"]))
     np.save(paths["vectors_file"], all_vectors)
 
-    # Serializa como dicts planos para máxima portabilidad y compatibilidad.
+    # Serialize as flat dicts for maximum portability and compatibility.
     with open(paths["metadata_file"], "wb") as f:
         pickle.dump([m.model_dump() for m in metadata], f)
 
-    logger.info("Colección guardada correctamente.")
+    logger.info("Collection saved successfully.")
 
 
 # ======================================================
@@ -221,14 +221,14 @@ def save_collection(
 
 def encode_chunks(chunks: list[str]) -> np.ndarray:
     logger.info(
-        f"Generando embeddings para {len(chunks)} chunks | "
+        f"Generating embeddings for {len(chunks)} chunks | "
         f"backend={settings.embedding_backend} | model={settings.embedding_model}"
     )
     return get_encoder().encode(chunks)
 
 
 def create_faiss_index(dimension: int) -> FaissIndex:
-    logger.info(f"Creando índice FAISS (dim={dimension})")
+    logger.info(f"Creating FAISS index (dim={dimension})")
     return faiss.IndexFlatIP(dimension)
 
 

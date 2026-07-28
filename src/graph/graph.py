@@ -1,7 +1,7 @@
 """
-Grafo RAG con adaptive retrieval usando LangGraph.
+RAG graph with adaptive retrieval using LangGraph.
 
-Flujo:
+Flow:
                          ┌─────────────┐
                          │   retrieve  │◄──────────────┐
                          └──────┬──────┘               │
@@ -12,7 +12,7 @@ Flujo:
                                 │                      │
                ┌────────────────┴─────────────┐        │
           confidence ok                  confidence    │
-          o ya reformulado                 baja        │
+          or already reformulated           low        │
                │                              │        │
                ▼                              ▼        │
          ┌──────────┐                  ┌────────────┐  │
@@ -21,24 +21,24 @@ Flujo:
               │
               ▼
          ┌──────────┐
-         │  review  │  ← Gemini evalúa anclaje + citas
+         │  review  │  ← Gemini evaluates grounding + citations
          └────┬─────┘
               │
        ┌──────┴──────┐
-    passed        rechazado
+    passed        rejected
        │              │
        ▼              ▼
       END         ┌─────────┐
-                  │ correct │  ← local regenera con feedback
+                  │ correct │  ← local regenerates with feedback
                   └────┬────┘
                        │
                        ▼
-                    review  (loop acotado por MAX_REVIEW_ATTEMPTS)
+                    review  (bounded loop by MAX_REVIEW_ATTEMPTS)
 
 Routing evaluate: confidence >= settings.confidence_limit → generate
-                  confidence <  settings.confidence_limit → reformulate (una vez)
+                  confidence <  settings.confidence_limit → reformulate (once)
 Routing review:   passed=True  → END
-                  passed=False → correct → review (máx MAX_REVIEW_ATTEMPTS veces)
+                  passed=False → correct → review (max MAX_REVIEW_ATTEMPTS times)
 """
 
 from __future__ import annotations
@@ -72,9 +72,9 @@ _CORRECT = "correct"
 
 def route_after_evaluate(state: RAGState) -> Hashable:
     """
-    - Si ya reformuló                            → generate (evita loop)
-    - Si confidence >= settings.confidence_limit → generate
-    - Si confidence <  settings.confidence_limit → reformulate
+    - If already reformulated                        → generate (avoids loop)
+    - If confidence >= settings.confidence_limit → generate
+    - If confidence <  settings.confidence_limit → reformulate
     """
     confidence = state["confidence"]
     limit = settings.confidence_limit
@@ -86,15 +86,12 @@ def route_after_evaluate(state: RAGState) -> Hashable:
         )
         return _GENERATE
 
-    logger.info(
-        f"[graph] route → {_REFORMULATE} "
-        f"(confidence={confidence:.4f} < limit={limit})"
-    )
+    logger.info(f"[graph] route → {_REFORMULATE} (confidence={confidence:.4f} < limit={limit})")
     return _REFORMULATE
 
 
 def build_rag_graph() -> CompiledStateGraph[RAGState]:
-    """Construye y compila el grafo RAG."""
+    """Builds and compiles the RAG graph."""
     graph: StateGraph[RAGState] = StateGraph(RAGState)
 
     graph.add_node(_RETRIEVE, retrieve_node)
@@ -122,14 +119,14 @@ def build_rag_graph() -> CompiledStateGraph[RAGState]:
         {"end": END, "correct": _CORRECT},
     )
 
-    # StateGraph.compile() no resuelve su TypeVar genérico igual en todas
-    # las versiones de langgraph (en algunas queda un StateT libre en el
-    # tipo inferido para Input/Output en vez de bindearlo a RAGState).
-    # Un cast directo a CompiledStateGraph[RAGState] sería "redundante"
-    # en una versión y "incompatible" en otra -- cast(Any, ...) nunca es
-    # redundante (Any nunca coincide con lo que mypy infiera) y la
-    # anotación de la variable impone el tipo real hacia afuera, así que
-    # esto se mantiene correcto sin importar la versión instalada.
+    # StateGraph.compile() doesn't resolve its generic TypeVar the same way
+    # in all langgraph versions (in some a free StateT remains in the
+    # inferred type for Input/Output instead of being bound to RAGState).
+    # A direct cast to CompiledStateGraph[RAGState] would be "redundant"
+    # in one version and "incompatible" in another -- cast(Any, ...) is
+    # never redundant (Any never matches whatever mypy infers) and the
+    # variable annotation imposes the real type outward, so this remains
+    # correct regardless of the installed version.
     compiled: CompiledStateGraph[RAGState] = cast(Any, graph.compile())
-    logger.info("[graph] Grafo RAG compilado correctamente")
+    logger.info("[graph] RAG graph compiled successfully")
     return compiled

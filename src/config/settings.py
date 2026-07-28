@@ -1,15 +1,15 @@
 """
-Configuración centralizada del sistema usando pydantic-settings.
+Centralized system configuration using pydantic-settings.
 
-Ventajas sobre os.getenv manual:
-  - Validación de tipos en el arranque (falla rápido si el env está mal)
-  - Constraints en campos (gt=0, ge=0, le=2.0)
-  - Validación cruzada entre campos (@field_validator)
-  - Lectura automática de .env sin llamar load_dotenv()
-  - Un solo objeto `settings` como fuente de verdad
+Advantages over manual os.getenv:
+  - Type validation at startup (fails fast if env is wrong)
+  - Field constraints (gt=0, ge=0, le=2.0)
+  - Cross-field validation (@field_validator)
+  - Automatic .env reading without calling load_dotenv()
+  - Single `settings` object as the source of truth
 
-Los exports al final del módulo mantienen compatibilidad con todos los
-archivos que ya importan directamente (ej: from src.config.settings import CHUNK_SIZE).
+The exports at the bottom of the module maintain compatibility with all
+files that already import directly (e.g.: from src.config.settings import CHUNK_SIZE).
 """
 
 from pathlib import Path
@@ -22,30 +22,30 @@ from src.nlp.llm.roles import LLMRole
 
 def _split_backend_model(raw: str, var_name: str) -> tuple[str, str]:
     """
-    Parsea el formato "backend,modelo" que usan EMBEDDER y LLM_ROL_* en
-    .env.providers (ej. "flm,qwen3.5:9b" -> ("flm", "qwen3.5:9b")).
+    Parses the "backend,model" format used by EMBEDDER and LLM_ROL_* in
+    .env.providers (e.g. "flm,qwen3.5:9b" -> ("flm", "qwen3.5:9b")).
 
-    El split es solo en la PRIMERA coma: el nombre del modelo puede traer
-    ':' legítimamente (tags de Ollama/FastFlowLM, ej. "qwen3.5:9b"), así
-    que nunca se parte por eso.
+    The split is only on the FIRST comma: the model name can legitimately
+    contain ':' (Ollama/FastFlowLM tags, e.g. "qwen3.5:9b"), so we
+    never split on that.
     """
     backend, sep, model = raw.partition(",")
     backend, model = backend.strip(), model.strip()
     if not sep or not backend or not model:
         raise ValueError(
-            f"{var_name} debe tener el formato 'backend,modelo' "
-            f"(ej. 'ollama,bge-m3'). Valor actual: {raw!r}"
+            f"{var_name} must have the format 'backend,model' "
+            f"(e.g. 'ollama,bge-m3'). Current value: {raw!r}"
         )
     return backend, model
 
 
 class Settings(BaseSettings):
     """
-    Configuración del sistema RAG.
+    RAG system configuration.
 
-    Pydantic-settings lee las variables de entorno (y el archivo .env)
-    de forma automática. El nombre del campo en snake_case se mapea
-    al env var en UPPER_CASE (ej: chunk_size -> CHUNK_SIZE).
+    Pydantic-settings reads environment variables (and the .env file)
+    automatically. The snake_case field name maps to the UPPER_CASE
+    env var (e.g: chunk_size -> CHUNK_SIZE).
     """
 
     model_config = SettingsConfigDict(
@@ -59,7 +59,7 @@ class Settings(BaseSettings):
     # Root
     ai_home: Path = Field(default=Path("/srv/ai"))
 
-    # Paths: Los paths derivados son propiedades calculadas
+    # Paths: Derived paths are computed properties
     @property
     def data_path(self) -> Path:
         return self.ai_home / "data"
@@ -73,16 +73,16 @@ class Settings(BaseSettings):
         return self.ai_home / "logs"
 
     # ======================================================
-    # BACKENDS -- URLs de runtime (.env.providers)
+    # BACKENDS -- Runtime URLs (.env.providers)
     # ======================================================
-    # Un backend es un runtime concreto (FastFlowLM, Ollama, Gemini).
-    # Acá solo vive CÓMO conectarse a cada uno (URL + credencial); QUÉ
-    # modelo de ese backend usa cada rol se decide más abajo, en
-    # EMBEDDER / LLM_ROL_* -- nunca en esta sección.
+    # A backend is a concrete runtime (FastFlowLM, Ollama, Gemini).
+    # Here only HOW to connect to each one lives (URL + credential); WHICH
+    # model from that backend each role uses is decided below, in
+    # EMBEDDER / LLM_ROL_* -- never in this section.
     #
-    # flm/ollama no requieren API key real (runtimes locales); el campo
-    # existe solo porque el SDK de OpenAI exige un string no vacío -- ver
-    # Settings.embedding_api_key y providers._backend_api_key().
+    # flm/ollama don't require a real API key (local runtimes); the field
+    # exists only because the OpenAI SDK requires a non-empty string -- see
+    # Settings.embedding_api_key and providers._backend_api_key().
     llm_flm_url: str = Field(default="")
     llm_ollama_url: str = Field(default="")
     llm_gemini_url: str = Field(default="")
@@ -92,19 +92,17 @@ class Settings(BaseSettings):
     embedder_ollama_url: str = Field(default="")
 
     # ======================================================
-    # EMBEDDER -- qué backend + modelo generan los embeddings
+    # EMBEDDER -- which backend + model generates embeddings
     # ======================================================
-    # Formato "backend,modelo" (ver _split_backend_model). Backends
-    # válidos: sentence_transformers (en proceso, sin URL) | ollama |
-    # flm. Agregar un modelo nuevo a un backend existente es una entrada
-    # en src/config/models/<backend>.py -- nunca una variable de entorno
-    # nueva.
+    # Format "backend,model" (see _split_backend_model). Valid backends:
+    # sentence_transformers (in-process, no URL) | ollama | flm. Adding
+    # a new model to an existing backend is an entry in
+    # src/config/models/<backend>.py -- never a new environment variable.
     #
-    # IMPORTANTE: cambiar backend o modelo invalida los índices
-    # existentes. Los índices se guardan en rutas separadas por
-    # backend/modelo:
-    #   /srv/ai/vector_stores/<backend>/<model_safe>/<categoria>/<coleccion>/
-    # donde model_safe reemplaza '/' y ':' por '_'.
+    # IMPORTANT: changing backend or model invalidates existing indexes.
+    # Indexes are stored in paths separated by backend/model:
+    #   /srv/ai/vector_stores/<backend>/<model_safe>/<category>/<collection>/
+    # where model_safe replaces '/' and ':' with '_'.
     embedder: str = Field(default="ollama,bge-m3")
 
     @field_validator(
@@ -117,7 +115,7 @@ class Settings(BaseSettings):
     )
     @classmethod
     def _validate_backend_model_format(cls, v: str, info: ValidationInfo) -> str:
-        """Falla rápido en el arranque si EMBEDDER/LLM_ROL_* no vienen 'backend,modelo'."""
+        """Fails fast at startup if EMBEDDER/LLM_ROL_* are not in 'backend,model' format."""
         if info.field_name is not None:
             _split_backend_model(v, info.field_name.upper())
         return v
@@ -130,11 +128,11 @@ class Settings(BaseSettings):
     def embedder_model(self) -> str:
         return _split_backend_model(self.embedder, "EMBEDDER")[1]
 
-    # Alias retrocompatibles -- ingest/core.py, cli/commands.py,
-    # context/*.py y nlp/embedders/encoder.py ya conocían estos nombres
-    # desde antes de la simplificación de .env.providers; se mantienen
-    # como la interfaz pública de "qué backend/modelo generan embeddings"
-    # para no tener que tocar esos call sites.
+    # Backward-compatible aliases -- ingest/core.py, cli/commands.py,
+    # context/*.py and nlp/embedders/encoder.py already knew these names
+    # before the .env.providers simplification; they are kept as the
+    # public interface for "which backend/model generates embeddings"
+    # so those call sites don't need to be changed.
     @property
     def embedding_backend(self) -> str:
         return self.embedder_backend
@@ -145,17 +143,17 @@ class Settings(BaseSettings):
 
     @property
     def embedding_model_safe(self) -> str:
-        """Nombre del modelo sanitizado para usar como directorio."""
+        """Sanitized model name for use as a directory name."""
         return self.embedding_model.replace("/", "_").replace(":", "_")
 
     @property
     def embedding_base_url(self) -> str:
         """
-        URL HTTP del backend de embeddings activo.
+        HTTP URL of the active embeddings backend.
 
-        Solo tiene sentido para backends HTTP (ollama/flm) -- llamar esto
-        con EMBEDDER=sentence_transformers,... es un error del caller
-        (ese backend corre en proceso, sin URL) y se señaliza como tal.
+        Only makes sense for HTTP backends (ollama/flm) -- calling this
+        with EMBEDDER=sentence_transformers,... is a caller error
+        (that backend runs in-process, no URL) and is flagged as such.
         """
         urls = {"flm": self.embedder_flm_url, "ollama": self.embedder_ollama_url}
         backend = self.embedding_backend
@@ -163,26 +161,26 @@ class Settings(BaseSettings):
             return urls[backend]
         except KeyError:
             raise ValueError(
-                f"El backend de embeddings {backend!r} no usa URL HTTP "
-                f"(¿EMBEDDER=sentence_transformers,...? ese backend no tiene base_url)."
+                f"Embedding backend {backend!r} does not use an HTTP URL "
+                f"(is EMBEDDER=sentence_transformers,...? That backend has no base_url)."
             ) from None
 
     @property
     def embedding_api_key(self) -> str:
-        # Ni Ollama ni FastFlowLM validan esta key -- el SDK de OpenAI
-        # simplemente exige un string no vacío para construirse.
+        # Neither Ollama nor FastFlowLM validate this key -- the OpenAI SDK
+        # simply requires a non-empty string to construct itself.
         return "not-needed"
 
     @property
     def vector_store_path_for_backend(self) -> Path:
         """
-        Ruta base que incluye backend y modelo:
+        Base path including backend and model:
         /srv/ai/vector_stores/<backend>/<model_safe>/
 
-        Los índices de backends/modelos distintos son incompatibles
-        (viven en espacios vectoriales distintos), por eso se aíslan
-        en subdirectorios separados en vez de mezclarlos.
-        Las carpetas se crean automáticamente al primer uso en get_collection_paths().
+        Indexes from different backends/models are incompatible (they live
+        in different vector spaces), which is why they are isolated in
+        separate subdirectories instead of being mixed together.
+        Folders are created automatically on first use in get_collection_paths().
         """
         return self.ai_home / "vector_stores" / self.embedding_backend / self.embedding_model_safe
 
@@ -194,12 +192,12 @@ class Settings(BaseSettings):
     @classmethod
     def overlap_must_be_less_than_size(cls, v: int, info: ValidationInfo) -> int:
         """
-        Garantiza que el overlap no sea >= al tamaño del chunk.
-        Sin esta validación, chunk_text() produciría un loop infinito.
+        Ensures that overlap is not >= chunk size.
+        Without this validation, chunk_text() would produce an infinite loop.
         """
         if "chunk_size" in info.data and v >= info.data["chunk_size"]:
             raise ValueError(
-                f"chunk_overlap ({v}) debe ser menor que chunk_size ({info.data['chunk_size']})"
+                f"chunk_overlap ({v}) must be less than chunk_size ({info.data['chunk_size']})"
             )
         return v
 
@@ -215,52 +213,51 @@ class Settings(BaseSettings):
 
     max_turns: int = Field(default=4, gt=0)
     llm_timeout: int = Field(default=600, gt=0)
-    # Diagnóstico opt-in: vuelca a ./debug_last_llm_request.json el
-    # request EXACTO (mensajes + extra_fields aplanados) que se le manda
-    # al provider en cada llamada -- ver _dump_request_for_debug en
-    # src/llm/generate.py. Pensado para reproducir con curl un fallo que
-    # depende del tamaño/contenido real del prompt (ej. RAG con muchos
-    # chunks) sin reconstruirlo a mano. Default False: nunca escribe
-    # archivos en uso normal.
+    # Opt-in diagnostics: dumps the EXACT request (messages + flattened
+    # extra_fields) sent to the provider on each call to
+    # ./debug_last_llm_request.json -- see _dump_request_for_debug in
+    # src/llm/generate.py. Intended for reproducing with curl a failure
+    # that depends on the actual prompt size/content (e.g. RAG with many
+    # chunks) without rebuilding it by hand. Default False: never writes
+    # files during normal use.
     llm_debug_dump: bool = Field(default=False)
 
     # ======================================================
-    # LLM POR ROL -- qué backend + modelo atiende cada rol
+    # LLM BY ROLE -- which backend + model handles each role
     # ======================================================
-    # Cada punto del pipeline que llama a un LLM se identifica con un rol
-    # (ver LLMRole en src/nlp/llm/roles.py). Acá se decide, por
-    # separado y en formato "backend,modelo" (ver _split_backend_model),
-    # qué backend + modelo lo atiende -- este es el ÚNICO lugar donde se
-    # decide "qué modelo hace qué rol". No hay una capa de indirección
-    # extra tipo PROVIDER_GENERATE=local: el rol especifica su backend y
-    # modelo directamente, y ambos ejes (backend -> URL/cliente,
-    # modelo -> capacidades) se resuelven en src/nlp/llm/providers.py.
+    # Each pipeline step that calls an LLM is identified by a role
+    # (see LLMRole in src/nlp/llm/roles.py). Here we decide, separately
+    # and in "backend,model" format (see _split_backend_model), which
+    # backend + model handles it -- this is the ONLY place where we
+    # decide "which model handles which role". There is no extra layer
+    # of indirection like PROVIDER_GENERATE=local: the role specifies
+    # its backend and model directly, and both axes (backend -> URL/client,
+    # model -> capabilities) are resolved in src/nlp/llm/providers.py.
     #
-    # Agregar un modelo nuevo a un backend existente = una entrada en
-    # src/config/models/<backend>.py, nunca una variable de entorno
-    # nueva. Agregar un backend nuevo (ej. Claude, OpenAI) = una entrada
-    # en los registros de src/nlp/llm/providers.py + un archivo en
-    # src/config/models/ + (si hace falta un cliente nuevo) uno en
-    # src/nlp/llm/backends/ -- nunca hace falta tocar graph.py, nodes.py
-    # ni generate.py.
+    # Adding a new model to an existing backend = an entry in
+    # src/config/models/<backend>.py, never a new environment variable.
+    # Adding a new backend (e.g. Claude, OpenAI) = an entry in the
+    # registry of src/nlp/llm/providers.py + a file in
+    # src/config/models/ + (if a new client is needed) one in
+    # src/nlp/llm/backends/ -- graph.py, nodes.py or generate.py
+    # never need to be touched.
     llm_rol_generate: str = Field(default="")
     llm_rol_reformulate: str = Field(default="")
     llm_rol_review: str = Field(default="")
-    # Nombrada distinto a LLMRole.WEB_SUPPLEMENT a propósito: en
-    # .env.providers el rol se llama "SUPPLEMENT" (más corto), el nombre
-    # interno completo ("web_supplement") solo vive en el enum. El mapeo
-    # entre ambos está en role_spec() más abajo -- único lugar que lo
-    # conoce.
+    # Named differently from LLMRole.WEB_SUPPLEMENT on purpose: in
+    # .env.providers the role is called "SUPPLEMENT" (shorter), the full
+    # internal name ("web_supplement") only lives in the enum. The mapping
+    # between both is in role_spec() below -- the only place that knows it.
     llm_rol_supplement: str = Field(default="")
 
     def role_spec(self, role: LLMRole) -> tuple[str, str]:
         """
-        Devuelve (backend, modelo) configurado para `role`, ej.
+        Returns the (backend, model) configured for `role`, e.g.
         role_spec(LLMRole.GENERATE) -> ("flm", "qwen3.5:9b").
 
-        Único punto de lookup rol -> (backend, modelo). Los call sites
-        (src/nlp/llm/providers.py, src/nlp/llm/context_guard.py) nunca
-        leen llm_rol_* directamente.
+        Single lookup point for role -> (backend, model). The call sites
+        (src/nlp/llm/providers.py, src/nlp/llm/context_guard.py) never
+        read llm_rol_* directly.
         """
         raw_by_role: dict[LLMRole, tuple[str, str]] = {
             LLMRole.GENERATE: ("LLM_ROL_GENERATE", self.llm_rol_generate),
@@ -271,11 +268,19 @@ class Settings(BaseSettings):
         var_name, raw = raw_by_role[role]
         return _split_backend_model(raw, var_name)
 
-    # Agent — umbral de foco temático para el grafo LangGraph.
-    # Con 1 colección mide spread de chunk_index (menor = match).
-    # Con N colecciones mide source dominance (mayor = match).
-    # Sobreescribible en .env: CONFIDENCE_LIMIT=0.20
+    # Agent -- thematic focus threshold for the LangGraph graph.
+    # With 1 collection, measures chunk_index spread (lower = match).
+    # With N collections, measures source dominance (higher = match).
+    # Overridable in .env: CONFIDENCE_LIMIT=0.20
     confidence_limit: float = Field(default=0.79, ge=0.0, le=1.0)
+    max_review_attempts: int = Field(default=1, ge=0)
+
+    # Context guard -- token estimation safety margins
+    context_guard_safety_margin: float = Field(default=0.10, ge=0.0, le=0.5)
+    context_guard_output_reserve: int = Field(default=1024, gt=0)
+
+    # Embeddings
+    embedding_batch_size: int = Field(default=64, gt=0)
 
     # API
     api_host: str = Field(default="127.0.0.1")
@@ -284,21 +289,23 @@ class Settings(BaseSettings):
     # ======================================================
     # WEB SEARCH (Tavily)
     # ======================================================
-    # Búsqueda web como fuente de retrieval complementaria/alternativa a
-    # las colecciones locales (ver QueryRequest.web_search en
-    # src/api/schemas/chat.py y src/retrieval/web_search.py).
+    # Web search as a complementary/alternative retrieval source to
+    # local collections (see QueryRequest.web_search in
+    # src/api/schemas/chat.py and src/retrieval/web_search.py).
     #
-    # web_search_enabled es un kill-switch global e independiente de si
-    # se manda web_search=True en el request: permite desactivar la
-    # feature entera en un ambiente (ej. sin salida a internet, o para
-    # no generar costo en la API de Tavily) sin tocar el frontend ni el
-    # código -- el router devuelve 400 si se pide web_search=True con
-    # esto en False.
+    # web_search_enabled is a global kill-switch independent of whether
+    # web_search=True is sent in the request: it allows disabling the
+    # entire feature in an environment (e.g. without internet access, or
+    # to avoid generating Tavily API costs) without touching the frontend
+    # or the code -- the router returns 400 if web_search=True is
+    # requested with this set to False.
     web_search_enabled: bool = Field(default=False)
     tavily_api_key: str = Field(default="")
     web_search_timeout: int = Field(default=15, gt=0)
     web_search_max_results: int = Field(default=5, gt=0)
+    web_search_depth: str = Field(default="basic")
+    web_search_include_answer: bool = Field(default=False)
 
 
-# Instancia singleton — se valida al importar el módulo.
+# Singleton instance -- validated on module import.
 settings = Settings()

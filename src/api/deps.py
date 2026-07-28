@@ -1,14 +1,14 @@
 """
-Dependencias compartidas entre routers (patrón FastAPI Depends()).
+Shared dependencies between routers (FastAPI Depends() pattern).
 
-Los recursos pesados -- el grafo LangGraph compilado y el almacén de
-colecciones efímeras -- se instancian una sola vez y viven acá para que
-cualquier router los pida vía Depends() sin importar app.py directamente.
-Eso evita el ciclo de imports router -> app -> router que aparecería si
-cada router leyera estos objetos desde app.py.
+Heavy resources -- the compiled LangGraph graph and the ephemeral
+collection store -- are instantiated once and live here so that any
+router can request them via Depends() without importing app.py directly.
+This avoids the import cycle router -> app -> router that would appear
+if each router read these objects from app.py.
 
-app.py llama a set_rag_graph() una sola vez dentro de lifespan(), al
-arrancar el proceso.
+app.py calls set_rag_graph() once inside lifespan(), when the process
+starts.
 """
 
 from __future__ import annotations
@@ -22,10 +22,10 @@ from src.context.ephemeral import EphemeralStore
 from src.context.manager import ContextManager
 from src.graph.state import RAGState
 
-# TTL de inactividad para colecciones efímeras (ver EphemeralStore.sweep_expired)
-# y para archivos adjuntos sin enviar (ver AttachmentStore.sweep_expired) --
-# mismo valor, misma semántica de "contexto de una sola conversación sin
-# actividad".
+# Inactivity TTL for ephemeral collections (see EphemeralStore.sweep_expired)
+# and for unsent file attachments (see AttachmentStore.sweep_expired) --
+# same value, same semantics of "single-conversation context with no
+# activity".
 EPHEMERAL_TTL = timedelta(hours=6)
 
 _rag_graph: CompiledStateGraph[RAGState] | None = None
@@ -40,10 +40,10 @@ def set_rag_graph(graph: CompiledStateGraph[RAGState]) -> None:
 
 
 def get_rag_graph() -> CompiledStateGraph[RAGState]:
-    # Se puebla en lifespan() al arrancar la app; en un request real
-    # nunca es None. El assert lo hace explícito para mypy y actúa como
-    # red de seguridad en runtime si algo invoca esto antes del startup.
-    assert _rag_graph is not None, "_rag_graph no inicializado: falta lifespan()"
+    # Populated in lifespan() when the app starts; in a real request it
+    # is never None. The assert makes it explicit for mypy and acts as a
+    # runtime safety net if something invokes this before startup.
+    assert _rag_graph is not None, "_rag_graph not initialized: missing lifespan()"
     return _rag_graph
 
 

@@ -1,22 +1,21 @@
 """
-Almacén de archivos "adjuntos" ad-hoc: archivos que el usuario sube para
-que se inyecten crudos (sin chunking ni embeddings) en el prompt de su
-PRÓXIMA query -- ver inject_attachments() en src/prompts/builder.py y
-QueryRequest en src/api/schemas/chat.py.
+Store for ad-hoc "attachment" files: files the user uploads to be
+injected raw (without chunking or embeddings) into the prompt of their
+NEXT query -- see inject_attachments() in src/prompts/builder.py and
+QueryRequest in src/api/schemas/chat.py.
 
-A diferencia de EphemeralStore (src/context/ephemeral.py), que indexa
-archivos en FAISS para retrieval semántico y persiste mientras dure la
-conversación, acá no hay indexado ni persistencia más allá de un solo
-envío: una vez que una query se procesa con archivos adjuntos
-presentes, el router los consume (AttachmentStore.remove_conversation)
-y la lista vuelve a estar vacía -- ver "Archivos adjuntos" en
-RightSidebar.tsx, que se refresca después de cada envío para reflejar
-esto.
+Unlike EphemeralStore (src/context/ephemeral.py), which indexes files
+in FAISS for semantic retrieval and persists for the duration of the
+conversation, here there is no indexing or persistence beyond a single
+send: once a query is processed with attachments present, the router
+consumes them (AttachmentStore.remove_conversation) and the list becomes
+empty again -- see "Attachments" in RightSidebar.tsx, which refreshes
+after each send to reflect this.
 
-Aplican en cualquier modo de respuesta: con colecciones activas, sin
-ninguna (ver _answer_raw en src/api/routers/chat.py), o con
-web_search. No son "contexto RAG" en sí mismos -- son contexto puntual
-del usuario para esta pregunta.
+Applies in any response mode: with active collections, with none (see
+_answer_raw in src/api/routers/chat.py), or with web_search. They are
+not "RAG context" per se -- they are ad-hoc user context for this
+specific question.
 """
 
 from __future__ import annotations
@@ -29,27 +28,45 @@ from pydantic import BaseModel
 
 from src.utils.logger import logger
 
-# Extensiones de texto plano que tiene sentido inyectar crudas en un
-# prompt. A diferencia de _SUPPORTED_SUFFIXES en api/routers/files.py
-# (.pdf/.html/.txt, pensado para indexar en una colección efímera), acá
-# el caso de uso típico es "pegame este módulo puntual" -- todo lo que
-# sea texto plano de código/config/datos aplica.
+# Plain text extensions that make sense to inject raw into a prompt.
+# Unlike _SUPPORTED_SUFFIXES in api/routers/files.py
+# (.pdf/.html/.txt, meant for indexing in an ephemeral collection), here
+# the typical use case is "paste me this specific module" -- any plain
+# text code/config/data applies.
 SUPPORTED_SUFFIXES = {
-    ".txt", ".md", ".json", ".py", ".js", ".ts", ".tsx", ".jsx",
-    ".java", ".yaml", ".yml", ".toml", ".csv", ".sql", ".sh",
-    ".env", ".cfg", ".ini", ".xml", ".css", ".html",
+    ".txt",
+    ".md",
+    ".json",
+    ".py",
+    ".js",
+    ".ts",
+    ".tsx",
+    ".jsx",
+    ".java",
+    ".yaml",
+    ".yml",
+    ".toml",
+    ".csv",
+    ".sql",
+    ".sh",
+    ".env",
+    ".cfg",
+    ".ini",
+    ".xml",
+    ".css",
+    ".html",
 }
 
-# Límite de tamaño por archivo -- un archivo de texto gigante (log,
-# dataset) reventaría el context window igual que rechazarlo silencioso
-# más adelante en el guard de contexto (ver src/llm/context_guard.py),
-# pero rechazarlo acá da un error inmediato y específico en vez de un
-# 413 genérico recién al enviar la query.
+# Per-file size limit -- a giant text file (log, dataset) would break
+# the context window just like silently rejecting it later in the
+# context guard (see src/llm/context_guard.py), but rejecting it here
+# gives an immediate specific error instead of a generic 413 only when
+# sending the query.
 MAX_FILE_BYTES = 512_000  # 500 KB
 
 
 class AttachmentInfo(BaseModel):
-    """Metadata de un archivo adjunto (para respuestas de API)."""
+    """Metadata for an attachment file (for API responses)."""
 
     file_id: str
     filename: str
@@ -66,20 +83,20 @@ class _Attachment:
 
 @dataclass
 class _ConversationAttachments:
-    """Estado en memoria de los adjuntos pendientes de una conversación."""
+    """In-memory state for pending attachments in a conversation."""
 
     files: dict[str, _Attachment] = field(default_factory=dict)
     last_used: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
 class AttachmentStore:
-    """Archivos adjuntos en memoria, uno por conversation_id, pendientes de envío."""
+    """In-memory attachments, one per conversation_id, pending send."""
 
     def __init__(self) -> None:
         self._conversations: dict[str, _ConversationAttachments] = {}
 
     # -------------------------------------------------
-    # ESCRITURA
+    # WRITING
     # -------------------------------------------------
 
     def add_file(self, conversation_id: str, filename: str, content: str) -> AttachmentInfo:
@@ -98,17 +115,17 @@ class AttachmentStore:
         )
 
         logger.info(
-            f"[attachments] archivo agregado | conversation={conversation_id} "
+            f"[attachments] file added | conversation={conversation_id} "
             f"| file={filename} | file_id={file_id} | bytes={info.size_bytes}"
         )
         return info
 
     # -------------------------------------------------
-    # BORRADO
+    # DELETION
     # -------------------------------------------------
 
     def remove_file(self, conversation_id: str, file_id: str) -> bool:
-        """Borra un adjunto puntual (botón de borrar manual en la UI, antes de enviar)."""
+        """Deletes a specific attachment (manual delete button in the UI, before sending)."""
         store = self._conversations.get(conversation_id)
         if store is None or file_id not in store.files:
             return False
@@ -122,22 +139,24 @@ class AttachmentStore:
 
     def remove_conversation(self, conversation_id: str) -> bool:
         """
-        Borra todos los adjuntos pendientes de una conversación.
+        Deletes all pending attachments for a conversation.
 
-        Se llama en dos casos: (1) el usuario los borra todos manualmente
-        desde la UI, o (2) -- el caso normal -- el router de chat los
-        consume automáticamente después de procesar una query que los
-        incluyó (ver src/api/routers/chat.py), para que la lista quede
-        vacía de cara al próximo mensaje.
+        Called in two cases: (1) the user manually deletes all of them
+        from the UI, or (2) -- the normal case -- the chat router
+        automatically consumes them after processing a query that
+        included them (see src/api/routers/chat.py), so the list is
+        empty for the next message.
         """
         existed = conversation_id in self._conversations
         self._conversations.pop(conversation_id, None)
         if existed:
-            logger.info(f"[attachments] conversación consumida/limpiada | conversation={conversation_id}")
+            logger.info(
+                f"[attachments] conversation consumed/cleared | conversation={conversation_id}"
+            )
         return existed
 
     # -------------------------------------------------
-    # LECTURA
+    # READING
     # -------------------------------------------------
 
     def list_files(self, conversation_id: str) -> list[AttachmentInfo]:
@@ -155,7 +174,7 @@ class AttachmentStore:
         ]
 
     def list_contents(self, conversation_id: str | None) -> list[tuple[str, str]]:
-        """(filename, content) de todos los adjuntos -- para inject_attachments()."""
+        """(filename, content) of all attachments -- for inject_attachments()."""
         if conversation_id is None:
             return []
         store = self._conversations.get(conversation_id)
@@ -165,16 +184,15 @@ class AttachmentStore:
         return [(f.filename, f.content) for f in store.files.values()]
 
     # -------------------------------------------------
-    # MANTENIMIENTO
+    # MAINTENANCE
     # -------------------------------------------------
 
     def sweep_expired(self, ttl: timedelta) -> int:
         """
-        Borra conversaciones con adjuntos sin consumir hace más de `ttl`
-        -- red de seguridad para adjuntos que el usuario subió pero nunca
-        llegó a enviar. Llamado periódicamente junto con
-        EphemeralStore.sweep_expired desde el mismo _cleanup_loop en
-        src/api/app.py.
+        Deletes conversations with unconsumed attachments older than `ttl`
+        -- safety net for attachments the user uploaded but never sent.
+        Called periodically alongside EphemeralStore.sweep_expired from
+        the same _cleanup_loop in src/api/app.py.
         """
         cutoff = datetime.now(UTC) - ttl
         expired = [cid for cid, s in self._conversations.items() if s.last_used < cutoff]
@@ -183,6 +201,6 @@ class AttachmentStore:
             del self._conversations[cid]
 
         if expired:
-            logger.info(f"[attachments] limpieza TTL | conversaciones eliminadas={len(expired)}")
+            logger.info(f"[attachments] TTL sweep | conversations deleted={len(expired)}")
 
         return len(expired)

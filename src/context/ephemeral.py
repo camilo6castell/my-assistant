@@ -1,39 +1,39 @@
 """
-Almacén de colecciones efímeras: archivos subidos "solo para esta
-conversación" (a diferencia de un archivo que se adjunta a una colección
-persistida vía POST /api/v1/files con attach_to_collection=True).
+Store for ephemeral collections: files uploaded "for this conversation
+only" (as opposed to a file attached to a persisted collection via
+POST /api/v1/files with attach_to_collection=True).
 
-Por qué existe un módulo separado de ContextManager:
-  ContextManager (context/manager.py) carga/lista colecciones que viven
-  en disco bajo settings.vector_store_path_for_backend. Una colección
-  efímera nunca se escribe a disco: vive solo en memoria del proceso,
-  indexada por conversation_id (un id opaco que el cliente genera una
-  vez por conversación y reenvía en cada request relevante). No
-  sobrevive a un restart del servidor -- es justo lo que se quiere para
-  contexto de un solo uso.
+Why a separate module from ContextManager:
+  ContextManager (context/manager.py) loads/lists collections that live
+  on disk under settings.vector_store_path_for_backend. An ephemeral
+  collection is never written to disk: it lives only in process memory,
+  indexed by conversation_id (an opaque ID that the client generates
+  once per conversation and resends with each relevant request). It does
+  not survive a server restart -- which is exactly what you want for
+  single-use context.
 
-Por qué no se puede hacer en el navegador:
-  Chunking + embeddings requieren sentence_transformers/FAISS corriendo
-  en el proceso Python del backend, no algo viable en un navegador. El
-  cliente solo sube el archivo; todo el cómputo pasa por el mismo
-  pipeline que usa ingest/ingest.py para colecciones persistidas
-  (chunk_text, encode_chunks, build_metadata) -- la única diferencia es
-  que acá nunca se llama a save_collection().
+Why it cannot be done in the browser:
+  Chunking + embeddings require sentence_transformers/FAISS running in
+  the backend Python process, not something viable in a browser. The
+  client only uploads the file; all computation goes through the same
+  pipeline used by ingest/ingest.py for persisted collections
+  (chunk_text, encode_chunks, build_metadata) -- the only difference is
+  that save_collection() is never called here.
 
-Borrado a nivel de archivo:
-  Cada chunk guarda su file_id (ver ChunkMetadata.file_id). Borrar un
-  archivo puntual filtra metadata/vectors por ese file_id y reconstruye
-  el índice FAISS con lo que queda. Para el tamaño típico de una
-  colección efímera (unos pocos archivos por conversación) reconstruir
-  el índice es trivialmente barato -- no hace falta el soporte de
-  borrado nativo de FAISS (IndexIDMap + remove_ids), que además no
-  todos los tipos de índice soportan.
+File-level deletion:
+  Each chunk stores its file_id (see ChunkMetadata.file_id). Deleting a
+  specific file filters metadata/vectors by that file_id and rebuilds
+  the FAISS index with what remains. For the typical size of an
+  ephemeral collection (a few files per conversation) rebuilding the
+  index is trivially cheap -- there is no need for FAISS native delete
+  support (IndexIDMap + remove_ids), which also is not supported by all
+  index types.
 
-Concurrencia:
-  Pensado para un solo worker uvicorn (caso típico de este proyecto:
-  local, single-user). Con --workers > 1 cada worker tendría su propio
-  store en memoria y una conversación podría "perder" sus archivos si
-  el load balancer la manda a otro worker en el siguiente request.
+Concurrency:
+  Designed for a single uvicorn worker (typical case for this project:
+  local, single-user). With --workers > 1 each worker would have its
+  own in-memory store and a conversation could "lose" its files if the
+  load balancer routes it to another worker on the next request.
 """
 
 from __future__ import annotations
@@ -63,12 +63,12 @@ if TYPE_CHECKING:
 
 
 # ======================================================
-# TIPOS PÚBLICOS
+# PUBLIC TYPES
 # ======================================================
 
 
 class EphemeralFileInfo(BaseModel):
-    """Metadata de un archivo subido a una conversación (para respuestas de API)."""
+    """Metadata for a file uploaded to a conversation (for API responses)."""
 
     file_id: str
     filename: str
@@ -77,13 +77,13 @@ class EphemeralFileInfo(BaseModel):
 
 
 # ======================================================
-# ESTADO INTERNO
+# INTERNAL STATE
 # ======================================================
 
 
 @dataclass
 class _ConversationStore:
-    """Estado en memoria de los archivos efímeros de una conversación."""
+    """In-memory state for ephemeral files in a conversation."""
 
     metadata: list[ChunkMetadata] = field(default_factory=list)
     vectors: np.ndarray | None = None
@@ -94,12 +94,12 @@ class _ConversationStore:
 
 def _placeholder_paths(conversation_id: str) -> CollectionPaths:
     """
-    CollectionPaths "de mentira" para satisfacer el TypedDict LoadedCollection.
+    Fake CollectionPaths to satisfy the LoadedCollection TypedDict.
 
-    retrieve() (src/retrieval/search.py) nunca lee la clave 'paths' --
-    solo index, metadata y collection_name -- así que esto nunca toca el
-    disco. Se arma solo para no tener que aflojar el tipo de
-    LoadedCollection ni introducir un TypedDict paralelo.
+    retrieve() (src/retrieval/search.py) never reads the 'paths' key --
+    only index, metadata, and collection_name -- so this never touches
+    disk. It exists only to avoid loosening the LoadedCollection type or
+    introducing a parallel TypedDict.
     """
     base = settings.vector_store_path_for_backend / "_ephemeral" / conversation_id
     return CollectionPaths(
@@ -123,13 +123,13 @@ def _rebuild_index(vectors: np.ndarray) -> FaissIndex:
 
 
 class EphemeralStore:
-    """Colecciones efímeras en memoria, una por conversation_id."""
+    """In-memory ephemeral collections, one per conversation_id."""
 
     def __init__(self) -> None:
         self._conversations: dict[str, _ConversationStore] = {}
 
     # -------------------------------------------------
-    # ESCRITURA
+    # WRITING
     # -------------------------------------------------
 
     def add_file(
@@ -140,9 +140,9 @@ class EphemeralStore:
         pages: list[tuple[int, str]],
     ) -> EphemeralFileInfo:
         """
-        Chunkea, embebe e indexa un archivo dentro de la colección
-        efímera de `conversation_id`. Si la conversación ya tenía
-        archivos, este se agrega a los existentes (no los reemplaza).
+        Chunks, embeds, and indexes a file within the ephemeral
+        collection of `conversation_id`. If the conversation already has
+        files, this one is added to the existing ones (does not replace).
         """
         file_id = uuid.uuid4().hex[:12]
         new_chunks: list[str] = []
@@ -164,7 +164,7 @@ class EphemeralStore:
                 )
 
         if not new_chunks:
-            raise ValueError(f"No se pudo extraer contenido de chunkeable de '{filename}'.")
+            raise ValueError(f"Could not extract chunkable content from '{filename}'.")
 
         embeddings = encode_chunks(new_chunks)
         store = self._conversations.setdefault(conversation_id, _ConversationStore())
@@ -185,23 +185,23 @@ class EphemeralStore:
         store.last_used = datetime.now(UTC)
 
         logger.info(
-            f"[ephemeral] archivo agregado | conversation={conversation_id} "
+            f"[ephemeral] file added | conversation={conversation_id} "
             f"| file={filename} | file_id={file_id} | chunks={len(new_chunks)}"
         )
         return info
 
     # -------------------------------------------------
-    # BORRADO
+    # DELETION
     # -------------------------------------------------
 
     def remove_file(self, conversation_id: str, file_id: str) -> bool:
         """
-        Borra un archivo puntual de la colección efímera de una
-        conversación, reconstruyendo metadata/vectors/index sin sus
-        chunks. Si era el último archivo, borra la conversación entera.
+        Deletes a specific file from the ephemeral collection of a
+        conversation, rebuilding metadata/vectors/index without its
+        chunks. If it was the last file, deletes the entire conversation.
 
-        Devuelve False si conversation_id o file_id no existen (idempotente:
-        el router lo traduce a 404, no a un 500).
+        Returns False if conversation_id or file_id do not exist (idempotent:
+        the router translates it to 404, not 500).
         """
         store = self._conversations.get(conversation_id)
         if store is None or file_id not in store.files:
@@ -212,8 +212,8 @@ class EphemeralStore:
         if not keep:
             del self._conversations[conversation_id]
             logger.info(
-                f"[ephemeral] se borró el último archivo -> conversación "
-                f"limpiada | conversation={conversation_id}"
+                f"[ephemeral] last file deleted -> conversation "
+                f"cleaned | conversation={conversation_id}"
             )
             return True
 
@@ -225,21 +225,21 @@ class EphemeralStore:
         store.last_used = datetime.now(UTC)
 
         logger.info(
-            f"[ephemeral] archivo borrado | conversation={conversation_id} "
-            f"| file_id={file_id} | chunks_restantes={len(store.metadata)}"
+            f"[ephemeral] file deleted | conversation={conversation_id} "
+            f"| file_id={file_id} | remaining_chunks={len(store.metadata)}"
         )
         return True
 
     def remove_conversation(self, conversation_id: str) -> bool:
-        """Borra toda la colección efímera de una conversación (ej: al cerrarla en la UI)."""
+        """Deletes the ephemeral collection of a conversation (e.g. closing it in the UI)."""
         existed = conversation_id in self._conversations
         self._conversations.pop(conversation_id, None)
         if existed:
-            logger.info(f"[ephemeral] conversación eliminada | conversation={conversation_id}")
+            logger.info(f"[ephemeral] conversation deleted | conversation={conversation_id}")
         return existed
 
     # -------------------------------------------------
-    # LECTURA
+    # READING
     # -------------------------------------------------
 
     def list_files(self, conversation_id: str) -> list[EphemeralFileInfo]:
@@ -247,7 +247,7 @@ class EphemeralStore:
         return list(store.files.values()) if store is not None else []
 
     def get_collection(self, conversation_id: str) -> LoadedCollection | None:
-        """Colección lista para retrieve(), o None si la conversación no tiene archivos."""
+        """Collection ready for retrieve(), or None if the conversation has no files."""
         store = self._conversations.get(conversation_id)
         if store is None or store.index is None:
             return None
@@ -262,15 +262,15 @@ class EphemeralStore:
         )
 
     # -------------------------------------------------
-    # MANTENIMIENTO
+    # MAINTENANCE
     # -------------------------------------------------
 
     def sweep_expired(self, ttl: timedelta) -> int:
         """
-        Borra conversaciones sin actividad hace más de `ttl`. Sin esto,
-        las colecciones efímeras crecen sin límite mientras viva el
-        proceso -- pensado para llamarse periódicamente (ver lifespan
-        en src/api/app.py).
+        Deletes conversations inactive for more than `ttl`. Without this,
+        ephemeral collections grow without bound while the process lives
+        -- designed to be called periodically (see lifespan in
+        src/api/app.py).
         """
         cutoff = datetime.now(UTC) - ttl
         expired = [cid for cid, s in self._conversations.items() if s.last_used < cutoff]
@@ -279,6 +279,6 @@ class EphemeralStore:
             del self._conversations[cid]
 
         if expired:
-            logger.info(f"[ephemeral] limpieza TTL | conversaciones eliminadas={len(expired)}")
+            logger.info(f"[ephemeral] TTL sweep | conversations deleted={len(expired)}")
 
         return len(expired)

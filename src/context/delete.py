@@ -1,11 +1,10 @@
 """
-Gestion de eliminacion granular de documentos, URLs y fuentes del
-vectorstore. Provee reconstruccion de indice FAISS y compactacion de
-metadata tras las eliminaciones.
+Granular deletion of documents, URLs, and sources from the vectorstore.
+Provides FAISS index reconstruction and metadata compaction after deletions.
 
-Nota sobre # pyright: ignore[reportCallIssue] en llamadas a faiss:
-  Pylance lee stubs SWIG C++; mypy tiene stubs correctos para el wrapper
-  Python. La directiva pyright: es ignorada por mypy, sin unused-ignore.
+Note on # pyright: ignore[reportCallIssue] in faiss calls:
+  Pylance reads SWIG C++ stubs; mypy has correct stubs for the Python
+  wrapper. The pyright: directive is ignored by mypy, without unused-ignore.
 """
 
 from __future__ import annotations
@@ -19,16 +18,16 @@ import numpy as np
 from pydantic import BaseModel, ConfigDict
 
 from src.config.settings import settings
-from src.ingest.core import ChunkMetadata
+from src.ingest.core import ChunkMetadata, _to_f32
 from src.utils.logger import logger
 
 # ======================================================
-# HELPERS INTERNOS
+# INTERNAL HELPERS
 # ======================================================
 
 
 def _collection_paths(collection: str) -> dict[str, Path]:
-    base: Path = Path(settings.vector_store_path) / collection
+    base: Path = settings.vector_store_path_for_backend / collection
     return {
         "base": base,
         "index": base / "index.faiss",
@@ -43,7 +42,7 @@ def _load_raw(
     paths: dict[str, Path] = _collection_paths(collection)
 
     if not paths["metadata"].exists():
-        logger.warning(f"metadata.pkl no encontrado | collection={collection}")
+        logger.warning(f"metadata.pkl not found | collection={collection}")
         return [], None
 
     with open(paths["metadata"], "rb") as f:
@@ -55,7 +54,7 @@ def _load_raw(
     if paths["vectors"].exists():
         vectors = np.load(paths["vectors"])
     else:
-        logger.warning(f"vectors.npy no encontrado | collection={collection}")
+        logger.warning(f"vectors.npy not found | collection={collection}")
 
     return metadata, vectors
 
@@ -75,9 +74,7 @@ def _save_raw(
     np.save(paths["vectors"], vectors)
     faiss.write_index(index, str(paths["index"]))
 
-    logger.info(
-        f"Colección guardada | collection={collection} | chunks={len(metadata)}"
-    )
+    logger.info(f"Collection saved | collection={collection} | chunks={len(metadata)}")
 
 
 def _clear_collection_files(collection: str) -> None:
@@ -87,15 +84,11 @@ def _clear_collection_files(collection: str) -> None:
         p: Path = paths[key]
         if p.exists():
             p.unlink()
-            logger.info(f"Archivo eliminado: {p}")
-
-
-def _to_f32(arr: np.ndarray) -> np.ndarray:
-    return np.ascontiguousarray(arr, dtype=np.float32)
+            logger.info(f"File deleted: {p}")
 
 
 # ======================================================
-# RECONSTRUCCION DE INDICE
+# INDEX RECONSTRUCTION
 # ======================================================
 
 
@@ -103,17 +96,14 @@ def rebuild_index(collection: str) -> faiss.Index | None:
     paths: dict[str, Path] = _collection_paths(collection)
 
     if not paths["vectors"].exists():
-        logger.warning(
-            f"No se puede reconstruir: vectors.npy ausente "
-            f"| collection={collection}"
-        )
+        logger.warning(f"Cannot rebuild: vectors.npy missing | collection={collection}")
         return None
 
     vectors: np.ndarray = np.load(paths["vectors"])
 
     if vectors.ndim != 2 or vectors.shape[0] == 0:
         logger.warning(
-            f"vectors.npy vacío o con forma inválida "
+            f"vectors.npy empty or with invalid shape "
             f"| shape={vectors.shape} | collection={collection}"
         )
         return None
@@ -125,15 +115,14 @@ def rebuild_index(collection: str) -> faiss.Index | None:
     faiss.write_index(index, str(paths["index"]))
 
     logger.info(
-        f"Índice reconstruido | collection={collection} "
-        f"| vectors={vectors.shape[0]} | dim={dimension}"
+        f"Index rebuilt | collection={collection} | vectors={vectors.shape[0]} | dim={dimension}"
     )
 
     return index
 
 
 # ======================================================
-# VACUUM / COMPACTACION
+# VACUUM / COMPACTION
 # ======================================================
 
 
@@ -145,7 +134,7 @@ def vacuum_collection(collection: str) -> dict[str, int]:
     before: int = len(metadata)
 
     if not metadata or vectors is None:
-        logger.info(f"Vacuum: nada que compactar | collection={collection}")
+        logger.info(f"Vacuum: nothing to compact | collection={collection}")
         return {"before": before, "after": before, "removed": 0}
 
     valid_indices: list[int] = [i for i in range(len(metadata)) if i < len(vectors)]
@@ -156,7 +145,7 @@ def vacuum_collection(collection: str) -> dict[str, int]:
     removed: int = before - after
 
     if removed == 0 and np.array_equal(vectors, clean_vectors):
-        logger.info(f"Vacuum: colección ya consistente | collection={collection}")
+        logger.info(f"Vacuum: collection already consistent | collection={collection}")
         return {"before": before, "after": after, "removed": 0}
 
     dimension: int = clean_vectors.shape[1]
@@ -166,7 +155,7 @@ def vacuum_collection(collection: str) -> dict[str, int]:
     _save_raw(collection, clean_metadata, clean_vectors, index)
 
     logger.info(
-        f"Vacuum completado | collection={collection} "
+        f"Vacuum completed | collection={collection} "
         f"| before={before} | after={after} | removed={removed}"
     )
 
@@ -174,7 +163,7 @@ def vacuum_collection(collection: str) -> dict[str, int]:
 
 
 # ======================================================
-# ELIMINACION POR FUENTE
+# DELETE BY SOURCE
 # ======================================================
 
 
@@ -196,7 +185,7 @@ def delete_by_sources(
     source_set: set[str] = set(sources)
 
     if not source_set:
-        logger.warning("delete_by_sources: lista de fuentes vacía.")
+        logger.warning("delete_by_sources: empty source list.")
         return 0
 
     metadata: list[ChunkMetadata]
@@ -205,28 +194,23 @@ def delete_by_sources(
 
     if not metadata:
         logger.warning(
-            f"delete_by_sources: colección vacía o inexistente "
-            f"| collection={collection}"
+            f"delete_by_sources: collection empty or nonexistent | collection={collection}"
         )
         return 0
 
-    # Acceso por atributo — ChunkMetadata es BaseModel, no TypedDict
-    keep_indices: list[int] = [
-        i for i, m in enumerate(metadata) if m.source not in source_set
-    ]
+    # Attribute access — ChunkMetadata is BaseModel, not TypedDict
+    keep_indices: list[int] = [i for i, m in enumerate(metadata) if m.source not in source_set]
 
     removed_count: int = len(metadata) - len(keep_indices)
 
     if removed_count == 0:
         logger.info(
-            f"delete_by_sources: ninguna fuente encontrada "
-            f"| sources={source_set} | collection={collection}"
+            f"delete_by_sources: no source found | sources={source_set} | collection={collection}"
         )
         return 0
 
     logger.info(
-        f"Eliminando chunks | sources={source_set} "
-        f"| count={removed_count} | collection={collection}"
+        f"Deleting chunks | sources={source_set} | count={removed_count} | collection={collection}"
     )
 
     clean_metadata: list[ChunkMetadata] = [metadata[i] for i in keep_indices]
@@ -245,7 +229,7 @@ def delete_by_sources(
         _save_raw(collection, clean_metadata, clean_vectors, index)
     else:
         _clear_collection_files(collection)
-        logger.info(f"Colección vaciada completamente | collection={collection}")
+        logger.info(f"Collection completely emptied | collection={collection}")
 
     if rebuild and clean_metadata:
         vacuum_collection(collection)
@@ -254,17 +238,17 @@ def delete_by_sources(
 
 
 # ======================================================
-# LIMPIEZA TOTAL
+# FULL CLEANUP
 # ======================================================
 
 
 def clear_collection(collection: str) -> None:
     _clear_collection_files(collection)
-    logger.info(f"Colección limpiada | collection={collection}")
+    logger.info(f"Collection cleared | collection={collection}")
 
 
 # ======================================================
-# ALIAS SEMANTICOS PARA URLs
+# SEMANTIC ALIASES FOR URLs
 # ======================================================
 
 
@@ -277,12 +261,12 @@ def delete_urls(collection: str, urls: Sequence[str], *, rebuild: bool = True) -
 
 
 # ======================================================
-# INSPECCION
+# INSPECTION
 # ======================================================
 
 
 class SourceSummary(BaseModel):
-    """Resumen de una fuente indexada en una colección."""
+    """Summary of a source indexed in a collection."""
 
     model_config = ConfigDict(frozen=True)
 
@@ -293,14 +277,14 @@ class SourceSummary(BaseModel):
 
 def list_sources(collection: str) -> list[SourceSummary]:
     """
-    Devuelve un resumen de las fuentes indexadas en la colección,
-    ordenadas por nombre de fuente.
+    Returns a summary of sources indexed in the collection,
+    sorted by source name.
     """
     metadata: list[ChunkMetadata]
     metadata, _ = _load_raw(collection)
 
-    # Dos dicts bien tipados en lugar de dict[str, object],
-    # que causaba errores de tipo al acceder al contador.
+    # Two well-typed dicts instead of dict[str, object],
+    # which caused type errors when accessing the counter.
     chunk_counts: dict[str, int] = {}
     source_types: dict[str, str] = {}
 

@@ -7,7 +7,7 @@ settings.log_path.mkdir(
     exist_ok=True,
 )
 
-FORMAT: str = "%(asctime)s " "[%(levelname)s] " "%(name)s: " "%(message)s"
+FORMAT: str = "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
 
 logging.basicConfig(
     level=logging.INFO,

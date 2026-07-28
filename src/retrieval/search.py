@@ -1,7 +1,7 @@
 """
-Nota sobre # pyright: ignore[reportCallIssue] en index.search():
-  Pylance lee stubs SWIG C++ de faiss; mypy tiene stubs del wrapper Python.
-  La directiva pyright: es ignorada por mypy, sin unused-ignore.
+Note on # pyright: ignore[reportCallIssue] in index.search():
+  Pylance reads SWIG C++ stubs for faiss; mypy has Python wrapper stubs.
+  The pyright: directive is ignored by mypy, without unused-ignore.
 """
 
 from __future__ import annotations
@@ -21,19 +21,19 @@ from src.nlp.embedders.encoder import get_encoder
 
 def build_queries(question: str, mode: str) -> list[str]:
     """
-    HARD: 1 query literal.
-    SOFT: 3 queries — literal + 2 variantes semánticas.
+    HARD: 1 literal query.
+    SOFT: 3 queries -- literal + 2 semantic variants.
 
-    El historial viaja como mensajes de API en generate.py,
-    no como variante de query adicional.
+    History travels as API messages in generate.py,
+    not as an additional query variant.
     """
     if mode == ChatMode.HARD:
         return [question]
 
     return [
         question,
-        f"Explica el concepto: {question}",
-        f"Relaciona ideas sobre: {question}",
+        f"Explain the concept: {question}",
+        f"Relate ideas about: {question}",
     ]
 
 
@@ -74,13 +74,13 @@ def retrieve(
                 query, top_k_initial
             )
 
-            for score, idx in zip(scores[0], indices[0]):
+            for score, idx in zip(scores[0], indices[0], strict=False):
                 if idx == -1:
                     continue
 
                 item = metadata[idx]
 
-                # Acceso por atributo — ChunkMetadata es BaseModel
+                # Attribute access -- ChunkMetadata is BaseModel
                 results.append(
                     SearchResult(
                         score=float(score),
@@ -119,6 +119,19 @@ def rerank(results: list[SearchResult]) -> list[SearchResult]:
 
 
 # ======================================================
+# FORMATTING
+# ======================================================
+
+
+def format_context_chunks(results: list[SearchResult]) -> list[str]:
+    """Format SearchResult objects into context chunks for prompt building."""
+    return [
+        f"SOURCE: {r.source}\nCOLLECTION: {r.collection}\nPAGE: {r.page}\n\n{r.text}"
+        for r in results
+    ]
+
+
+# ======================================================
 # PUBLIC API
 # ======================================================
 
@@ -131,15 +144,15 @@ def search(
     top_k_final: int | None = None,
 ) -> tuple[list[SearchResult], float]:
     """
-    top_k_initial/top_k_final: parámetros internos, ya sin ningún caller
-    que los override -- ver GenerationOptions en src/api/schemas/chat.py,
-    que dejó de tener estos campos (retrieval pasó a ser exclusivamente
-    configuración de servidor, .env). None (el único valor que llega
-    hoy desde retrieve_node/chat.py) usa el default de settings para el
-    modo (SOFT/HARD). Se mantienen como parámetros de la función porque
-    siguen siendo una pieza interna razonable (ej. tests, o un futuro
-    caller interno que necesite un top_k puntual) -- lo que se eliminó
-    fue el camino que los exponía como override por-request desde la API.
+    top_k_initial/top_k_final: internal parameters, no longer with any caller
+    that overrides them -- see GenerationOptions in src/api/schemas/chat.py,
+    which no longer has these fields (retrieval became exclusively server-side
+    configuration via .env). None (the only value that currently arrives from
+    retrieve_node/chat.py) uses the settings default for the mode (SOFT/HARD).
+    They are kept as function parameters because they remain a reasonable
+    internal piece (e.g. tests, or a future internal caller needing a specific
+    top_k) -- what was removed was the path that exposed them as per-request
+    overrides from the API.
     """
 
     if mode == ChatMode.SOFT:

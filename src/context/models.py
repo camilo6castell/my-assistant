@@ -1,17 +1,17 @@
 """
-Modelos de dominio del sistema RAG.
+Domain models for the RAG system.
 
-Usan BaseModel con frozen=True porque son objetos de solo lectura:
-  - Se crean durante la búsqueda y se consumen en el prompt.
-  - No deben mutarse después de su creación.
-  - frozen=True habilita hashing, lo que los hace usables en sets y como dict keys.
+They use BaseModel with frozen=True because they are read-only objects:
+  - Created during retrieval and consumed in the prompt.
+  - Must not be mutated after creation.
+  - frozen=True enables hashing, making them usable in sets and as dict keys.
 """
 
 from pydantic import BaseModel, ConfigDict
 
 
 class ContextSource(BaseModel):
-    """Referencia a una fuente de datos indexada."""
+    """Reference to an indexed data source."""
 
     model_config = ConfigDict(frozen=True)
 
@@ -22,10 +22,10 @@ class ContextSource(BaseModel):
 
 class SearchResult(BaseModel):
     """
-    Resultado de una búsqueda semántica.
+    Result of a semantic search.
 
-    Combina el fragmento de texto recuperado con su metadata de origen
-    y el score de similitud coseno con la query.
+    Combines the retrieved text fragment with its source metadata
+    and the cosine similarity score with the query.
     """
 
     model_config = ConfigDict(frozen=True)

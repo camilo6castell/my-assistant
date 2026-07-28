@@ -1,4 +1,4 @@
-# python -m src.ingest.web_ingest <categoria> <coleccion> <url>
+# python -m src.ingest.web_ingest <category> <collection> <url>
 
 import sys
 
@@ -21,14 +21,14 @@ from src.utils.logger import logger
 
 def extract_main_content(url: str) -> str | None:
     try:
-        logger.info(f"Descargando URL: {url}")
+        logger.info(f"Downloading URL: {url}")
         response: requests.Response = requests.get(url, timeout=10)
         response.raise_for_status()
         doc: Document = Document(response.text)
         soup: BeautifulSoup = BeautifulSoup(doc.summary(), "html.parser")
         return soup.get_text(separator="\n")
     except Exception as e:
-        logger.error(f"Error extrayendo contenido de {url}: {e}")
+        logger.error(f"Error extracting content from {url}: {e}")
         return None
 
 
@@ -38,26 +38,26 @@ def main() -> None:
     url: str = sys.argv[3]
     collection: str = f"{category}/{collection_name}"
 
-    logger.info(f"Iniciando web ingest: {collection}")
+    logger.info(f"Starting web ingest: {collection}")
 
     collection_data: RawCollection = load_collection(collection)
 
-    # Acceso por atributo — ChunkMetadata es BaseModel
+    # Attribute access — ChunkMetadata is a BaseModel
     existing_sources: set[str] = {m.source for m in collection_data["metadata"]}
 
     if url in existing_sources:
-        logger.warning("URL ya indexada.")
-        print("URL ya indexada.")
+        logger.warning("URL already indexed.")
+        print("URL already indexed.")
         return
 
     text: str | None = extract_main_content(url)
 
     if not text:
-        print("No se pudo extraer contenido.")
+        print("Could not extract content.")
         return
 
     chunks: list[str] = chunk_text(text)
-    logger.info(f"Chunks generados: {len(chunks)}")
+    logger.info(f"Chunks generated: {len(chunks)}")
 
     new_metadata: list[ChunkMetadata] = [
         build_metadata(
@@ -79,7 +79,7 @@ def main() -> None:
         new_metadata=new_metadata,
     )
 
-    print(f"\nSe indexaron {len(chunks)} chunks en '{collection}'.\n")
+    print(f"\nIndexed {len(chunks)} chunks in '{collection}'.\n")
 
 
 if __name__ == "__main__":

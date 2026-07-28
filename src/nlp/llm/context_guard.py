@@ -1,40 +1,42 @@
 """
-Guard preventivo de límite de contexto -- corre ANTES de llamar al LLM,
-tanto en /query (src/api/routers/chat.py) como en /task/query
+Preventive context-limit guard -- runs BEFORE calling the LLM, both in
+/query (src/api/routers/chat.py) and in /task/query
 (src/api/routers/task.py).
 
-No trunca ni reescribe nada automáticamente: si el request no entra,
-lanza ContextLimitExceeded con el detalle exacto para que el router lo
-traduzca a un 413 y el frontend se lo muestre al usuario ANTES de
-esperar una respuesta que iba a fallar (o peor, a devolver una
-respuesta cortada a mitad de frase porque el modelo se quedó sin
-espacio para terminarla).
+It does not truncate or rewrite anything automatically: if the request
+does not fit, it raises ContextLimitExceeded with the exact details so
+the router can translate it to a 413 and the frontend can show it to
+the user BEFORE waiting for a response that would have failed (or
+worse, returned a response cut off mid-sentence because the model ran
+out of space to finish it).
 """
 
 from __future__ import annotations
 
 from src.cli.types import TurnMemory
 from src.config.models import get_context_window
+from src.config.settings import settings
 from src.nlp.llm.providers import get_client
 from src.utils.tokens import estimate_tokens
 
-# Margen de seguridad sobre el estimado de tokens -- tiktoken/heurística
-# nunca va a matchear el tokenizador real exacto del modelo activo; este
-# colchón absorbe ese margen de error sin bloquear requests que en la
-# práctica entrarían igual.
-SAFETY_MARGIN_RATIO = 0.10
+# Safety margin over the token estimate -- tiktoken/heuristic will
+# never match the active model's exact real tokenizer; this cushion
+# absorbs that error margin without blocking requests that would fit in
+# practice anyway.
+SAFETY_MARGIN_RATIO = settings.context_guard_safety_margin
 
-# Tokens reservados para la respuesta cuando el request no especifica
-# max_tokens explícito -- piso conservador para no dejar al modelo sin
-# espacio para responder aunque el prompt entre justo en la ventana.
-DEFAULT_OUTPUT_RESERVE = 1024
+# Tokens reserved for the response when the request does not specify
+# max_tokens explicitly -- a conservative floor so the model is never
+# left without space to answer even if the prompt fits exactly in the
+# window.
+DEFAULT_OUTPUT_RESERVE = settings.context_guard_output_reserve
 
 
 class ContextLimitExceeded(Exception):
     """
-    Se lanza cuando el request estimado no entra en la ventana de
-    contexto del modelo activo. El router la captura y la traduce a un
-    HTTPException 413 vía as_detail().
+    Raised when the estimated request does not fit in the active model's
+    context window. The router catches it and translates it to an
+    HTTPException 413 via as_detail().
     """
 
     def __init__(self, *, estimated_tokens: int, limit: int, model: str) -> None:
@@ -42,8 +44,8 @@ class ContextLimitExceeded(Exception):
         self.limit = limit
         self.model = model
         super().__init__(
-            f"El request estimado ({estimated_tokens} tokens) supera el límite "
-            f"utilizable ({limit} tokens) del modelo '{model}'."
+            f"Estimated request ({estimated_tokens} tokens) exceeds the usable "
+            f"limit ({limit} tokens) of model '{model}'."
         )
 
     def as_detail(self) -> dict[str, int | str]:
@@ -64,18 +66,17 @@ def check_context_fit(
     max_tokens: int | None,
 ) -> None:
     """
-    Estima el tamaño total del request (system + historial + prompt) y
-    lo compara contra la ventana de contexto del modelo activo, menos lo
-    reservado para la respuesta. Lanza ContextLimitExceeded si no entra;
-    no devuelve nada si entra (o si el modelo activo no tiene
-    context_window documentado -- ver más abajo).
+    Estimates the total request size (system + history + prompt) and
+    compares it against the active model's context window minus the
+    reserve for the response. Raises ContextLimitExceeded if it does not
+    fit; returns nothing if it fits (or if the active model has no
+    documented context_window -- see below).
 
-    Fail-open: si get_context_window() devuelve None (el modelo activo
-    todavía no tiene su ventana de contexto completada en
-    src/config/models/<backend>.py), esta función no bloquea nada --
-    preferible a romper requests por un dato de configuración
-    incompleto. Completar ese valor es lo que activa el guard para ese
-    modelo.
+    Fail-open: if get_context_window() returns None (the active model
+    still has no context window completed in
+    src/config/models/<backend>.py), this function blocks nothing --
+    preferable to breaking requests over incomplete configuration data.
+    Filling in that value is what activates the guard for that model.
     """
     _, config = get_client(provider)
     limit = get_context_window(config.capabilities, config.model)

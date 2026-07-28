@@ -1,14 +1,15 @@
 """
-Contrato común entre implementaciones de cliente LLM.
+Common contract across LLM client implementations.
 
-generate.py arma el dict de kwargs YA RESUELTO (model/messages/
-max_tokens/think/extra ya traducidos al shape que ese backend espera --
-la temperatura no pasa por acá, viaja fija dentro de ese mismo dict
-desde _MODELS[model], ver src/config/models/build_kwargs()) y se lo
-entrega a cualquier LLMClient sin saber qué hay detrás -- OpenAI SDK,
-cliente nativo de Ollama, lo que sea. Cada implementación solo tiene que
-desempacar ese dict contra su propio SDK (`**kwargs`); no vuelve a tocar
-la mecánica de qué campo significa qué.
+generate.py builds the kwargs dict ALREADY RESOLVED (model/messages/
+max_tokens/think/extra already translated to the shape that backend
+expects -- temperature doesn't pass through here, it travels fixed
+inside that same dict from _MODELS[model], see
+src/config/models/build_kwargs()) and hands it to any LLMClient
+without knowing what's behind it -- OpenAI SDK, native Ollama client,
+whatever. Each implementation only has to unpack that dict against its
+own SDK (`**kwargs`); it never touches the mechanics of what each
+field means.
 """
 
 from __future__ import annotations
@@ -22,12 +23,12 @@ class ChatTurn(TypedDict):
 
 
 class LLMClient(Protocol):
-    """Cualquier forma de completar un chat: OpenAI-compatible, Ollama nativo, etc."""
+    """Any form of completing a chat: OpenAI-compatible, native Ollama, etc."""
 
     def complete(self, kwargs: dict[str, Any]) -> str | None:
         """
-        `kwargs` ya viene armado por src.config.models.build_kwargs() en
-        el shape nativo de este backend. Devuelve el texto de la
-        respuesta, o None si vino vacía.
+        `kwargs` is already built by src.config.models.build_kwargs() in
+        the native shape of this backend. Returns the response text,
+        or None if empty.
         """
         ...

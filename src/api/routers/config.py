@@ -1,8 +1,8 @@
 """
-Router "config" -- descubrimiento de providers y sus capacidades.
+Router "config" -- discovery of providers and their capabilities.
 
-Solo lectura a propósito: ver docstring de src/api/schemas/config.py
-para el razonamiento de por qué no hay un PATCH acá.
+Deliberately read-only: see docstring of src/api/schemas/config.py
+for the reasoning behind why there is no PATCH endpoint here.
 """
 
 from __future__ import annotations
@@ -20,23 +20,23 @@ router = APIRouter(prefix="/config", tags=["config"])
 @router.get("/providers", response_model=ProvidersResponse)
 async def list_providers() -> ProvidersResponse:
     """
-    Lista los providers configurados y qué GenerationOptions acepta
-    cada uno -- el frontend usa `supports` para decidir dinámicamente
-    qué controles mostrar (ej. el botón de "Pensar" solo aparece
-    habilitado si el provider activo lo soporta, deshabilitado con
-    tooltip si no), en vez de hardcodear por nombre de modelo.
-    `default_think` le dice a la UI en qué estado arranca ese botón
-    antes de que el usuario lo toque. `active_generation_provider` le
-    dice cuál de todos es el relevante para esa decisión.
+    Lists configured providers and which GenerationOptions each one
+    accepts -- the frontend uses `supports` to dynamically decide which
+    controls to show (e.g. the "Think" button only appears enabled if
+    the active provider supports it, disabled with tooltip otherwise),
+    instead of hardcoding by model name. `default_think` tells the UI
+    what state that button starts in before the user touches it.
+    `active_generation_provider` tells it which of all providers is the
+    relevant one for that decision.
 
-    `supports`/`default_think` salen de src/config/models/, no de un
-    campo configurado a mano -- no pueden desincronizarse del
-    comportamiento real (ver docstring de src/config/models/__init__.py).
+    `supports`/`default_think` come from src/config/models/, not from a
+    hand-configured field -- they cannot drift out of sync with actual
+    behavior (see docstring of src/config/models/__init__.py).
 
-    No incluye retrieval/max_turns (ver GenerationDefaults, eliminado):
-    esos parámetros pasaron a ser exclusivamente de .env, sin ningún
-    override ni valor "actual" que mostrarle al cliente -- ver
-    GenerationOptions en src/api/schemas/chat.py.
+    Does not include retrieval/max_turns (see GenerationDefaults,
+    removed): those parameters became exclusively .env-driven, with no
+    override or "current" value to show the client -- see
+    GenerationOptions in src/api/schemas/chat.py.
     """
     table = list_provider_configs()
     return ProvidersResponse(

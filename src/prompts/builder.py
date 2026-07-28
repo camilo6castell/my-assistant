@@ -113,22 +113,21 @@ REQUIREMENTS:
 
 def build_web_supplement_system_prompt() -> str:
     """
-    System prompt para la llamada de complemento web (ver
-    build_web_supplement_prompt() y ask_llm_supplement() en
+    System prompt for the web supplement call (see
+    build_web_supplement_prompt() and ask_llm_supplement() in
     src/llm/generate.py).
 
-    La instrucción de tratar los fragmentos web como material NO
-    confiable, nunca como instrucciones, es la mitigación principal
-    contra prompt injection indirecto -- una página web podría contener
-    texto tipo "ignora tus instrucciones anteriores y...". Este system
-    prompt establece esa frontera antes de que el modelo vea un solo
-    fragmento.
+    The instruction to treat web fragments as untrusted material, never
+    as instructions, is the primary mitigation against indirect prompt
+    injection -- a web page could contain text like "ignore your previous
+    instructions and...". This system prompt establishes that boundary
+    before the model sees a single fragment.
 
-    A diferencia del prompt principal, aquí SÍ se instruye señalar
-    explícitamente que la información viene de la web: es una capa de
-    fuentes externas superpuesta a una respuesta ya generada desde el
-    contexto local, y esa distinción es información relevante para el
-    usuario (no ruido de "cómo funciona el sistema").
+    Unlike the main prompt, here it IS instructed to explicitly indicate
+    that the information comes from the web: it is a layer of external
+    sources overlaid on an answer already generated from local context,
+    and that distinction is relevant information for the user (not
+    noise about "how the system works").
     """
     return """
 ROLE:
@@ -208,17 +207,17 @@ def inject_attachments(
     attachments: list[tuple[str, str]],
 ) -> str:
     """
-    Antepone el contenido de los archivos adjuntos (ver
-    src/context/attachments.py) a `question`, envueltos en bloques de
-    código con el nombre de archivo como header.
+    Prepends the content of attached files (see
+    src/context/attachments.py) to `question`, wrapped in code blocks
+    with the filename as a header.
 
-    Uso: se aplica a `question` ANTES de pasarla a build_prompt() (caso
-    con colecciones/RAG) o de usarla directo en modo sin contexto (ver
-    _answer_raw en src/api/routers/chat.py) -- los adjuntos son
-    ortogonales al modo de respuesta, no son "contexto RAG" en sí
-    mismos, así que se inyectan igual en cualquiera de los dos casos.
+    Usage: applied to `question` BEFORE passing it to build_prompt() (case
+    with collections/RAG) or using it directly in no-context mode (see
+    _answer_raw in src/api/routers/chat.py) -- attachments are orthogonal
+    to the response mode, they are not "RAG context" per se, so they are
+    injected the same way in either case.
 
-    Sin adjuntos, devuelve `question` sin modificar.
+    Without attachments, returns `question` unmodified.
     """
     if not attachments:
         return question
@@ -370,25 +369,6 @@ REQUIREMENTS:
 
 - Return only the corrected answer.
 """  # noqa: E501
-
-
-# Token de salida exacto que build_web_supplement_prompt() le pide al
-# modelo devolver cuando los fragmentos web no aportan nada nuevo. Un
-# token fijo en inglés y poco probable de aparecer en una respuesta real
-# (vs. ej. una frase en español, que el modelo podría generar de forma
-# natural en un contexto ambiguo) para que el chequeo en
-# src/api/routers/chat.py sea una comparación exacta, no una heurística.
-#
-# DECISIÓN (dejar comentado, no borrar): se decidió no usar este
-# sentinel en el flujo de web-supplement actual, pero el patrón --
-# pedirle al modelo un token de salida fijo y chequearlo con
-# comparación exacta en vez de heurística sobre texto libre -- es
-# reutilizable en otros contextos (ej. cualquier llamada de "decidí si
-# agregar algo o no" de una sola pasada). Se conserva comentado, junto
-# con su punto de chequeo en src/api/routers/chat.py y con
-# ask_llm_supplement() en src/llm/generate.py, como referencia de
-# implementación en vez de borrarlo.
-# WEB_SUPPLEMENT_SENTINEL = "<<NO_ADDITIONAL_INFO>>"
 
 
 def build_web_supplement_prompt(

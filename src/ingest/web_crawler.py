@@ -24,7 +24,7 @@ from src.utils.logger import logger
 
 def extract_main_content(url: str) -> str | None:
     try:
-        logger.info(f"Descargando contenido: {url}")
+        logger.info(f"Downloading content: {url}")
 
         response: requests.Response = requests.get(url, timeout=10)
         response.raise_for_status()
@@ -33,21 +33,21 @@ def extract_main_content(url: str) -> str | None:
         soup: BeautifulSoup = BeautifulSoup(doc.summary(), "html.parser")
         text: str = soup.get_text(separator="\n")
 
-        logger.info(f"Contenido extraído correctamente: {url}")
+        logger.info(f"Content extracted successfully: {url}")
         return text
 
     except requests.RequestException as e:
-        logger.error(f"Error HTTP en {url}: {e}")
+        logger.error(f"HTTP error on {url}: {e}")
         return None
 
     except Exception as e:
-        logger.error(f"Error extrayendo contenido de {url}: {e}")
+        logger.error(f"Error extracting content from {url}: {e}")
         return None
 
 
 def get_links(url: str, domain: str) -> set[str]:
     try:
-        logger.info(f"Extrayendo links desde: {url}")
+        logger.info(f"Extracting links from: {url}")
 
         response: requests.Response = requests.get(url, timeout=10)
         response.raise_for_status()
@@ -57,9 +57,9 @@ def get_links(url: str, domain: str) -> set[str]:
 
         for a in soup.find_all("a", href=True):
             # FIX: a["href"] retorna _AttributeValue = str | list[str].
-            # urljoin requiere str. El guard isinstance descarta el caso
-            # list[str] (múltiples valores en un atributo HTML) que es
-            # inválido para una URL y que también sería un bug en runtime.
+            # urljoin requires str. The isinstance guard discards the case
+            # where a list[str] (multiple values in an HTML attribute) is
+            # invalid for a URL and would also be a runtime bug.
             raw_href = a["href"]
             if not isinstance(raw_href, str):
                 continue
@@ -70,15 +70,15 @@ def get_links(url: str, domain: str) -> set[str]:
                 clean: str = parsed.scheme + "://" + parsed.netloc + parsed.path
                 links.add(clean)
 
-        logger.info(f"Links encontrados: {len(links)}")
+        logger.info(f"Links found: {len(links)}")
         return links
 
     except requests.RequestException as e:
-        logger.error(f"Error HTTP obteniendo links de {url}: {e}")
+        logger.error(f"HTTP error fetching links from {url}: {e}")
         return set()
 
     except Exception as e:
-        logger.error(f"Error extrayendo links de {url}: {e}")
+        logger.error(f"Error extracting links from {url}: {e}")
         return set()
 
 
@@ -92,7 +92,7 @@ def main() -> None:
 
     collection: str = f"{category}/{collection_name}"
 
-    logger.info(f"Iniciando crawler:{collection}")
+    logger.info(f"Starting crawler: {collection}")
 
     collection_data: RawCollection = load_collection(collection)
     domain: str = urlparse(start_url).netloc
@@ -114,11 +114,11 @@ def main() -> None:
         text: str | None = extract_main_content(url)
 
         if not text:
-            logger.warning(f"No se pudo extraer texto de {url}")
+            logger.warning(f"Could not extract text from {url}")
             continue
 
         chunks: list[str] = chunk_text(text)
-        logger.info(f"Chunks generados ({len(chunks)}) para {url}")
+        logger.info(f"Chunks generated ({len(chunks)}) for {url}")
 
         for i, chunk in enumerate(chunks):
             new_chunks.append(chunk)
@@ -137,21 +137,21 @@ def main() -> None:
             if link not in visited:
                 to_visit.append(link)
 
-        logger.info(f"URLs pendientes: {len(to_visit)}")
+        logger.info(f"Pending URLs: {len(to_visit)}")
         time.sleep(settings.delay)
 
     if not new_chunks:
-        logger.warning("No se encontraron nuevas páginas.")
-        print("No nuevas páginas.")
+        logger.warning("No new pages found.")
+        print("No new pages.")
         return
 
-    logger.info(f"Generando embeddings para {len(new_chunks)} chunks")
+    logger.info(f"Generating embeddings for {len(new_chunks)} chunks")
 
     new_embeddings: np.ndarray = encode_chunks(new_chunks)
     save_collection(collection_data, new_embeddings, new_metadata)
 
-    logger.info(f"Crawler finalizado | chunks={len(new_chunks)}")
-    print(f"Se indexaron {len(new_chunks)} chunks en '{collection}'.")
+    logger.info(f"Crawler finished | chunks={len(new_chunks)}")
+    print(f"Indexed {len(new_chunks)} chunks into '{collection}'.")
 
 
 if __name__ == "__main__":

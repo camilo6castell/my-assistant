@@ -1,10 +1,10 @@
 """
-Configuración de modelos Gemini, vía su endpoint OpenAI-compatible.
+Configuration for Gemini models, via their OpenAI-compatible endpoint.
 
-Mismo patrón que src/config/models/fastflowlm.py -- ver ese docstring
-para el razonamiento general. Gemini (vía este endpoint) no expone hoy
-un equivalente a enable_thinking/think, así que supports_thinking()
-siempre es False acá.
+Same pattern as src/config/models/fastflowlm.py -- see that docstring
+for the general rationale. Gemini (via this endpoint) does not expose an
+equivalent to enable_thinking/think today, so supports_thinking() is
+always False here.
 """
 
 from __future__ import annotations
@@ -33,22 +33,22 @@ def _lookup(model_name: str) -> dict[str, Any]:
     try:
         return _MODELS[model_name]
     except KeyError:
-        raise ValueError(f"Modelo Gemini no soportado: {model_name!r}") from None
+        raise ValueError(f"Unsupported Gemini model: {model_name!r}") from None
 
 
 def context_window(model_name: str) -> int | None:
-    """Ventana de contexto en tokens, o None si no está documentada (ver _CONTEXT_WINDOWS)."""
+    """Context window in tokens, or None if not documented (see _CONTEXT_WINDOWS)."""
     _lookup(model_name)
     return _CONTEXT_WINDOWS.get(model_name)
 
 
 def supports_thinking(model_name: str) -> bool:
-    _lookup(model_name)  # valida que el modelo exista
+    _lookup(model_name)  # validate that the model exists
     return False
 
 
 def default_think(model_name: str) -> bool | None:
-    _lookup(model_name)  # valida que el modelo exista
+    _lookup(model_name)  # validate that the model exists
     return None
 
 
@@ -66,7 +66,7 @@ def build_kwargs(
 ) -> dict[str, Any]:
     if think is not None:
         raise ValueError(
-            f"El modelo '{model_name}' (Gemini) no tiene modo de razonamiento configurado."
+            f"Model '{model_name}' (Gemini) does not have a reasoning mode configured."
         )
 
     kwargs = deepcopy(_lookup(model_name))

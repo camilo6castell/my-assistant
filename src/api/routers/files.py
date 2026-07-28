@@ -1,24 +1,23 @@
 """
-Router "files" -- subir archivos para usarlos como contexto RAG.
+Router "files" -- upload files to use as RAG context.
 
-Dos destinos posibles para un archivo subido (toggle attach_to_collection):
-  - True:  se procesa con el mismo pipeline que ingest/ingest.py y se
-           persiste a disco en `collection` -- queda disponible para
-           cualquier conversación futura, igual que si se hubiera
-           corrido el CLI de ingest.
-  - False (default): se procesa igual, pero el resultado vive solo en
-           memoria, scopeado a `conversation_id` (ver
-           src/context/ephemeral.py). Nunca toca disco.
+Two possible destinations for an uploaded file (toggle attach_to_collection):
+  - True:  processed with the same pipeline as ingest/ingest.py and
+           persisted to disk in `collection` -- available for any future
+           conversation, just as if the ingest CLI had been run.
+  - False (default): processed the same way, but the result lives only
+           in memory, scoped to `conversation_id` (see
+           src/context/ephemeral.py). Never touches disk.
 
-Borrado:
-  DELETE /files/{conversation_id}/{file_id} borra un archivo puntual de
-  la colección efímera de una conversación (y solo de ahí -- no hay
-  forma de "borrar un archivo" de una colección persistida desde acá;
-  eso es responsabilidad del CLI/ingest, fuera de alcance de este router).
+Deletion:
+  DELETE /files/{conversation_id}/{file_id} deletes a single file from
+  the ephemeral collection of a conversation (and only from there -- there
+  is no way to "delete a file" from a persisted collection from here;
+  that is the ingest CLI's responsibility, out of scope for this router).
 
-  DELETE /files/{conversation_id} borra toda la colección efímera de la
-  conversación de una vez -- pensado para cuando el usuario cierra o
-  elimina la conversación completa en la UI.
+  DELETE /files/{conversation_id} deletes the entire ephemeral collection
+  for the conversation at once -- intended for when the user closes or
+  deletes the full conversation in the UI.
 """
 
 from __future__ import annotations
@@ -54,15 +53,15 @@ _SUPPORTED_SUFFIXES = {".pdf", ".html", ".txt"}
 
 def _extract_pages(filename: str, raw_bytes: bytes) -> list[tuple[int, str]]:
     """
-    Reutiliza el parsing de PDF/HTML/TXT de ingest/ingest.py, que espera
-    un Path en disco. El archivo temporal se borra apenas termina de leerse,
-    nunca queda persistido -- eso lo decide attach_to_collection, no esto.
+    Reuse the PDF/HTML/TXT parsing from ingest/ingest.py, which expects
+    a Path on disk. The temporary file is deleted as soon as reading
+    finishes, never persisted -- that is decided by attach_to_collection, not here.
     """
     suffix = Path(filename).suffix.lower()
     if suffix not in _SUPPORTED_SUFFIXES:
         raise HTTPException(
             status_code=415,
-            detail=f"Formato no soportado: '{suffix}'. Soportados: {sorted(_SUPPORTED_SUFFIXES)}.",
+            detail=f"Unsupported format: '{suffix}'. Supported: {sorted(_SUPPORTED_SUFFIXES)}.",
         )
 
     with tempfile.NamedTemporaryFile(suffix=suffix) as tmp:
@@ -73,7 +72,7 @@ def _extract_pages(filename: str, raw_bytes: bytes) -> list[tuple[int, str]]:
     if not pages:
         raise HTTPException(
             status_code=422,
-            detail=f"No se pudo extraer contenido de '{filename}'.",
+            detail=f"Could not extract content from '{filename}'.",
         )
 
     return pages
@@ -85,7 +84,7 @@ def _attach_to_persisted_collection(
     pages: list[tuple[int, str]],
     file_id: str,
 ) -> int:
-    """Ingesta un archivo a una colección persistida, igual que ingest/ingest.py."""
+    """Ingest a file into a persisted collection, same as ingest/ingest.py."""
     collection_data: RawCollection = load_collection(collection)
 
     new_chunks: list[str] = []
@@ -109,7 +108,7 @@ def _attach_to_persisted_collection(
     if not new_chunks:
         raise HTTPException(
             status_code=422,
-            detail=f"No se generaron chunks para '{filename}'.",
+            detail=f"No chunks were generated for '{filename}'.",
         )
 
     embeddings = encode_chunks(new_chunks)
@@ -130,35 +129,35 @@ async def upload_file(
     ephemeral_store: EphemeralStore = Depends(get_ephemeral_store),
 ) -> FileUploadResponse:
     """
-    Sube un archivo (.pdf, .html, .txt) y lo procesa con el mismo
-    pipeline de chunking/embeddings que usa el CLI de ingest.
+    Upload a file (.pdf, .html, .txt) and process it with the same
+    chunking/embeddings pipeline used by the ingest CLI.
 
-    attach_to_collection=True requiere `collection` (formato
-    "namespace/coleccion", igual que el CLI) y persiste el resultado a
-    disco -- disponible para cualquier conversación futura.
+    attach_to_collection=True requires `collection` (format
+    "namespace/collection", same as the CLI) and persists the result to
+    disk -- available for any future conversation.
 
-    attach_to_collection=False (default) lo guarda solo en memoria,
-    scopeado a `conversation_id` -- se pierde si el servidor se reinicia
-    o si nadie lo usa por más de EPHEMERAL_TTL (ver src/api/deps.py).
+    attach_to_collection=False (default) stores it in memory only,
+    scoped to `conversation_id` -- lost if the server restarts or if
+    nobody uses it for more than EPHEMERAL_TTL (see src/api/deps.py).
     """
     if attach_to_collection and not collection:
         raise HTTPException(
             status_code=422,
-            detail="'collection' es requerido cuando attach_to_collection=True.",
+            detail="'collection' is required when attach_to_collection=True.",
         )
 
-    filename = file.filename or "archivo_sin_nombre"
+    filename = file.filename or "unnamed_file"
     raw_bytes = await file.read()
     pages = _extract_pages(filename, raw_bytes)
 
     if attach_to_collection:
-        assert collection is not None  # ya validado arriba
-        # file_id acá es solo informativo (no hay borrado por-archivo en
-        # colecciones persistidas, eso es responsabilidad del CLI de ingest).
+        assert collection is not None  # already validated above
+        # file_id here is informational only (there is no per-file deletion in
+        # persisted collections; that is the responsibility of the ingest CLI).
         file_id = f"persisted-{abs(hash((collection, filename))) & 0xFFFFFF:06x}"
         chunk_count = _attach_to_persisted_collection(collection, filename, pages, file_id)
         logger.info(
-            f"[api] archivo adjuntado a colección persistida | collection={collection} "
+            f"[api] file attached to persisted collection | collection={collection} "
             f"| file={filename} | chunks={chunk_count}"
         )
         return FileUploadResponse(
@@ -189,7 +188,7 @@ async def list_ephemeral_files(
     conversation_id: str,
     ephemeral_store: EphemeralStore = Depends(get_ephemeral_store),
 ) -> EphemeralFilesResponse:
-    """Lista los archivos efímeros adjuntos a una conversación."""
+    """List ephemeral files attached to a conversation."""
     return EphemeralFilesResponse(
         conversation_id=conversation_id,
         files=ephemeral_store.list_files(conversation_id),
@@ -203,16 +202,16 @@ async def delete_ephemeral_file(
     ephemeral_store: EphemeralStore = Depends(get_ephemeral_store),
 ) -> DeleteResponse:
     """
-    Borra un archivo puntual de la colección efímera de una conversación.
+    Delete a specific file from the ephemeral collection of a conversation.
 
-    404 si la conversación o el archivo no existen -- ya sea porque
-    nunca se subió, porque ya se borró antes, o porque expiró por TTL.
+    Returns 404 if the conversation or file do not exist -- either because
+    it was never uploaded, was already deleted, or expired via TTL.
     """
     deleted = ephemeral_store.remove_file(conversation_id, file_id)
     if not deleted:
         raise HTTPException(
             status_code=404,
-            detail=f"No se encontró el archivo '{file_id}' en la conversación '{conversation_id}'.",
+            detail=f"File '{file_id}' not found in conversation '{conversation_id}'.",
         )
     return DeleteResponse(deleted=True)
 
@@ -222,11 +221,11 @@ async def delete_ephemeral_conversation(
     conversation_id: str,
     ephemeral_store: EphemeralStore = Depends(get_ephemeral_store),
 ) -> DeleteResponse:
-    """Borra toda la colección efímera de una conversación (todos sus archivos a la vez)."""
+    """Delete the entire ephemeral collection for a conversation (all files at once)."""
     deleted = ephemeral_store.remove_conversation(conversation_id)
     if not deleted:
         raise HTTPException(
             status_code=404,
-            detail=f"La conversación '{conversation_id}' no tiene archivos efímeros.",
+            detail=f"Conversation '{conversation_id}' has no ephemeral files.",
         )
     return DeleteResponse(deleted=True)

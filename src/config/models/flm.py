@@ -1,19 +1,19 @@
 """
-Configuración de modelos FastFlowLM (backend "flm" en .env.providers) --
-un backend OpenAI-compatible.
+Configuration for FastFlowLM models (backend "flm" in .env.providers) --
+an OpenAI-compatible backend.
 
-_MODELS es la ÚNICA fuente de verdad: un dict por modelo con exactamente
-los kwargs que espera `client.chat.completions.create(**kwargs)`. Para
-tocar el comportamiento de un modelo puntual (temperatura, top_p, si
-piensa por defecto...) se edita acá, nada más -- build_kwargs() nunca
-hace falta tocarlo para eso.
+_MODELS is the SINGLE source of truth: a dict per model with exactly the
+kwargs that `client.chat.completions.create(**kwargs)` expects. To
+tune the behavior of a specific model (temperature, top_p, whether it
+thinks by default...) edit this file and this file only -- you never need
+to touch build_kwargs() for that.
 
-Todo acá son funciones puras sobre `model_name` + `_MODELS[model_name]`,
-sin estado mutable compartido: build_kwargs() siempre deepcopy-ea desde
-_MODELS antes de aplicar overrides, así que dos requests concurrentes
-para el mismo modelo nunca pueden pisarse un override del otro (a
-diferencia del diseño anterior, donde un único FastFlowLMModelConfig por
-proceso mutaba su propio _config con set_thinking()).
+Everything here is pure functions over `model_name` + `_MODELS[model_name]`,
+with no shared mutable state: build_kwargs() always deepcopies from
+_MODELS before applying overrides, so two concurrent requests for the
+same model can never stomp on each other's override (unlike the previous
+design where a single FastFlowLMModelConfig per process mutated its own
+_config via set_thinking()).
 """
 
 from __future__ import annotations
@@ -71,12 +71,12 @@ def _lookup(model_name: str) -> dict[str, Any]:
     try:
         return _MODELS[model_name]
     except KeyError:
-        raise ValueError(f"Modelo FastFlowLM no soportado: {model_name!r}") from None
+        raise ValueError(f"Unsupported FastFlowLM model: {model_name!r}") from None
 
 
 def context_window(model_name: str) -> int | None:
-    """Ventana de contexto en tokens, o None si no está documentada (ver _CONTEXT_WINDOWS)."""
-    _lookup(model_name)  # valida que el modelo exista
+    """Context window in tokens, or None if not documented (see _CONTEXT_WINDOWS)."""
+    _lookup(model_name)  # validate that the model exists
     return _CONTEXT_WINDOWS.get(model_name)
 
 
@@ -88,7 +88,7 @@ def supports_thinking(model_name: str) -> bool:
 
 
 def default_think(model_name: str) -> bool | None:
-    """Valor de enable_thinking YA escrito en _MODELS -- None si no aplica."""
+    """enable_thinking value ALREADY written in _MODELS -- None if not applicable."""
     if not supports_thinking(model_name):
         return None
     extra = _lookup(model_name).get("extra_body", {})
@@ -102,7 +102,7 @@ def supports_max_tokens(model_name: str) -> bool:
 
 
 def _set_thinking(extra_body: dict[str, Any], enabled: bool) -> None:
-    """Muta un extra_body YA COPIADO (ver build_kwargs) -- nunca el original."""
+    """Mutate an extra_body ALREADY COPIED (see build_kwargs) -- never the original."""
     if "enable_thinking" in extra_body:
         extra_body["enable_thinking"] = enabled
     chat_kwargs = extra_body.get("chat_template_kwargs")
@@ -119,22 +119,22 @@ def build_kwargs(
     extra: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """
-    Arma el dict listo para `client.chat.completions.create(**kwargs)`.
+    Assemble the dict ready for `client.chat.completions.create(**kwargs)`.
 
-    No acepta `temperature`: siempre queda tal cual está en
-    _MODELS[model_name] -- no hay override por-request para eso, es
-    responsabilidad exclusiva de este archivo (editar la entrada del
-    modelo acá si hace falta cambiarla).
+    Does not accept `temperature`: it always stays as written in
+    _MODELS[model_name] -- there is no per-request override for that; it
+    is this file's sole responsibility (edit the model entry here if it
+    needs changing).
 
-    Los demás `None` significan "usar lo que ya está en
-    _MODELS[model_name]" -- por eso, por ejemplo, qwen3.5:9b viene con
-    thinking OFF por defecto sin que este módulo necesite un concepto
-    separado de "default": ya está escrito en su entrada de _MODELS.
+    The remaining `None` values mean "use whatever is already in
+    _MODELS[model_name]" -- that is why, for example, qwen3.5:9b ships
+    with thinking OFF by default without this module needing a separate
+    "default" concept: it is already written in its _MODELS entry.
 
-    Lanza ValueError si se pide `think` para un modelo sin soporte de
-    razonamiento -- el caller (src/llm/generate.py) ya valida esto contra
-    `supports_thinking()` antes de llegar acá, así que en circulación
-    normal este error nunca debería dispararse.
+    Raises ValueError if `think` is requested for a model without
+    reasoning support -- the caller (src/llm/generate.py) already
+    validates this against `supports_thinking()` before reaching here,
+    so under normal circulation this error should never fire.
     """
     kwargs = deepcopy(_lookup(model_name))
     kwargs["model"] = model_name
@@ -145,7 +145,7 @@ def build_kwargs(
 
     if think is not None:
         if not supports_thinking(model_name):
-            raise ValueError(f"El modelo '{model_name}' no tiene modo de razonamiento configurado.")
+            raise ValueError(f"Model '{model_name}' does not have a reasoning mode configured.")
         extra_body = kwargs.setdefault("extra_body", {})
         _set_thinking(extra_body, think)
 

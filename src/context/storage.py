@@ -24,7 +24,6 @@ class StorageData(TypedDict):
 
 
 class CollectionStorage:
-
     def __init__(self, collection_name: str) -> None:
         self.collection_name: str = collection_name
         self.base_path: Path = settings.vector_store_path / collection_name
@@ -46,9 +45,7 @@ class CollectionStorage:
 
         with open(self.metadata_path, "rb") as f:
             raw: list[object] = pickle.load(f)
-            metadata: list[ChunkMetadata] = [
-                ChunkMetadata.model_validate(m) for m in raw
-            ]
+            metadata: list[ChunkMetadata] = [ChunkMetadata.model_validate(m) for m in raw]
 
         vectors: np.ndarray = np.load(self.vectors_path)
 

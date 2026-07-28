@@ -1,6 +1,6 @@
 """
-Schemas del dominio "chat" -- las funciones regulares de la aplicación:
-hacer una pregunta, listar colecciones disponibles.
+Schemas for the "chat" domain -- the application's regular functions:
+ask a question, list available collections.
 """
 
 from __future__ import annotations
@@ -12,48 +12,49 @@ from pydantic import BaseModel, Field
 
 class GenerationOptions(BaseModel):
     """
-    Overrides opcionales de generación para una llamada puntual a
-    POST /query o POST /query/agent.
+    Optional generation overrides for a single call to
+    POST /query or POST /query/agent.
 
-    La temperatura NO es uno de estos campos -- es responsabilidad
-    exclusiva de cada archivo en src/config/models/ (_MODELS[model]),
-    igual que top_p, presence_penalty, etc. No es un override
-    por-request: es una propiedad del modelo, se edita en el JSON de su
-    backend y aplica a todas las llamadas a ese modelo. Si en algún
-    momento hace falta volver a exponer un override real de temperatura
-    por-request, ver el historial de este archivo antes de reinventar la
-    rueda (el diseño anterior con Settings.llm_temperature pisaba
-    silenciosamente el valor de _MODELS en cada request; ver
-    src/llm/generate.py).
+    Temperature is NOT one of these fields -- it is the exclusive
+    responsibility of each file in src/config/models/ (_MODELS[model]),
+    just like top_p, presence_penalty, etc. It is not a per-request
+    override: it is a model property, edited in its backend JSON and
+    applied to all calls to that model. If at some point a real
+    per-request temperature override needs to be exposed again,
+    see the history of this file before reinventing the wheel (the
+    previous design with Settings.llm_temperature silently overwrote
+    the _MODELS value on every request; see src/llm/generate.py).
 
-    think_mode: campo con nombre porque es un concepto común a la
-    mayoría de providers/modelos razonadores (pensado para el botón
-    "Pensar" en la UI). None significa "usar el default que ya está
-    escrito en _MODELS[model] para este modelo" -- no "usar 0.2 de un
-    .env" como pasaba antes con temperature.
+    think_mode: named field because it is a common concept across
+    most reasoning provider/model combos (designed for the "Think"
+    button in the UI). None means "use the default already written
+    in _MODELS[model] for this model" -- not "use 0.2 from a .env"
+    as happened before with temperature.
 
-    extra: escape hatch genérico para cualquier parámetro que el backend
-    NO modela explícitamente (top_p, presence_penalty, un flag propio de
-    un provider nuevo...). Se envía tal cual al provider vía extra_body
-    del cliente OpenAI -- sin validar su contenido, porque por definición
-    puede ser cualquier cosa que un provider específico entienda. Por eso
-    requiere que el provider declare "extra" en su `supports` (ver
-    ProviderConfig en src/llm/providers.py): es un opt-in explícito, no
-    "cualquier JSON pasa a cualquier servidor".
+    extra: generic escape hatch for any parameter that the backend
+    does NOT explicitly model (top_p, presence_penalty, a custom flag
+    from a new provider...). It is sent as-is to the provider via the
+    OpenAI client's extra_body -- without validating its content,
+    because by definition it can be anything a specific provider
+    understands. That is why it requires the provider to declare
+    "extra" in its `supports` (see ProviderConfig in
+    src/llm/providers.py): it is an explicit opt-in, not "any JSON
+    passes to any server".
 
-    No incluye max_turns ni top_k_initial/top_k_final: la ventana de
-    historial y el retrieval (ver src/retrieval/search.py) pasaron a ser
-    exclusivamente configuración de servidor (settings.max_turns,
-    settings.soft_top_k_*/hard_top_k_*, ver .env) -- no hay override
-    por-request para ninguno de los dos. Si en algún momento hace falta
-    reexponerlos, ver el historial de este archivo antes de reinventar la
-    rueda: existieron acá y se sacaron deliberadamente, no por omisión.
+    Does not include max_turns or top_k_initial/top_k_final: the chat
+    history window and retrieval (see src/retrieval/search.py) have
+    become exclusively server-side configuration (settings.max_turns,
+    settings.soft_top_k_*/hard_top_k_*, see .env) -- there is no
+    per-request override for either. If they ever need to be
+    re-exposed, see the history of this file before reinventing the
+    wheel: they existed here and were deliberately removed, not omitted
+    by accident.
 
-    Ninguno de estos valores muta Settings ni ProviderConfig -- son
-    parámetros por-request, no estado del servidor (ver docstring de
-    src/llm/generate.py para el porqué). El servidor valida cada campo
-    contra ProviderConfig.supports antes de usarlo y devuelve 400 si el
-    provider activo no lo soporta.
+    None of these values mutate Settings or ProviderConfig -- they are
+    per-request parameters, not server state (see the docstring of
+    src/llm/generate.py for why). The server validates each field
+    against ProviderConfig.supports before using it and returns 400 if
+    the active provider does not support it.
     """
 
     think_mode: bool | None = None
@@ -62,7 +63,7 @@ class GenerationOptions(BaseModel):
 
 
 class WebSource(BaseModel):
-    """Fuente web citada en una respuesta (ver QueryResponse.web_sources)."""
+    """Web source cited in a response (see QueryResponse.web_sources)."""
 
     title: str
     url: str
@@ -70,40 +71,41 @@ class WebSource(BaseModel):
 
 class QueryRequest(BaseModel):
     """
-    Payload para POST /query y POST /query/agent.
+    Payload for POST /query and POST /query/agent.
 
-    collections:    tokens con la misma sintaxis que el CLI, ej.
+    collections:    tokens with the same syntax as the CLI, e.g.
                     ["sociologia", "psicoanalisis/Freud_Suenos"].
     mode:           "SOFT" (default) | "HARD"
-    chat_history:   turnos previos de conversación. Cada turno es un dict
-                    {"user": "...", "assistant": "..."}. El cliente es
-                    responsable de mantener y reenviar el historial -- la
-                    API es stateless por diseño.
-    conversation_id: id opaco que el cliente genera una vez por
-                    conversación (ej. crypto.randomUUID() en el
-                    frontend). Hace falta si esa conversación tiene
-                    colecciones efímeras (POST /api/v1/files) o archivos
-                    adjuntos ad-hoc (POST /api/v1/attachments) -- si no
-                    tiene ninguno de los dos, se puede omitir.
-    generation:     overrides opcionales de temperatura/tokens/think mode.
-    web_search:     si True, complementa (o reemplaza, si no hay
-                    colecciones/archivos) el contexto con una búsqueda
-                    web vía Tavily -- ver _run_web_search en
-                    src/api/routers/chat.py para el detalle de los dos
-                    modos. Requiere settings.web_search_enabled=True; si
-                    no, el router devuelve 400. Best-effort: si la
-                    búsqueda web falla y SÍ hay colecciones/archivos, el
-                    request no falla por eso (ver QueryResponse.used_web_search).
+    chat_history:   previous conversation turns. Each turn is a dict
+                    {"user": "...", "assistant": "..."}. The client is
+                    responsible for maintaining and re-sending the history
+                    -- the API is stateless by design.
+    conversation_id: opaque id that the client generates once per
+                    conversation (e.g. crypto.randomUUID() in the
+                    frontend). Required if the conversation has
+                    ephemeral files (POST /api/v1/files) or ad-hoc
+                    attachments (POST /api/v1/attachments) -- can be
+                    omitted if neither is present.
+    generation:     optional temperature/tokens/think mode overrides.
+    web_search:     if True, complements (or replaces, if there are no
+                    collections/files) the context with a web search
+                    via Tavily -- see _run_web_search in
+                    src/api/routers/chat.py for details on the two
+                    modes. Requires settings.web_search_enabled=True;
+                    otherwise the router returns 400. Best-effort: if
+                    the web search fails and there ARE collections/files,
+                    the request does not fail because of it (see
+                    QueryResponse.used_web_search).
 
-    Sin `collections`, sin colección efímera, y con web_search=False: NO
-    es un error (a diferencia de una versión anterior de este schema,
-    que exigía al menos una fuente de contexto). El router responde
-    directo con el LLM, sin ningún system prompt ni retrieval -- ver
-    _answer_raw() en src/api/routers/chat.py. Es el modo esperado para
-    preguntas sueltas o para adjuntar un archivo puntual
-    (POST /api/v1/attachments) sin tener ninguna colección elegida: el
-    usuario es responsable de darle rol/reglas/tarea al modelo en su
-    propio mensaje.
+    Without `collections`, without ephemeral files, and with
+    web_search=False: this is NOT an error (unlike a previous version
+    of this schema that required at least one context source). The
+    router responds directly with the LLM, without any system prompt or
+    retrieval -- see _answer_raw() in src/api/routers/chat.py. This is
+    the expected mode for standalone questions or for attaching a
+    single file (POST /api/v1/attachments) without any selected
+    collection: the user is responsible for giving the model its
+    role/rules/task in their own message.
     """
 
     question: str = Field(..., min_length=1)
@@ -117,25 +119,25 @@ class QueryRequest(BaseModel):
 
 class QueryResponse(BaseModel):
     """
-    Respuesta de POST /query y POST /query/agent.
+    Response for POST /query and POST /query/agent.
 
-    reformulated:     solo relevante en /query/agent. True si el grafo
-                       reformuló la query antes de generar.
-    used_web_search:   lo que REALMENTE pasó, no lo que se pidió -- False
-                       si se pidió web_search=True pero la búsqueda no
-                       devolvió resultados utilizables (ver
-                       src/retrieval/web_search.py), aunque el resto de
-                       la respuesta se haya generado igual con el
-                       contexto local disponible.
-    web_sources:       fuentes web efectivamente usadas (título + URL),
-                       para que el frontend las muestre como citas. None
-                       si used_web_search es False.
-    web_search_quota_exceeded: True si Tavily devolvió que se agotó la
-                       cuota de la cuenta (free tier u otro plan) --
-                       señal distinta de "sin resultados" para que el
-                       frontend pueda avisar al usuario y deshabilitar
-                       el botón de búsqueda web en vez de fallar en
-                       silencio en cada mensaje siguiente.
+    reformulated:     only relevant in /query/agent. True if the graph
+                       reformulated the query before generating.
+    used_web_search:   what ACTUALLY happened, not what was requested --
+                       False if web_search=True was requested but the
+                       search returned no usable results (see
+                       src/retrieval/web_search.py), even though the rest
+                       of the response was still generated with the
+                       locally available context.
+    web_sources:       web sources actually used (title + URL), for the
+                       frontend to display as citations. None if
+                       used_web_search is False.
+    web_search_quota_exceeded: True if Tavily returned that the account
+                       quota was exhausted (free tier or other plan) --
+                       a distinct signal from "no results" so the
+                       frontend can warn the user and disable the web
+                       search button instead of failing silently on
+                       every subsequent message.
     """
 
     answer: str
@@ -148,6 +150,6 @@ class QueryResponse(BaseModel):
 
 
 class CollectionsResponse(BaseModel):
-    """Respuesta de GET /api/v1/collections."""
+    """Response for GET /api/v1/collections."""
 
     collections: list[str]

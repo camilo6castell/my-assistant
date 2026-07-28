@@ -1,58 +1,58 @@
 """
-Estado compartido del grafo LangGraph.
+Shared state for the LangGraph graph.
 
-RAGState es el único objeto que viaja entre nodos. LangGraph lo pasa
-como argumento a cada nodo y aplica el dict de retorno como un merge
-parcial — solo los campos devueltos se actualizan, el resto se conserva.
+RAGState is the only object that travels between nodes. LangGraph passes
+it as an argument to each node and applies the returned dict as a partial
+merge -- only the returned fields are updated, the rest is preserved.
 
-Campos:
-  question       pregunta original del usuario
+Fields:
+  question       original user question
   mode           ChatMode.SOFT | ChatMode.HARD
-  collections    colecciones FAISS cargadas en memoria
-  chat_memory    historial de turnos (ventana deslizante en generate.py)
-  results        chunks recuperados por retrieve_node
-  confidence     score promedio de los resultados
-  reformulated   True si ya se reformuló la query en esta ejecución
-                 (evita loops infinitos en el grafo)
-  answer         respuesta final del LLM
-  review_passed    True si review_node aprobó la respuesta (o no se revisó)
-  review_feedback  motivo del rechazo, usado para regenerar con corrección
-  review_attempts  cuántas veces se regeneró tras un rechazo del reviewer
-                   (evita loops infinitos: ver MAX_REVIEW_ATTEMPTS)
+  collections    FAISS collections loaded in memory
+  chat_memory    turn history (sliding window in generate.py)
+  results        chunks retrieved by retrieve_node
+  confidence     average score of the results
+  reformulated   True if the query has been reformulated in this execution
+                 (prevents infinite loops in the graph)
+  answer         final LLM answer
+  review_passed    True if review_node approved the answer (or was not reviewed)
+  review_feedback  reason for rejection, used to regenerate with correction
+  review_attempts  how many times the answer was regenerated after a reviewer
+                   rejection (prevents infinite loops: see MAX_REVIEW_ATTEMPTS)
   max_tokens/think_mode/extra
-                   overrides de generación por-request (ver
-                   GenerationOptions en src/api/schemas/chat.py); None
-                   en todos = comportamiento actual sin cambios. La
-                   temperatura NO vive acá -- es una propiedad fija de
-                   cada modelo (src/config/models/<backend>.py), nunca
-                   un override por-request.
+                   per-request generation overrides (see
+                   GenerationOptions in src/api/schemas/chat.py); None
+                   in all = current behavior without changes. Temperature
+                   does NOT live here -- it is a fixed property of each
+                   model (src/config/models/<backend>.py), never a
+                   per-request override.
 
-                   No hay top_k_initial/top_k_final ni max_turns acá:
-                   dejaron de ser overrides por-request (ver
-                   GenerationOptions en src/api/schemas/chat.py) --
-                   retrieve_node/generate_node los resuelven
-                   directamente contra settings, sin pasar por el
-                   estado del grafo. Si en algún momento hace falta
-                   reexponerlos, existieron acá antes y se sacaron
-                   deliberadamente -- ver el historial de este archivo
-                   antes de reinventar la rueda.
-  attachments      archivos adjuntos ad-hoc (ver
-                   src/context/attachments.py), como lista de
-                   (filename, content). Solo generate_node los inyecta
-                   en el prompt final (ver inject_attachments() en
-                   src/prompts/builder.py) -- retrieve_node y
-                   reformulate_node usan `question` sin adjuntos, para
-                   no ensuciar el embedding de búsqueda ni la
-                   reformulación con contenido de archivo.
+                   There are no top_k_initial/top_k_final or max_turns here:
+                   they stopped being per-request overrides (see
+                   GenerationOptions in src/api/schemas/chat.py) --
+                   retrieve_node/generate_node resolve them directly
+                   against settings, without going through the graph
+                   state. If they ever need to be re-exposed, they
+                   existed here before and were deliberately removed --
+                   see the history of this file before reinventing
+                   the wheel.
+  attachments      ad-hoc file attachments (see
+                   src/context/attachments.py), as a list of
+                   (filename, content). Only generate_node injects them
+                   into the final prompt (see inject_attachments() in
+                   src/prompts/builder.py) -- retrieve_node and
+                   reformulate_node use `question` without attachments,
+                   to avoid polluting the search embedding or
+                   reformulation with file content.
 
-NOTA: este módulo NO usa `from __future__ import annotations`.
-LangGraph llama get_type_hints(RAGState) en runtime para inspeccionar
-los campos del estado. Con annotations postponed, todos los tipos se
-convierten en strings lazy y get_type_hints() falla al resolver
-LoadedCollection si está bajo TYPE_CHECKING (NameError en runtime).
+NOTE: this module does NOT use `from __future__ import annotations`.
+LangGraph calls get_type_hints(RAGState) at runtime to inspect the
+state fields. With postponed annotations, all types become lazy strings
+and get_type_hints() fails to resolve LoadedCollection if it is under
+TYPE_CHECKING (NameError at runtime).
 
-La solución es importar LoadedCollection directamente —sin guard—
-para que exista en el namespace del módulo cuando LangGraph lo evalúa.
+The solution is to import LoadedCollection directly --without a guard--
+so it exists in the module namespace when LangGraph evaluates it.
 """
 
 from typing import Any, TypedDict
@@ -74,31 +74,31 @@ class RAGState(TypedDict):
     review_passed: bool
     review_feedback: str
     review_attempts: int
-    # Overrides de generación por-request (ver GenerationOptions en
-    # src/api/schemas/chat.py). None = usar el default de settings/.env.
-    # Solo generate_node/correct_node los leen -- reformulate_node y
-    # review_node siempre usan la temperatura por defecto, son tareas
-    # internas de una sola pasada, no la respuesta final al usuario.
+    # Per-request generation overrides (see GenerationOptions in
+    # src/api/schemas/chat.py). None = use the settings/.env default.
+    # Only generate_node/correct_node read them -- reformulate_node and
+    # review_node always use the default temperature, they are single-pass
+    # internal tasks, not the final response to the user.
     max_tokens: int | None
     think_mode: bool | None
-    # Passthrough genérico sin validar (ver GenerationOptions.extra) --
-    # dict[str, Any] es la única excepción deliberada al tipado estricto
-    # del resto del proyecto: por definición puede contener cualquier
-    # parámetro propio de un provider que el backend no modela.
+    # Generic passthrough without validation (see GenerationOptions.extra) --
+    # dict[str, Any] is the only deliberate exception to the strict typing
+    # in the rest of the project: by definition it can contain any
+    # provider-specific parameter that the backend does not model.
     extra: dict[str, Any] | None
     attachments: list[tuple[str, str]]
 
 
 class RAGStateUpdate(TypedDict, total=False):
     """
-    Actualización parcial de RAGState.
+    Partial update to RAGState.
 
-    Cada nodo del grafo (src/graph/nodes.py) devuelve solo el subconjunto
-    de campos que modifica -- LangGraph aplica el resto como merge parcial
-    sobre el estado existente (ver docstring del módulo). `total=False`
-    modela justamente eso: todos los campos son opcionales en el dict de
-    retorno, pero cada uno que sí esté presente queda tipado igual que en
-    RAGState, en vez de perder precisión con `dict[str, object]`.
+    Each graph node (src/graph/nodes.py) returns only the subset of
+    fields it modifies -- LangGraph applies the rest as a partial merge
+    on the existing state (see module docstring). `total=False` models
+    exactly that: all fields are optional in the returned dict, but each
+    one that is present is typed the same as in RAGState, instead of
+    losing precision with `dict[str, object]`.
     """
 
     question: str

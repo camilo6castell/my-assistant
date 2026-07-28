@@ -1,36 +1,35 @@
 """
-API REST del sistema RAG.
+REST API for the RAG system.
 
-Expone el RAG como servicio HTTP para que herramientas externas
-(n8n, el frontend React, scripts, otros servicios) puedan consumirlo
-sin depender de la interfaz CLI. Todos los clientes hablan con los
-mismos endpoints -- no hay archivos de API por-cliente, la separación
-es por dominio funcional (ver src/api/routers/).
+Exposes the RAG as an HTTP service so that external tools
+(n8n, the React frontend, scripts, other services) can consume it
+without depending on the CLI interface. All clients talk to the
+same endpoints -- there are no per-client API files; separation
+is by functional domain (see src/api/routers/).
 
-Endpoints (todos bajo /api/v1, ver routers/ para el detalle):
-  chat.py        /collections, /query, /query/agent  -- funciones regulares
-                                                          (incluye el caso sin
-                                                          ninguna fuente de
-                                                          contexto -- ver
-                                                          _answer_raw en
+Endpoints (all under /api/v1, see routers/ for details):
+  chat.py        /collections, /query, /query/agent  -- regular functions
+                                                          (includes the case with
+                                                          no context source at all --
+                                                          see _answer_raw in
                                                           routers/chat.py)
-  files.py       /files                               -- upload + colecciones efímeras
-  config.py      /config/providers                    -- capacidades por provider (solo lectura)
-  attachments.py /attachments                         -- archivos ad-hoc de un solo
-                                                          envío (ver
+  files.py       /files                               -- upload + ephemeral collections
+  config.py      /config/providers                    -- per-provider capabilities (read-only)
+  attachments.py /attachments                         -- ad-hoc single-use
+                                                          attachments (see
                                                           src/context/attachments.py)
 
-GET /health queda fuera de /api/v1 a propósito: es un liveness probe
-para load balancers, no un recurso versionado de la API.
+GET /health is intentionally outside /api/v1: it is a liveness probe
+for load balancers, not a versioned API resource.
 
-Diseño stateless (con una excepción acotada):
-  La API no mantiene estado de sesión entre requests. El cliente es
-  responsable de enviar las colecciones y el chat_history en cada
-  request. La única excepción es EphemeralStore (src/context/ephemeral.py):
-  los archivos subidos "solo para esta conversación" sí viven en memoria
-  del servidor, porque el chunking/embeddings no se puede hacer en el
-  navegador. Se limpian solos por TTL (ver _cleanup_loop) o explícitamente
-  vía DELETE /api/v1/files/{conversation_id}.
+Stateless design (with one narrow exception):
+  The API does not maintain session state between requests. The client is
+  responsible for sending collections and chat_history with every
+  request. The only exception is EphemeralStore (src/context/ephemeral.py):
+  files uploaded "just for this conversation" do live in server
+  memory, because chunking/embeddings cannot be done in the
+  browser. They are cleaned up automatically by TTL (see _cleanup_loop) or
+  explicitly via DELETE /api/v1/files/{conversation_id}.
 """
 
 from __future__ import annotations
@@ -48,14 +47,14 @@ from src.api.routers import attachments, chat, config, files
 from src.graph import build_rag_graph
 from src.utils.logger import logger
 
-# Cada cuánto se revisan conversaciones efímeras inactivas -- más frecuente
-# que el TTL mismo para que la limpieza sea razonablemente puntual sin
-# ser costosa (sweep_expired es O(conversaciones activas), trivial).
+# How often inactive ephemeral conversations are checked -- more frequent
+# than the TTL itself so cleanup is reasonably punctual without
+# being costly (sweep_expired is O(active conversations), trivial).
 _CLEANUP_INTERVAL_SECONDS = 60 * 30
 
 
 async def _cleanup_loop() -> None:
-    """Tarea de fondo: barre colecciones efímeras y adjuntos sin enviar, vencidos por TTL."""
+    """Background task: sweeps expired ephemeral collections and unconsumed attachments."""
     while True:
         await asyncio.sleep(_CLEANUP_INTERVAL_SECONDS)
         deps.get_ephemeral_store().sweep_expired(deps.EPHEMERAL_TTL)
@@ -64,16 +63,16 @@ async def _cleanup_loop() -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
-    logger.info("[api] Compilando grafo RAG...")
+    logger.info("[api] Compiling RAG graph...")
     deps.set_rag_graph(build_rag_graph())
 
     cleanup_task = asyncio.create_task(_cleanup_loop())
-    logger.info("[api] API lista.")
+    logger.info("[api] API ready.")
 
     yield
 
     cleanup_task.cancel()
-    logger.info("[api] Cerrando API.")
+    logger.info("[api] Shutting down API.")
 
 
 # ======================================================
@@ -82,13 +81,13 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
 app = FastAPI(
     title="MyAssistant RAG API",
-    description="API REST para el sistema RAG local con LangGraph.",
+    description="REST API for the local RAG system with LangGraph.",
     version="1.1.0",
     lifespan=lifespan,
 )
 
-# CORS abierto para desarrollo local -- n8n y el frontend React corren en
-# puertos distintos. En producción restringir a los orígenes permitidos.
+# CORS open for local development -- n8n and the React frontend run on
+# different ports. In production, restrict to allowed origins.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -105,28 +104,28 @@ app.include_router(attachments.router, prefix="/api/v1")
 @app.exception_handler(Exception)
 async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
     """
-    Red de seguridad para cualquier excepción no capturada dentro de un
-    endpoint (bugs de prompts, del grafo, lo que sea).
+    Safety net for any unhandled exception inside an
+    endpoint (prompt bugs, graph bugs, anything).
 
-    Sin esto, Starlette resuelve una excepción no manejada con su propio
-    ServerErrorMiddleware, que envuelve por FUERA al CORSMiddleware que
-    agregamos arriba -- la respuesta 500 resultante nunca pasa por
-    CORSMiddleware y llega al navegador sin headers CORS. El navegador
-    entonces bloquea la lectura de esa respuesta y la reporta como error
-    de red, no como el 500 que en realidad es -- exactamente el síntoma
-    de "no se pudo conectar con el backend" aunque el backend sí
-    respondió (y el log del servidor sí tiene el traceback real).
-    Registrar un handler acá hace que FastAPI lo resuelva vía
-    ExceptionMiddleware, que sí queda DENTRO de CORSMiddleware.
+    Without this, Starlette handles an unhandled exception with its own
+    ServerErrorMiddleware, which wraps OUTSIDE the CORSMiddleware we
+    added above -- the resulting 500 response never passes through
+    CORSMiddleware and reaches the browser without CORS headers. The
+    browser then blocks reading the response and reports it as a network
+    error, not the actual 500 -- exactly the symptom of "could not
+    connect to the backend" even though the backend did respond (and the
+    server log does have the real traceback).
+    Registering a handler here makes FastAPI resolve it via
+    ExceptionMiddleware, which sits INSIDE CORSMiddleware.
     """
-    logger.exception(f"[api] Excepción no manejada en {request.method} {request.url.path}")
+    logger.exception(f"[api] Unhandled exception at {request.method} {request.url.path}")
     return JSONResponse(
         status_code=500,
-        content={"detail": "Error interno del servidor. Revisá los logs del backend."},
+        content={"detail": "Internal server error. Check the backend logs."},
     )
 
 
 @app.get("/health")
 async def health() -> dict[str, str]:
-    """Health check. n8n y los load balancers lo usan para verificar que el servicio está vivo."""
+    """Health check. n8n and load balancers use it to verify the service is alive."""
     return {"status": "ok"}

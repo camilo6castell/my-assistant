@@ -13,24 +13,24 @@ from src.ingest.core import (
 )
 from src.utils.logger import logger
 
-# FIX #4: TYPE_CHECKING es el patrón estándar reconocido por mypy y Pylance.
-# "if False:" es equivalente en teoría pero no todos los checkers lo procesan igual.
-# Con from __future__ import annotations las anotaciones son strings lazy,
-# por lo que estos imports NO se ejecutan en runtime: cero overhead.
+# FIX #4: TYPE_CHECKING is the standard pattern recognized by mypy and Pylance.
+# "if False:" is equivalent in theory but not all checkers process it the same.
+# With from __future__ import annotations, annotations are lazy strings,
+# so these imports do NOT execute at runtime: zero overhead.
 if TYPE_CHECKING:
     import numpy as np
     from faiss import Index as FaissIndex
 
 
 # ======================================================
-# TIPOS
+# TYPES
 # ======================================================
 
 
 class LoadedCollection(TypedDict):
     """
-    Colección completamente cargada en memoria.
-    Extiende RawCollection con el nombre lógico asignado por ContextManager.
+    Collection fully loaded in memory.
+    Extends RawCollection with the logical name assigned by ContextManager.
     """
 
     index: FaissIndex | None
@@ -46,7 +46,6 @@ class LoadedCollection(TypedDict):
 
 
 class ContextManager:
-
     def __init__(self) -> None:
         self.base_path: Path = settings.vector_store_path_for_backend
         self.loaded_contexts: dict[str, LoadedCollection] = {}
@@ -57,9 +56,8 @@ class ContextManager:
 
     def list_all(self) -> list[str]:
         """
-        Recorre base_path y devuelve todas las colecciones disponibles
-        en disco con el formato 'namespace/coleccion', ordenadas
-        alfabéticamente.
+        Traverses base_path and returns all available collections on disk
+        in the 'namespace/collection' format, sorted alphabetically.
         """
         contexts: list[str] = []
 
@@ -82,8 +80,8 @@ class ContextManager:
 
     def resolve_pattern(self, pattern: str) -> list[str]:
         """
-        Resuelve un patrón (namespace o colección exacta) contra
-        las colecciones disponibles en disco.
+        Resolves a pattern (namespace or exact collection) against
+        the collections available on disk.
         """
         available: list[str] = self.list_all()
 
@@ -98,10 +96,10 @@ class ContextManager:
 
     def activate(self, pattern: str) -> list[str]:
         """
-        Carga en memoria las colecciones que coinciden con el patrón.
-        Las ya cargadas se omiten sin error.
+        Loads into memory the collections matching the pattern.
+        Already loaded ones are skipped without error.
 
-        Retorna los nombres de las colecciones efectivamente cargadas.
+        Returns the names of the collections actually loaded.
         """
         matches: list[str] = self.resolve_pattern(pattern)
 
@@ -126,10 +124,10 @@ class ContextManager:
                 )
 
                 loaded.append(context_name)
-                logger.info(f"Contexto cargado: {context_name}")
+                logger.info(f"Context loaded: {context_name}")
 
             except Exception:
-                logger.exception(f"Error cargando contexto: {context_name}")
+                logger.exception(f"Error loading context: {context_name}")
 
         return loaded
 
@@ -139,10 +137,10 @@ class ContextManager:
 
     def deactivate(self, pattern: str) -> list[str]:
         """
-        Descarga de memoria las colecciones que coinciden con el patrón.
-        Las que no están activas se omiten sin error.
+        Unloads from memory the collections matching the pattern.
+        Those not active are skipped without error.
 
-        Retorna los nombres de las colecciones descargadas.
+        Returns the names of the collections unloaded.
         """
         matches: list[str] = self.resolve_pattern(pattern)
         removed: list[str] = []
@@ -151,23 +149,23 @@ class ContextManager:
             if context_name in self.loaded_contexts:
                 del self.loaded_contexts[context_name]
                 removed.append(context_name)
-                logger.info(f"Contexto descargado: {context_name}")
+                logger.info(f"Context unloaded: {context_name}")
 
         return removed
 
     def clear(self) -> None:
-        """Descarga todos los contextos activos."""
+        """Unloads all active contexts."""
         self.loaded_contexts.clear()
-        logger.info("Todos los contextos fueron descargados")
+        logger.info("All contexts have been unloaded")
 
     # =====================================================
     # GETTERS
     # =====================================================
 
     def get_active(self) -> list[str]:
-        """Devuelve los nombres de los contextos activos."""
+        """Returns the names of active contexts."""
         return list(self.loaded_contexts.keys())
 
     def get_loaded_collections(self) -> list[LoadedCollection]:
-        """Devuelve las colecciones cargadas en memoria."""
+        """Returns the collections loaded in memory."""
         return list(self.loaded_contexts.values())

@@ -1,10 +1,10 @@
 # src/chat/types.py
 
 """
-Tipos compartidos del módulo chat.
+Shared types for the chat module.
 
-Definidos en un módulo propio para que session.py, generate.py y
-builder.py los importen sin crear dependencias circulares.
+Defined in their own module so that session.py, generate.py, and
+builder.py can import them without creating circular dependencies.
 """
 
 from pydantic import BaseModel, ConfigDict
@@ -12,10 +12,10 @@ from pydantic import BaseModel, ConfigDict
 
 class TurnMemory(BaseModel):
     """
-    Un turno del historial de conversación.
+    A single turn in the conversation history.
 
-    frozen=True porque los turnos son inmutables una vez registrados:
-    el historial es una lista append-only en ChatSession.
+    frozen=True because turns are immutable once recorded:
+    history is an append-only list in ChatSession.
     """
 
     model_config = ConfigDict(frozen=True)

@@ -1,18 +1,19 @@
 """
-Cliente nativo para Ollama, usando el paquete oficial `ollama`
-(pip install ollama) en vez de su endpoint OpenAI-compatible.
+Native client for Ollama, using the official `ollama` package
+(pip install ollama) instead of its OpenAI-compatible endpoint.
 
-Por qué nativo y no OpenAI-compat: el endpoint /v1/chat/completions de
-Ollama tiene soporte inconsistente y no del todo documentado para
-`think`/`reasoning_effort` (hay un issue abierto del proyecto donde
-think=true directamente no aplica para varios modelos). El cliente
-nativo (`ollama.Client().chat(..., think=...)`) sí lo soporta de forma
-directa y tipada -- ver ollama._types.ChatResponse en el paquete.
+Why native and not OpenAI-compat: Ollama's /v1/chat/completions
+endpoint has inconsistent and poorly documented support for
+`think`/`reasoning_effort` (there's an open project issue where
+think=true simply doesn't apply to several models). The native
+client (`ollama.Client().chat(..., think=...)`) supports it directly
+and in a type-safe way -- see ollama._types.ChatResponse in the
+package.
 
-El import de `ollama` es perezoso (dentro de __init__, no a nivel de
-módulo): así, alguien que solo usa providers "openai_compat" (FastFlowLM,
-Gemini) nunca necesita tener el paquete `ollama` instalado -- es una
-dependencia opcional, no una obligación de todo el proyecto.
+The `ollama` import is lazy (inside __init__, not at module level):
+so someone who only uses "openai_compat" providers (FastFlowLM,
+Gemini) never needs the `ollama` package installed -- it's an
+optional dependency, not a project-wide requirement.
 """
 
 from __future__ import annotations
@@ -27,14 +28,14 @@ if TYPE_CHECKING:
 
 class OllamaNativeClient:
     """
-    Transporte puro, igual que OpenAICompatClient -- no decide qué
-    significa cada campo, solo desempaca `kwargs` (ya armado por
+    Pure transport, same as OpenAICompatClient -- doesn't decide what
+    each field means, just unpacks `kwargs` (already built by
     src.config.models.ollama.build_kwargs(), shape
-    {model, messages, think, options}) contra `ollama.Client().chat()`.
+    {model, messages, think, options}) against `ollama.Client().chat()`.
     """
 
     def __init__(self, host: str) -> None:
-        import ollama  # lazy: ver docstring del módulo
+        import ollama  # lazy: see module docstring
 
         self._client = ollama.Client(host=host)
 
@@ -44,11 +45,11 @@ class OllamaNativeClient:
             content = response.message.content
             return content.strip() if content else None
         except Exception:
-            # A diferencia de openai-python, ollama-python no envuelve
-            # errores de transporte (servidor caído, timeout) en su
-            # propia jerarquía -- ResponseError/RequestError no cubren
-            # esos casos. Capturar amplio acá mantiene el mismo contrato
-            # que OpenAICompatClient: nunca lanza, el caller decide el
-            # fallback.
-            logger.exception("[ollama_native] Error consultando LLM")
+            # Unlike openai-python, ollama-python doesn't wrap transport
+            # errors (server down, timeout) in its own hierarchy --
+            # ResponseError/RequestError don't cover those cases.
+            # Catching broadly here preserves the same contract as
+            # OpenAICompatClient: never raises, the caller decides
+            # the fallback.
+            logger.exception("[ollama_native] Error querying LLM")
             return None

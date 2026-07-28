@@ -1,33 +1,33 @@
 """
-Resuelve patrones de contexto contra la lista de colecciones disponibles.
+Resolves context patterns against the list of available collections.
 
-Patrones soportados por token:
-  sociologia          → todas las colecciones bajo sociologia/
-  sociologia/*        → ídem (alias explícito)
-  sociologia/debord   → colección exacta
+Supported patterns per token:
+  sociology           → all collections under sociology/
+  sociology/*         → same (explicit alias)
+  sociology/debord    → exact collection
 
-match_contexts acepta múltiples tokens separados por espacio,
-resuelve cada uno y devuelve la unión ordenada sin duplicados.
+match_contexts accepts multiple space-separated tokens,
+resolves each one and returns the sorted union without duplicates.
 """
 
 
 def _match_single(pattern: str, available: list[str]) -> list[str]:
-    """Resuelve un único token contra la lista de colecciones."""
+    """Resolves a single token against the list of collections."""
     pattern = pattern.strip()
 
     if not pattern:
         return []
 
-    # "sociologia/*"  →  namespace explícito
+    # "sociology/*"  →  explicit namespace
     if pattern.endswith("/*"):
         namespace = pattern[:-2]
         return [ctx for ctx in available if ctx.startswith(namespace + "/")]
 
-    # "sociologia/debord"  →  match exacto
+    # "sociology/debord"  →  exact match
     if "/" in pattern:
         return [pattern] if pattern in available else []
 
-    # "sociologia"  →  namespace implícito
+    # "sociology"  →  implicit namespace
     prefix = pattern + "/"
     matches = [ctx for ctx in available if ctx.startswith(prefix)]
 
@@ -42,8 +42,8 @@ def match_namespace(
     available_contexts: list[str],
 ) -> list[str]:
     """
-    Compatibilidad con el contrato anterior: resuelve un único patrón.
-    Usado por ContextManager.
+    Backward compatibility with the previous contract: resolves a single pattern.
+    Used by ContextManager.
     """
     return sorted(_match_single(pattern, available_contexts))
 
@@ -53,15 +53,15 @@ def match_contexts(
     available_contexts: list[str],
 ) -> list[str]:
     """
-    Resuelve múltiples tokens separados por espacio.
+    Resolves multiple space-separated tokens.
 
-    Ejemplos:
-        "sociologia"                               → sociologia/*
-        "sociologia react"                         → sociologia/* + react/*
-        "sociologia/debord react"                  → colección exacta + react/*
-        "sociologia/debord react/hooks psicologia" → mezcla de exactos y namespaces
+    Examples:
+        "sociology"                               → sociology/*
+        "sociology react"                         → sociology/* + react/*
+        "sociology/debord react"                  → exact collection + react/*
+        "sociology/debord react/hooks psychology" → mix of exact and namespace
 
-    Retorna la unión ordenada sin duplicados.
+    Returns the sorted union without duplicates.
     """
     tokens = raw.strip().split()
 

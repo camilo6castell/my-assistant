@@ -1,12 +1,12 @@
 """
-Configuración de modelos servidos vía el cliente nativo de Ollama.
+Configuration for models served via the native Ollama client.
 
-Mismo patrón que src/config/models/fastflowlm.py -- ver ese docstring
-para el razonamiento general. La diferencia es de FORMA, no de
-filosofía: acá build_kwargs() arma el dict que espera
-`ollama.Client().chat(**kwargs)` (model/messages/think/options), en vez
-del shape OpenAI-compatible -- cada backend decide su propio shape de
-salida, sus callers (src/llm/backends/*.py) no necesitan traducir nada.
+Same pattern as src/config/models/fastflowlm.py -- see that docstring
+for the general rationale. The difference is in form, not philosophy:
+here build_kwargs() assembles the dict that `ollama.Client().chat(**kwargs)`
+expects (model/messages/think/options), instead of the OpenAI-compatible
+shape -- each backend decides its own output shape, and its callers
+(src/llm/backends/*.py) do not need to translate anything.
 """
 
 from __future__ import annotations
@@ -48,11 +48,11 @@ def _lookup(model_name: str) -> dict[str, Any]:
     try:
         return _MODELS[model_name]
     except KeyError:
-        raise ValueError(f"Modelo Ollama no soportado: {model_name!r}") from None
+        raise ValueError(f"Unsupported Ollama model: {model_name!r}") from None
 
 
 def context_window(model_name: str) -> int | None:
-    """Ventana de contexto en tokens, o None si no está documentada (ver _CONTEXT_WINDOWS)."""
+    """Context window in tokens, or None if not documented (see _CONTEXT_WINDOWS)."""
     _lookup(model_name)
     return _CONTEXT_WINDOWS.get(model_name)
 
@@ -88,18 +88,18 @@ def build_kwargs(
 
     if think is not None:
         if "think" not in kwargs:
-            raise ValueError(f"El modelo '{model_name}' no tiene modo de razonamiento configurado.")
+            raise ValueError(f"Model '{model_name}' does not have a reasoning mode configured.")
         kwargs["think"] = think
 
     if extra:
-        # El cliente nativo de Ollama no tiene un passthrough genérico
-        # tipo extra_body -- solo entiende kwargs propios (model,
-        # messages, think, options, format...). Nunca hubo un lugar
-        # conocido donde meter claves arbitrarias, así que se ignoran
-        # con warning, igual que hacía antes OllamaNativeClient.
+        # The native Ollama client has no generic passthrough like
+        # extra_body -- it only understands its own kwargs (model,
+        # messages, think, options, format...). There was never a known
+        # place to put arbitrary keys, so they are ignored with a
+        # warning, same as OllamaNativeClient did before.
         logger.warning(
-            f"[config.models.ollama] Campos 'extra' sin mapeo conocido para "
-            f"'{model_name}', se ignoran: {sorted(extra)}"
+            f"[config.models.ollama] 'extra' fields with no known mapping for "
+            f"'{model_name}', ignored: {sorted(extra)}"
         )
 
     kwargs["model"] = model_name

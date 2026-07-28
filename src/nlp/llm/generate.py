@@ -1,42 +1,42 @@
 """
-Consulta al LLM configurado, sin importar qué backend hay detrás.
+Queries the configured LLM regardless of which backend is behind it.
 
-El historial de conversacion viaja aqui como mensajes estructurados
-user/assistant — es el unico lugar donde se incluye. El prompt no
-contiene un bloque HISTORIAL para evitar redundancia.
+Conversation history travels here as structured user/assistant messages
+-- this is the only place where it is included. The prompt does not
+contain a HISTORY block to avoid redundancy.
 
-MAX_TURNS limita cuantos turnos se envian para proteger la ventana
-de contexto del modelo.
+MAX_TURNS limits how many turns are sent to protect the model's
+context window.
 
-Overrides de generación (max_tokens/think_mode/extra):
-  Son parámetros *por-request*, nunca mutan `settings` ni ProviderConfig.
-  Si `ask_llm()`/`ask_llm_internal()` mutaran un Settings global para
-  aplicar un override, el cambio de una conversación se filtraría a
-  todas las conversaciones concurrentes del proceso — un bug de
-  concurrencia clásico. Cuando vienen en None, se usa el default de
-  settings/.env; el contrato completo vive en GenerationOptions
+Generation overrides (max_tokens/think_mode/extra):
+  These are *per-request* parameters that never mutate `settings` or
+  ProviderConfig. If `ask_llm()`/`ask_llm_internal()` mutated a global
+  Settings to apply an override, one conversation's change would leak to
+  all concurrent conversations in the process -- a classic concurrency
+  bug. When they come as None, the default from settings/.env is used;
+  the full contract lives in GenerationOptions
   (src/api/schemas/chat.py).
 
-  La temperatura NO es uno de estos overrides -- es una propiedad fija
-  de cada modelo, definida en src/config/models/<backend>.py
-  (_MODELS[model]["temperature"]) y nunca pisada acá. Antes existía
-  settings.llm_temperature (.env) que se aplicaba SIEMPRE como default
-  cuando no venía override, tapando silenciosamente el valor real del
-  modelo (ej. qwen3.5:9b configurado con temperature=0.0 en su
-  _MODELS pero mostrando 0.2 igual, porque _complete() lo pisaba antes
-  de llegar a build_kwargs). Eliminado a propósito: si algún día hace
-  falta un override real de temperatura por-request, agregarlo de nuevo
-  acá explícitamente en vez de reintroducir un default silencioso.
+  Temperature is NOT one of these overrides -- it is a fixed property
+  of each model, defined in src/config/models/<backend>.py
+  (_MODELS[model]["temperature"]) and never overwritten here. There
+  previously existed settings.llm_temperature (.env) which was applied
+  ALWAYS as a default when no override was provided, silently masking
+  the model's real value (e.g. qwen3.5:9b configured with
+  temperature=0.0 in _MODELS but still showing 0.2 because _complete()
+  overwrote it before build_kwargs was reached). Removed on purpose: if
+  a real per-request temperature override is ever needed, add it back
+  here explicitly instead of reintroducing a silent default.
 
-think_mode se valida acá contra `src.config.models.get_supports()` (el
-modelo activo tiene o no tiene modo de razonamiento) y se lo pasa tal
-cual a `src.config.models.build_kwargs()`, que arma el dict final ya en
-el shape nativo del backend (extra_body para OpenAI-compatible, kwarg
-`think` para Ollama). El LLMClient (src/llm/backends/) que efectivamente
-lo manda no necesita saber nada de esa mecánica. think_mode=None NO es
-"apagado" -- es "sin override", y build_kwargs() deja intacto lo que ya
-esté escrito en _MODELS[model] para ese modelo (ver
-src/config/models/fastflowlm.py).
+think_mode is validated here against `src.config.models.get_supports()`
+(whether the active model has a reasoning mode or not) and is passed
+as-is to `src.config.models.build_kwargs()`, which builds the final
+dict already in the backend's native shape (extra_body for
+OpenAI-compatible, `think` kwarg for Ollama). The LLMClient
+(src/llm/backends/) that actually sends it does not need to know about
+this mechanism. think_mode=None does NOT mean "off" -- it means "no
+override", and build_kwargs() leaves intact what is already written in
+_MODELS[model] for that model (see src/config/models/fastflowlm.py).
 """
 
 from __future__ import annotations
@@ -61,51 +61,51 @@ def build_messages(
     max_turns: int | None = None,
 ) -> list[ChatTurn]:
     """
-    Construye el array de mensajes para la API.
+    Builds the message array for the API.
 
-    Estructura:
-      [system] -> instrucciones base
-      [user / assistant] x max_turns -> historial reciente (ventana deslizante)
-      [user] -> prompt actual (contexto recuperado + pregunta)
+    Structure:
+      [system] -> base instructions
+      [user / assistant] x max_turns -> recent history (sliding window)
+      [user] -> current prompt (retrieved context + question)
 
-    chat_memory vacío (caso de ask_llm_internal, que no tiene turnos de
-    usuario) simplemente no agrega nada entre system y el prompt actual.
+    Empty chat_memory (the ask_llm_internal case, which has no user
+    turns) simply adds nothing between system and the current prompt.
 
-    system_prompt: None resuelve a build_system_prompt() (comportamiento
-    RAG por defecto) en el momento de la llamada, no al importar el
-    módulo -- antes este parámetro tenía build_system_prompt() como
-    default posicional, evaluado una sola vez al cargar generate.py.
-    Era inofensivo porque build_system_prompt() es puro/determinístico,
-    pero es el antipattern clásico de default mutable/evaluado-al-
-    importar en Python, y además impedía pasar un system prompt
-    distinto sin tocar la firma. ask_llm() ahora expone ese override
-    (ver su propio docstring) para el caso sin ninguna fuente de
-    contexto (_answer_raw() en src/api/routers/chat.py), que llama con
-    system_prompt="" para omitir el system prompt de RAG por completo.
+    system_prompt: None resolves to build_system_prompt() (default RAG
+    behavior) at call time, not at module import -- previously this
+    parameter had build_system_prompt() as a positional default,
+    evaluated once when generate.py was loaded. This was harmless
+    because build_system_prompt() is pure/deterministic, but it is the
+    classic Python antipattern of a mutable/import-time-evaluated
+    default, and it also prevented passing a different system prompt
+    without changing the signature. ask_llm() now exposes that override
+    (see its own docstring) for the case with no context source at all
+    (_answer_raw() in src/api/routers/chat.py), which calls with
+    system_prompt="" to omit the RAG system prompt entirely.
 
-    max_turns: parámetro interno, ya sin ningún caller que lo
-    override -- ver GenerationOptions en src/api/schemas/chat.py, que
-    dejó de tener este campo (pasó a ser exclusivamente configuración de
-    servidor). None (el único valor que llega hoy) usa settings.max_turns.
-    Se mantiene como parámetro de la función en vez de eliminarlo del
-    todo porque sigue siendo una pieza interna razonable (ventana
-    deslizante de historial) que otro caller interno podría necesitar
-    ajustar sin tocar la firma; lo que se eliminó fue el camino que lo
-    exponía como override por-request desde la API.
+    max_turns: internal parameter, now without any caller that
+    overrides it -- see GenerationOptions in src/api/schemas/chat.py,
+    which no longer has this field (it became exclusively server-side
+    configuration). None (the only value that arrives today) uses
+    settings.max_turns. It is kept as a function parameter rather than
+    removing it entirely because it remains a reasonable internal
+    building block (sliding history window) that another internal
+    caller might need to adjust without changing the signature; what was
+    removed was the path that exposed it as a per-request API override.
     """
     effective_max_turns = settings.max_turns if max_turns is None else max_turns
     effective_system_prompt = system_prompt if system_prompt is not None else build_system_prompt()
 
-    # system_prompt="" (distinto de None) es "sin system prompt en
-    # absoluto" -- caso _answer_raw() en src/api/routers/chat.py, donde
-    # no hay ninguna fuente de contexto y el usuario controla el rol/las
-    # reglas/la tarea íntegramente desde su propio mensaje. No se manda
-    # un mensaje "system" vacío: se omite del todo.
+    # system_prompt="" (distinct from None) means "no system prompt at
+    # all" -- the _answer_raw() case in src/api/routers/chat.py, where
+    # there is no context source and the user controls role/rules/task
+    # entirely from their own message. An empty "system" message is not
+    # sent: it is omitted entirely.
     messages: list[ChatTurn] = []
     if effective_system_prompt:
         messages.append({"role": "system", "content": effective_system_prompt})
 
-    # TurnMemory es BaseModel: acceso por atributo (.user, .assistant)
+    # TurnMemory is a BaseModel: attribute access (.user, .assistant)
     for turn in chat_memory[-effective_max_turns:]:
         messages.append({"role": "user", "content": turn.user})
         messages.append({"role": "assistant", "content": turn.assistant})
@@ -117,20 +117,21 @@ def build_messages(
 
 def _validate_think(think_mode: bool | None, config: ProviderConfig) -> None:
     """
-    Si vino un override explícito de think_mode, valida que el modelo
-    activo lo soporte -- ver `get_supports()` en src/config/models/.
+    If an explicit think_mode override was provided, validates that the
+    active model supports it -- see `get_supports()` in
+    src/config/models/.
 
-    think_mode=None (sin override) nunca necesita validación: significa
-    "dejar el default que ya está escrito en _MODELS[model] para este
-    modelo" (ver src/config/models/fastflowlm.py -- Qwen3 ya trae
-    enable_thinking=False como parte de su config base, así que "sin
-    override" nunca deja el campo sin mandar).
+    think_mode=None (no override) never needs validation: it means "use
+    the default already written in _MODELS[model] for this model" (see
+    src/config/models/fastflowlm.py -- Qwen3 already ships with
+    enable_thinking=False as part of its base config, so "no override"
+    never leaves the field unset).
 
-    Lanza ValueError si se pidió un valor explícito y el modelo no
-    soporta think_mode -- el router (src/api/routers/chat.py) ya valida
-    esto contra `supports` antes de llegar acá, así que este error solo
-    dispararía si algo llama a ask_llm() directamente sin pasar por la
-    validación del endpoint.
+    Raises ValueError if an explicit value was requested and the model
+    does not support think_mode -- the router
+    (src/api/routers/chat.py) already validates this against `supports`
+    before reaching here, so this error would only fire if something
+    calls ask_llm() directly without going through endpoint validation.
     """
     if think_mode is None:
         return
@@ -138,39 +139,38 @@ def _validate_think(think_mode: bool | None, config: ProviderConfig) -> None:
     supports = get_supports(config.capabilities, config.model)
     if "think_mode" not in supports:
         raise ValueError(
-            f"El modelo '{config.model}' (provider '{config.name}') no tiene "
-            "modo de razonamiento configurado -- ver src/config/models/"
+            f"Model '{config.model}' (provider '{config.name}') does not have "
+            "a reasoning mode configured -- see src/config/models/"
             f"{config.capabilities}.py."
         )
 
 
 def _dump_request_for_debug(kwargs: dict[str, Any]) -> None:
     """
-    Escribe el body EXACTO que se le manda al provider (los mismos
-    kwargs que arma src.config.models.build_kwargs(), en el shape nativo
-    de ese backend) a ./debug_last_llm_request.json en la raíz del
-    proyecto -- listo para:
+    Writes the EXACT body sent to the provider (the same kwargs built
+    by src.config.models.build_kwargs(), in that backend's native shape)
+    to ./debug_last_llm_request.json at the project root -- ready for:
 
-        curl -v --max-time 300 http://<base_url>/chat/completions \\
-          -H "Content-Type: application/json" \\
+        curl -v --max-time 300 http://<base_url>/chat/completions \
+          -H "Content-Type: application/json" \
           -d @debug_last_llm_request.json
 
-    (Para backends "ollama_native" el shape no es directamente el body
-    HTTP de /v1/chat/completions -- sirve igual para inspeccionar qué se
-    mandó, aunque el curl de arriba solo aplica tal cual a
+    (For "ollama_native" backends the shape is not directly the HTTP
+    body of /v1/chat/completions -- it is still useful for inspecting
+    what was sent, even though the curl above only applies as-is to
     "openai_compat".)
 
-    Se sobreescribe en cada llamada (solo importa el último request) y
-    solo se activa con settings.llm_debug_dump=True -- nunca corre en
-    uso normal. Cualquier fallo al escribir se loguea y se ignora: es un
-    diagnóstico opcional, nunca debe romper una consulta real al LLM.
+    Overwritten on each call (only the last request matters) and only
+    activated with settings.llm_debug_dump=True -- never runs in normal
+    usage. Any write failure is logged and ignored: it is an optional
+    diagnostic that should never break a real LLM query.
     """
     import json
 
-    # `kwargs["messages"]` es list[ChatTurn] en la práctica (build_kwargs
-    # siempre lo pone ahí), pero el tipo declarado es dict[str, Any] --
-    # se narrowea acá con isinstance en vez de asumirlo, así el cálculo
-    # de tamaño nunca revienta si algún backend nuevo cambia el shape.
+    # `kwargs["messages"]` is list[ChatTurn] in practice (build_kwargs
+    # always puts it there), but the declared type is dict[str, Any] --
+    # narrowed here with isinstance instead of assumed, so the size
+    # calculation never blows up if a new backend changes the shape.
     raw_messages = kwargs.get("messages", [])
     messages: list[dict[str, Any]] = raw_messages if isinstance(raw_messages, list) else []
 
@@ -179,11 +179,10 @@ def _dump_request_for_debug(kwargs: dict[str, Any]) -> None:
             json.dump(kwargs, f, ensure_ascii=False, indent=2)
         chars = sum(len(m["content"]) for m in messages if isinstance(m, dict) and "content" in m)
         logger.info(
-            "[debug] Request volcado a ./debug_last_llm_request.json "
-            f"({chars} caracteres de mensajes)"
+            f"[debug] Request dumped to ./debug_last_llm_request.json ({chars} message characters)"
         )
     except OSError as e:
-        logger.warning(f"[debug] No se pudo volcar el request para debug: {e}")
+        logger.warning(f"[debug] Could not dump request for debug: {e}")
 
 
 def _complete(
@@ -196,19 +195,19 @@ def _complete(
     extra: ExtraFields | None,
 ) -> str | None:
     """
-    Arma los kwargs resueltos (vía src.config.models.build_kwargs) y se
-    los entrega al LLMClient del provider -- este módulo no sabe (ni
-    necesita saber) si eso termina hablando con OpenAI, FastFlowLM u
-    Ollama nativo.
+    Builds the resolved kwargs (via src.config.models.build_kwargs) and
+    hands them to the LLMClient of the provider -- this module does not
+    know (nor need to know) whether that ends up talking to OpenAI,
+    FastFlowLM, or native Ollama.
 
-    No recibe `temperature`: nunca se pasa un override acá, así que
-    build_kwargs() siempre deja intacto el valor que ya está en
-    _MODELS[model] para el modelo activo (ver docstring del módulo).
+    Does not receive `temperature`: no override is ever passed here, so
+    build_kwargs() always leaves the value intact that is already in
+    _MODELS[model] for the active model (see module docstring).
 
-    Devuelve None (nunca lanza) si el modelo respondió vacío o si la
-    llamada falló -- cada función pública decide su propio fallback
-    (ask_llm devuelve un mensaje de error visible al usuario;
-    ask_llm_internal devuelve el prompt original sin cambios).
+    Returns None (never raises) if the model responded empty or if the
+    call failed -- each public function decides its own fallback
+    (ask_llm returns an error message visible to the user;
+    ask_llm_internal returns the original prompt unchanged).
     """
     client, config = get_client(provider_name)
     supports = get_supports(config.capabilities, config.model)
@@ -225,38 +224,39 @@ def _complete(
     )
 
     logger.info(
-        f"{log_prefix}Consultando LLM | provider={provider_name} | model={config.model} "
+        f"{log_prefix}Querying LLM | provider={provider_name} | model={config.model} "
         f"| timeout={settings.llm_timeout}s"
         + (f" | max_tokens={max_tokens}" if max_tokens is not None else "")
         + (f" | think={think_mode}" if think_mode is not None else "")
     )
 
-    # Diagnóstico opt-in (ver settings.llm_debug_dump / LLM_DEBUG_DUMP en
-    # .env): vuelca el request EXACTO que se le manda al provider a un
-    # archivo, listo para reproducir con curl sin adivinar tamaño de
-    # prompt ni reconstruir los kwargs a mano. Pensado para casos como
-    # "el modelo local devuelve vacío solo con prompts de RAG grandes" --
-    # sin esto, aislar si es tamaño/contenido del prompt implica
-    # reconstruir el payload real a ojo.
+    # Opt-in diagnostic (see settings.llm_debug_dump / LLM_DEBUG_DUMP in
+    # .env): dumps the EXACT request sent to the provider to a file,
+    # ready to reproduce with curl without guessing prompt size or
+    # reconstructing kwargs by hand. Designed for cases like "local
+    # model returns empty only with large RAG prompts" -- without this,
+    # isolating whether it is prompt size/content requires reconstructing
+    # the actual payload by eye.
     if settings.llm_debug_dump:
         _dump_request_for_debug(kwargs)
 
     content = client.complete(kwargs)
     if not content:
-        logger.warning(f"{log_prefix}El modelo devolvio respuesta vacia.")
+        logger.warning(f"{log_prefix}Model returned empty response.")
         return None
 
-    # Log diagnóstico para el bug reportado de mensajes que llegan
-    # incompletos al frontend (a veces faltan los primeros ~16
-    # caracteres). No hay slicing en este módulo ni en el camino
-    # request->JSONResponse->frontend (revisado), así que si el corte ya
-    # está presente ACÁ (longitud/preview más corto de lo esperado, o el
-    # preview empieza a mitad de palabra) el origen es el provider/modelo
-    # o el cliente HTTP (OpenAI SDK / ollama-python), no este código. Si
-    # el contenido llega completo hasta acá pero el frontend lo muestra
-    # incompleto, el problema está en el tramo API->navegador (red,
-    # proxy, o el estado de React), no en la generación.
-    logger.info(f"{log_prefix}Respuesta del LLM | len={len(content)} | preview={content[:40]!r}")
+    # Diagnostic log for the reported bug of messages arriving
+    # incomplete at the frontend (sometimes missing the first ~16
+    # characters). There is no slicing in this module or in the
+    # request->JSONResponse->frontend path (reviewed), so if the
+    # truncation is already present HERE (length/preview shorter than
+    # expected, or preview starting mid-word), the source is the
+    # provider/model or the HTTP client (OpenAI SDK / ollama-python),
+    # not this code. If the content arrives complete here but the
+    # frontend displays it incomplete, the problem is in the
+    # API->browser segment (network, proxy, or React state), not in
+    # generation.
+    logger.info(f"{log_prefix}LLM response | len={len(content)} | preview={content[:40]!r}")
     return content
 
 
@@ -271,20 +271,20 @@ def ask_llm(
     system_prompt: str | None = None,
 ) -> str:
     """
-    provider es obligatorio y siempre debe venir de
-    LLMRole.GENERATE.value -- ver src/nlp/llm/roles.py. Este
-    módulo ya no elige un default por su cuenta: el único lugar donde se
-    decide "qué modelo genera la respuesta" es Settings.role_spec(),
-    para que no haya una segunda fuente de verdad silenciosa.
+    provider is required and must always come from
+    LLMRole.GENERATE.value -- see src/nlp/llm/roles.py. This module no
+    longer picks a default on its own: the only place where "which model
+    generates the response" is decided is Settings.role_spec(), so there
+    is no second silent source of truth.
 
-    system_prompt: override opcional del system prompt -- None usa
-    build_system_prompt() (comportamiento RAG por defecto, con
-    grounding/citación contra contexto recuperado). "" (string vacío,
-    distinto de None) omite el mensaje "system" por completo -- ver
-    build_messages() más arriba y _answer_raw() en
-    src/api/routers/chat.py, el caso sin ninguna colección/archivo
-    efímero/web_search activo: el usuario controla rol/reglas/tarea
-    desde su propio mensaje, sin nada del servidor de por medio.
+    system_prompt: optional system prompt override -- None uses
+    build_system_prompt() (default RAG behavior, with grounding/citation
+    against retrieved context). "" (empty string, distinct from None)
+    omits the "system" message entirely -- see build_messages() above
+    and _answer_raw() in src/api/routers/chat.py, the case with no
+    active collection/ephemeral file/web_search: the user controls
+    role/rules/task from their own message, with nothing from the
+    server in between.
     """
     messages = build_messages(
         prompt=prompt,
@@ -302,7 +302,7 @@ def ask_llm(
         extra=extra,
     )
 
-    return content if content is not None else "El modelo no devolvio respuesta."
+    return content if content is not None else "Model did not return a response."
 
 
 def ask_llm_internal(
@@ -312,7 +312,7 @@ def ask_llm_internal(
     max_tokens: int | None = None,
 ) -> str | None:
     """
-    Llamada al LLM para operaciones internas del grafo (ej: reformulación de queries).
+    LLM call for internal graph operations (e.g. query reformulation).
     """
     messages = build_messages(prompt=prompt, chat_memory=[], system_prompt=system_prompt)
 
@@ -326,62 +326,3 @@ def ask_llm_internal(
     )
 
     return content
-
-    # DECISIÓN (dejar comentado, no borrar): variante descartada de
-    # ask_llm_internal con un parámetro could_be_none explícito en vez
-    # del fallback fijo "devolver el prompt sin cambios". Se conserva
-    # como referencia del patrón (fallback configurable por caller) por
-    # si hace falta en otro internal call que no pueda usar el mismo
-    # fallback que reformular query.
-    # if content is not None:
-    #     return content
-    # if content is None and could_be_none:
-    #     return None
-    # if content is None and not could_be_none:
-    #     return prompt
-
-
-# DECISIÓN (dejar comentado, no borrar): se decidió no usar esta
-# variante de ask_llm_internal en el flujo actual de web-supplement (ver
-# WEB_SUPPLEMENT_SENTINEL en src/prompts/builder.py para el contexto
-# completo), pero el patrón -- devolver None en un fallo en vez de hacer
-# eco del prompt, para callers donde el prompt es scaffolding interno y
-# no algo seguro de mostrarle al usuario -- es reutilizable. Se conserva
-# como referencia de implementación en vez de borrarla.
-# def ask_llm_supplement(
-#     prompt: str,
-#     system_prompt: str,
-#     provider: str,
-#     max_tokens: int | None = None,
-# ) -> str | None:
-#     """
-#     Variante de ask_llm_internal() para tareas internas de una sola
-#     pasada donde un fallo NO debe hacer eco del prompt como fallback.
-
-#     Por qué esto necesita existir aparte de ask_llm_internal(): ahí el
-#     fallback "devolver el prompt sin cambios" es seguro porque el prompt
-#     ES la pregunta del usuario (reformular query). Acá el prompt es
-#     scaffolding interno arbitrario (ej. la respuesta ya generada +
-#     fragmentos de una búsqueda web, ver build_web_supplement_prompt() en
-#     src/prompts/builder.py) -- si el modelo falla y este caller hiciera
-#     el mismo fallback, ese scaffolding completo terminaría pegado en la
-#     respuesta que ve el usuario. Por eso devuelve None en vez de prompt:
-#     fuerza al caller a decidir explícitamente qué hacer ante un fallo
-#     (típicamente: omitir el complemento en silencio, ver
-#     src/api/routers/chat.py).
-
-#     provider es obligatorio -- debe venir de
-#     LLMRole.WEB_SUPPLEMENT.value.
-#     """
-#     messages = build_messages(
-#         prompt=prompt, chat_memory=[], system_prompt=system_prompt
-#     )
-
-#     return _complete(
-#         messages=messages,
-#         provider_name=provider,
-#         log_prefix="[internal:web_supplement] ",
-#         max_tokens=max_tokens,
-#         think_mode=None,
-#         extra=None,
-#     )

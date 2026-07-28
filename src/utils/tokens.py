@@ -1,19 +1,18 @@
 """
-Estimación de tokens para el guard de contexto (src/llm/context_guard.py).
+Token estimation for the context guard (src/llm/context_guard.py).
 
-No hay un tokenizador exacto disponible para todos los backends (Qwen
-vía FastFlowLM, DeepSeek vía Ollama, Gemini) sin traer 3 librerías
-distintas. tiktoken (tokenizador de OpenAI, cl100k_base) da una
-aproximación razonable para texto en inglés/español -- suele
-sobre-contar un poco frente a tokenizadores tipo SentencePiece
-(Qwen/Gemini), lo cual es el sesgo correcto para un guard PREVENTIVO
-(mejor sobreestimar y avisar de más que subestimar y dejar pasar un
-request que el modelo va a rechazar o cortar).
+There is no exact tokenizer available for all backends (Qwen via
+FastFlowLM, DeepSeek via Ollama, Gemini) without bringing in 3 different
+libraries. tiktoken (OpenAI tokenizer, cl100k_base) provides a reasonable
+approximation for English/Spanish text -- it tends to over-count slightly
+compared to SentencePiece-style tokenizers (Qwen/Gemini), which is the
+correct bias for a PREVENTIVE guard (better to overestimate and warn than
+to underestimate and let through a request the model will reject or crop).
 
-Si tiktoken no está instalado, fallback a una heurística de
-caracteres/N (aproximación gruesa estándar para texto en inglés; para
-español con más tildes/palabras largas puede subestimar un poco -- por
-eso HEURISTIC_CHARS_PER_TOKEN queda en 3.5, no 4, para compensar).
+If tiktoken is not installed, falls back to a characters/N heuristic
+(coarse standard approximation for English text; for Spanish with more
+accents/long words it may underestimate slightly -- that is why
+HEURISTIC_CHARS_PER_TOKEN is 3.5, not 4, to compensate).
 """
 
 from __future__ import annotations
@@ -24,37 +23,36 @@ from src.utils.logger import logger
 
 HEURISTIC_CHARS_PER_TOKEN = 3.5
 
-# Anotación sin asignar: le da a mypy el tipo de _encoder de entrada
-# (Encoding | None) sin forzar una asignación inicial redundante --
-# ambas ramas del try/except de abajo asignan un valor compatible con
-# ese tipo. Sin esto, mypy infiere el tipo a partir de la primera
-# asignación (tiktoken.get_encoding(...) -> Encoding) y se queja al
-# asignar None en el except (error: typeddict/assignment).
+# Annotation without assignment: gives mypy the type of _encoder upfront
+# (Encoding | None) without forcing a redundant initial assignment --
+# both branches of the try/except below assign a value compatible with
+# that type. Without this, mypy infers the type from the first
+# assignment (tiktoken.get_encoding(...) -> Encoding) and complains when
+# assigning None in the except (error: typeddict/assignment).
 _encoder: tiktoken.Encoding | None
 
 try:
-    # tiktoken es dependencia dura (ver pyproject.toml), así que el
-    # import en sí no falla -- lo que puede fallar es get_encoding():
-    # la primera vez que corre, descarga el archivo de encoding desde
-    # una URL externa (no vendorizado), lo cual falla sin acceso de red
-    # a ese host puntual. Por eso el try/except envuelve la llamada, no
-    # el import.
+    # tiktoken is a hard dependency (see pyproject.toml), so the import
+    # itself does not fail -- what can fail is get_encoding(): the first
+    # time it runs, it downloads the encoding file from an external URL
+    # (not vendored), which fails without network access to that specific
+    # host. That is why the try/except wraps the call, not the import.
     _encoder = tiktoken.get_encoding("cl100k_base")
-except Exception:  # pragma: no cover -- típicamente sin red hacia el host de descarga
+except Exception:  # pragma: no cover -- typically no network to download host
     _encoder = None
     logger.warning(
-        "[tokens] tiktoken no pudo cargar su encoding (sin red hacia el host "
-        "de descarga) -- usando heurística de caracteres para estimar tokens "
-        "(menos precisa, ver docstring del módulo)."
+        "[tokens] tiktoken could not load its encoding (no network to download "
+        "host) -- using character heuristic to estimate tokens "
+        "(less accurate, see module docstring)."
     )
 
 
 def estimate_tokens(text: str) -> int:
     """
-    Estima la cantidad de tokens de `text`. No es exacto para ningún
-    backend en particular -- ver docstring del módulo para el porqué
-    ese margen de error es aceptable (y deliberadamente conservador)
-    para un guard preventivo de contexto.
+    Estimates the number of tokens in `text`. Not exact for any
+    particular backend -- see module docstring for why that margin
+    of error is acceptable (and deliberately conservative) for a
+    preventive context guard.
     """
     if not text:
         return 0

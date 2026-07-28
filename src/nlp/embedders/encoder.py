@@ -1,33 +1,34 @@
 """
-Capa de embeddings multi-backend.
+Multi-backend embedding layer.
 
-Diseño:
-  Un único punto de entrada: get_encoder() devuelve una instancia de
-  EmbeddingEncoder cacheada. Toda la lógica de backend vive aquí —
-  core.py y search.py solo importan get_encoder() y llaman a encode().
+Design:
+  Single entry point: get_encoder() returns a cached EmbeddingEncoder
+  instance. All backend logic lives here -- core.py and search.py only
+  import get_encoder() and call encode().
 
-  Backends soportados (mismo alias que en .env.providers, ver EMBEDDER
-  en src/config/settings.py):
-    sentence_transformers  — carga el modelo HuggingFace en proceso Python.
-                             Sin servidor externo. Default.
-    ollama                 — HTTP al endpoint /api/embeddings de Ollama.
-                             Ollama corre con soporte Vulkan (GPU AMD).
-    flm                    — HTTP al endpoint /v1/embeddings, compatible
-                             con la API OpenAI. FastFlowLM usa la NPU.
+  Supported backends (same alias as in .env.providers, see EMBEDDER in
+  src/config/settings.py):
+    sentence_transformers  -- loads the HuggingFace model in the Python
+                              process. No external server. Default.
+    ollama                 -- HTTP to Ollama's /api/embeddings endpoint.
+                              Ollama runs with Vulkan support (AMD GPU).
+    flm                    -- HTTP to the /v1/embeddings endpoint,
+                              compatible with the OpenAI API. FastFlowLM
+                              uses the NPU.
 
-  Ambos backends HTTP usan el mismo client OpenAI porque FastFlowLM expone
-  /v1/embeddings (OpenAI-compatible) y Ollama también lo expone desde v0.1.
-  Si en el futuro Ollama cambia la firma, se puede añadir un cliente nativo
-  sin cambiar la interfaz pública de este módulo.
+  Both HTTP backends use the same OpenAI client because FastFlowLM
+  exposes /v1/embeddings (OpenAI-compatible) and Ollama also does since
+  v0.1. If Ollama changes the signature in the future, a native client
+  can be added without changing this module's public interface.
 
-Extensibilidad:
-  Agregar un backend nuevo = subclasear EmbeddingEncoder e implementar
-  _encode_raw(). El resto del sistema no cambia.
+Extensibility:
+  Adding a new backend = subclassing EmbeddingEncoder and implementing
+  _encode_raw(). The rest of the system does not change.
 
-Normalización:
-  Todos los backends devuelven vectores L2-normalizados float32 C-contiguos.
-  Esto garantiza que IndexFlatIP de FAISS produce similitud coseno correcta
-  independientemente del backend.
+Normalization:
+  All backends return L2-normalized float32 C-contiguous vectors.
+  This guarantees that FAISS IndexFlatIP produces correct cosine
+  similarity regardless of the backend.
 """
 
 from __future__ import annotations
@@ -45,39 +46,40 @@ from src.config.settings import settings
 from src.utils.logger import logger
 
 # ======================================================
-# INTERFAZ BASE
+# BASE INTERFACE
 # ======================================================
 
 
 class EmbeddingEncoder(ABC):
     """
-    Interfaz común para todos los backends de embedding.
+    Common interface for all embedding backends.
 
-    El único método que los consumidores (core.py, search.py) necesitan
-    es encode(). La normalización y el cast a float32 se hacen aquí,
-    una sola vez, independientemente del backend.
+    The only method consumers (core.py, search.py) need is encode().
+    Normalization and the cast to float32 are done here, once, regardless
+    of the backend.
     """
 
     @abstractmethod
     def _encode_raw(self, texts: Sequence[str]) -> np.ndarray:
         """
-        Devuelve embeddings SIN normalizar, como floats de cualquier dtype.
-        Cada subclase implementa solo esto.
+        Returns un-normalized embeddings as floats of any dtype.
+        Each subclass implements only this.
         """
         ...
 
     def encode(self, texts: Sequence[str]) -> np.ndarray:
         """
-        Devuelve embeddings L2-normalizados, float32, C-contiguos.
-        Este es el contrato con el resto del sistema.
+        Returns L2-normalized, float32, C-contiguous embeddings.
+        This is the contract with the rest of the system.
         """
         raw = self._encode_raw(texts)
         arr = np.ascontiguousarray(raw, dtype=np.float32)
 
-        # L2-normalización en numpy: arr / ||arr||₂ por fila.
-        # Equivalente a faiss.normalize_L2 pero sin depender de faiss aquí.
+        # L2 normalization in numpy: arr / ||arr||_2 per row.
+        # Equivalent to faiss.normalize_L2 but without depending on faiss
+        # here.
         norms = np.linalg.norm(arr, axis=1, keepdims=True)
-        norms = np.where(norms == 0, 1.0, norms)  # evita división por cero
+        norms = np.where(norms == 0, 1.0, norms)  # avoids division by zero
         return cast(NDArray[np.float32], arr / norms)
 
 
@@ -88,11 +90,12 @@ class EmbeddingEncoder(ABC):
 
 class SentenceTransformersEncoder(EmbeddingEncoder):
     """
-    Carga el modelo HuggingFace directamente en el proceso Python.
+    Loads the HuggingFace model directly in the Python process.
 
-    Ventajas: sin servidor externo, más fácil de instalar.
-    Desventajas: la GPU no es accesible si torch no tiene soporte Vulkan/ROCm
-    compilado — en Arch Linux con AMD esto depende de la build de torch.
+    Advantages: no external server, easier to install.
+    Disadvantages: the GPU is not accessible if torch is not compiled
+    with Vulkan/ROCm support -- on Arch Linux with AMD this depends on
+    the torch build.
     """
 
     def __init__(self) -> None:
@@ -104,7 +107,8 @@ class SentenceTransformersEncoder(EmbeddingEncoder):
         self._model: SentenceTransformer = SentenceTransformer(settings.embedding_model)
 
     def _encode_raw(self, texts: Sequence[str]) -> np.ndarray:
-        # normalize_embeddings=False porque la normalización la hace encode()
+        # normalize_embeddings=False because normalization is handled by
+        # encode()
         result = self._model.encode(texts, normalize_embeddings=False)
         return np.asarray(result)
 
@@ -116,23 +120,23 @@ class SentenceTransformersEncoder(EmbeddingEncoder):
 
 class HttpEmbeddingEncoder(EmbeddingEncoder):
     """
-    Backend HTTP para Ollama y FastFlowLM.
+    HTTP backend for Ollama and FastFlowLM.
 
-    Ambos exponen un endpoint /v1/embeddings compatible con la API
-    OpenAI, por lo que comparten el mismo client. La diferencia entre
-    ollama y flm es solo la base_url (EMBEDDER_OLLAMA_URL /
-    EMBEDDER_FLM_URL) y el modelo (EMBEDDER=<backend>,<modelo>)
-    configurados en .env.providers.
+    Both expose a /v1/embeddings endpoint compatible with the OpenAI
+    API, so they share the same client. The difference between ollama
+    and flm is only the base_url (EMBEDDER_OLLAMA_URL /
+    EMBEDDER_FLM_URL) and the model (EMBEDDER=<backend>,<model>)
+    configured in .env.providers.
 
-    Ollama: http://localhost:11434  (GPU Vulkan)
+    Ollama: http://localhost:11434  (Vulkan GPU)
     FastFlowLM: http://127.0.0.1:52625  (NPU)
 
-    El batch se parte en lotes de BATCH_SIZE para evitar timeouts
-    en colecciones grandes — los runtimes locales suelen tener un
-    límite de tokens por request menos generoso que la API de OpenAI.
+    The batch is split into chunks of BATCH_SIZE to avoid timeouts on
+    large collections -- local runtimes typically have a less generous
+    per-request token limit than the OpenAI API.
     """
 
-    BATCH_SIZE = 64
+    BATCH_SIZE = settings.embedding_batch_size
 
     def __init__(self) -> None:
         logger.info(
@@ -155,10 +159,8 @@ class HttpEmbeddingEncoder(EmbeddingEncoder):
                 model=self._model,
                 input=batch,
             )
-            # La API devuelve los embeddings en el mismo orden que el input.
-            batch_embeddings: list[list[float]] = [
-                item.embedding for item in response.data
-            ]
+            # The API returns embeddings in the same order as the input.
+            batch_embeddings: list[list[float]] = [item.embedding for item in response.data]
             all_embeddings.extend(batch_embeddings)
 
         return np.array(all_embeddings, dtype=np.float32)
@@ -178,22 +180,20 @@ _BACKEND_MAP: dict[str, type[EmbeddingEncoder]] = {
 @lru_cache(maxsize=1)
 def get_encoder() -> EmbeddingEncoder:
     """
-    Devuelve la instancia cacheada del encoder para el backend configurado.
+    Returns the cached encoder instance for the configured backend.
 
-    lru_cache(maxsize=1): el encoder se construye una sola vez por proceso.
-    Esto evita recargar el modelo SentenceTransformer o recrear el client
-    HTTP en cada llamada a encode_chunks() o encode_queries().
+    lru_cache(maxsize=1): the encoder is built once per process. This
+    avoids reloading the SentenceTransformer model or recreating the HTTP
+    client on every call to encode_chunks() or encode_queries().
 
-    Si el backend no está en _BACKEND_MAP, falla rápido con un ValueError
-    claro en lugar de un AttributeError confuso más adelante.
+    If the backend is not in _BACKEND_MAP, fails fast with a clear
+    ValueError instead of a confusing AttributeError later.
     """
     backend = settings.embedding_backend.lower()
 
     if backend not in _BACKEND_MAP:
         valid = ", ".join(sorted(_BACKEND_MAP))
-        raise ValueError(
-            f"EMBEDDING_BACKEND={backend!r} no reconocido. " f"Valores válidos: {valid}"
-        )
+        raise ValueError(f"EMBEDDING_BACKEND={backend!r} not recognized. Valid values: {valid}")
 
     encoder_cls = _BACKEND_MAP[backend]
     return encoder_cls()

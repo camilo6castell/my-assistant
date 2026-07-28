@@ -1,7 +1,6 @@
-class ChatMode:
-    SOFT: str = "SOFT"
-    HARD: str = "HARD"
+from enum import StrEnum
 
 
-SOFT: str = ChatMode.SOFT
-HARD: str = ChatMode.HARD
+class ChatMode(StrEnum):
+    SOFT = "SOFT"
+    HARD = "HARD"

@@ -38,9 +38,7 @@ def read_pdf(path: Path) -> list[tuple[int, str]]:
             else:
                 logger.warning(f"Pagina vacia | {path.name} | page={i + 1}")
         except Exception as e:
-            logger.warning(
-                f"No se pudo leer pagina | {path.name} | page={i + 1} | error={e}"
-            )
+            logger.warning(f"No se pudo leer pagina | {path.name} | page={i + 1} | error={e}")
             continue
 
     return pages

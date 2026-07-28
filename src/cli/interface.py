@@ -1,23 +1,23 @@
 """
-Interfaz de chat. Gestiona el loop de comandos y preguntas.
+Chat interface. Manages the command loop and questions.
 
-Comandos disponibles:
-  /context <tokens...>   carga uno o más contextos
-  /remove  <tokens...>   descarga uno o más contextos
-  /list                  muestra todos los contextos disponibles
-  /active                muestra los contextos activos
-  /clear                 descarga todos los contextos
-  /reset                 limpia la memoria de conversación
-  /mode                  alterna entre RIGUROSO e INTERPRETATIVO
-  /help                  muestra esta ayuda
-  /exit                  vuelve al menú principal
+Available commands:
+  /context <tokens...>   load one or more contexts
+  /remove  <tokens...>   unload one or more contexts
+  /list                  show all available contexts
+  /active                show active contexts
+  /clear                 unload all contexts
+  /reset                 clear conversation memory
+  /mode                  toggle between STRICT and INTERPRETIVE
+  /help                  show this help
+  /exit                  return to main menu
 
-Sintaxis de <tokens>:
-  sociologia             → todas las colecciones bajo sociologia/
-  sociologia/debord      → colección exacta
+Token syntax:
+  sociologia             → all collections under sociologia/
+  sociologia/debord      → exact collection
   sociologia react       → sociologia/* + react/*
   sociologia/debord react/hooks psicologia
-                         → mezcla de exactos y namespaces
+                         → mix of exact and namespaces
 """
 
 import warnings
@@ -31,7 +31,7 @@ from src.graph import RAGState, build_rag_graph
 from src.nlp.llm.generate import ask_llm
 from src.nlp.llm.roles import LLMRole
 from src.prompts.builder import build_prompt
-from src.retrieval.search import search
+from src.retrieval.search import format_context_chunks, search
 
 warnings.filterwarnings(
     "ignore",
@@ -70,7 +70,7 @@ HELP: str = """
 
 
 # ======================================================
-# HELPERS DE PRESENTACIÓN
+# PRESENTATION HELPERS
 # ======================================================
 
 
@@ -115,7 +115,7 @@ def _print_active(session: ChatSession) -> None:
 
 
 # ======================================================
-# HANDLER DE /context Y /remove
+# /context AND /remove HANDLER
 # ======================================================
 
 
@@ -172,7 +172,7 @@ def _handle_remove(session: ChatSession, raw_tokens: str) -> None:
 
 
 # ======================================================
-# HANDLER DE PREGUNTAS
+# QUESTION HANDLER
 # ======================================================
 
 
@@ -197,13 +197,10 @@ def _handle_question(session: ChatSession, question: str) -> None:
         print("  No relevant context found.\n")
         return
 
-    context_chunks: list[str] = [
-        f"SOURCE: {r.source}\nCOLLECTION: {r.collection}\nPAGE: {r.page}\n\n{r.text}"
-        for r in results
-    ]
+    context_chunks: list[str] = format_context_chunks(results)
 
-    # chat_memory ya no se pasa a build_prompt — el historial viaja
-    # como mensajes de API en ask_llm → build_messages
+    # chat_memory is no longer passed to build_prompt -- history travels
+    # as API messages in ask_llm → build_messages
     prompt: str = build_prompt(
         context_chunks=context_chunks,
         question=question,
@@ -224,24 +221,24 @@ def _handle_question(session: ChatSession, question: str) -> None:
 
 
 # ======================================================
-# HANDLER DE /agent (LangGraph)
+# /agent HANDLER (LangGraph)
 # ======================================================
 
 
 def _handle_agent_question(session: ChatSession, question: str) -> None:
     """
-    Versión del handler de preguntas con adaptive retrieval via LangGraph.
+    Question handler variant with adaptive retrieval via LangGraph.
 
-    Diferencias respecto al pipeline lineal (_handle_question):
-      - Si la confianza de los resultados iniciales es baja, el grafo
-        reformula la query y reintenta una vez antes de generar.
-      - El flujo es un grafo de estados (retrieve → evaluate → generate /
-        reformulate → retrieve → generate) en lugar de una cadena lineal.
-      - Muestra si se activó la reformulación para que el usuario lo sepa.
+    Differences from the linear pipeline (_handle_question):
+      - If initial results confidence is low, the graph reformulates
+        the query and retries once before generating.
+      - The flow is a state graph (retrieve → evaluate → generate /
+        reformulate → retrieve → generate) instead of a linear chain.
+      - Shows whether reformulation was triggered so the user knows.
 
-    El grafo se compila en el primer uso y se reutiliza en llamadas
-    posteriores dentro de la misma sesión (build_rag_graph está cacheado
-    en el atributo _graph del ChatSession extendido por start_chat).
+    The graph is compiled on first use and reused across subsequent
+    calls within the same session (build_rag_graph is cached in the
+    _graph attribute of ChatSession extended by start_chat).
     """
     collections: list[LoadedCollection] = session.context_manager.get_loaded_collections()
 
@@ -251,8 +248,8 @@ def _handle_agent_question(session: ChatSession, question: str) -> None:
 
     print("\n  [agent] Executing RAG graph...\n")
 
-    # El grafo compilado se guarda en el frame de start_chat para no
-    # recompilarlo en cada pregunta. Se accede via el dict de la función.
+    # The compiled graph is stored in the start_chat frame to avoid
+    # recompiling on every question. Accessed via the function's dict.
     graph = build_rag_graph()
 
     initial_state: RAGState = {
@@ -270,20 +267,20 @@ def _handle_agent_question(session: ChatSession, question: str) -> None:
         "max_tokens": None,
         "think_mode": None,
         "extra": None,
-        # El CLI no tiene archivos adjuntos ad-hoc (eso es una feature de
-        # la API web -- ver src/context/attachments.py y
-        # src/api/routers/chat.py); lista vacía = generate_node no
-        # inyecta nada extra en el prompt (ver inject_attachments() en
-        # src/prompts/builder.py, que devuelve `question` sin modificar
-        # si `attachments` está vacío).
+        # The CLI has no ad-hoc file attachments (that is a web API
+        # feature -- see src/context/attachments.py and
+        # src/api/routers/chat.py); empty list = generate_node injects
+        # nothing extra into the prompt (see inject_attachments() in
+        # src/prompts/builder.py, which returns `question` unmodified
+        # if `attachments` is empty).
         "attachments": [],
     }
 
-    # CompiledStateGraph.invoke() está tipado en la librería como
-    # `dict[str, Any] | Any` (no como el StateT genérico), así que un
-    # cast explícito es más honesto aquí que ignorar el error a ciegas:
-    # documenta justo el punto donde termina la precisión de LangGraph
-    # y empieza la nuestra (mismo patrón que src/api/app.py).
+    # CompiledStateGraph.invoke() is typed in the library as
+    # `dict[str, Any] | Any` (not as the generic StateT), so an explicit
+    # cast is more honest here than blindly ignoring the error: it
+    # documents exactly the point where LangGraph's precision ends and
+    # ours begins (same pattern as src/api/app.py).
     final_state = cast(RAGState, graph.invoke(initial_state))
 
     answer = final_state["answer"]

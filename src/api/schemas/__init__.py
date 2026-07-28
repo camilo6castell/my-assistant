@@ -7,6 +7,10 @@ haciendo `from src.api.schemas import QueryRequest` sin que le importe
 en qué submódulo vive cada schema.
 """
 
+from src.api.schemas.attachments import (
+    AttachmentInfo,
+    AttachmentsResponse,
+)
 from src.api.schemas.chat import (
     CollectionsResponse,
     GenerationOptions,
@@ -19,10 +23,6 @@ from src.api.schemas.files import (
     EphemeralFileInfo,
     EphemeralFilesResponse,
     FileUploadResponse,
-)
-from src.api.schemas.attachments import (
-    AttachmentInfo,
-    AttachmentsResponse,
 )
 
 __all__ = [

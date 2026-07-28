@@ -1,16 +1,16 @@
 """
-Punto de entrada único del sistema RAG.
+Single entry point for the RAG system.
 
-Uso:
-  python -m src.main                                   menú interactivo
-  python -m src.main chat                              entra directo al chat
-  python -m src.main api                               levanta la API REST
-  python -m src.main web                               levanta API + frontend (ui/) y abre browser
-  python -m src.main ingest <cat> <col>                ingest de archivos locales
-  python -m src.main ingest-url <cat> <col> <url>      ingest de una URL puntual
-  python -m src.main crawl <cat> <col> <start_url>     rastrea un sitio completo
+Usage:
+  python -m src.main                                   interactive menu
+  python -m src.main chat                              go directly to chat
+  python -m src.main api                               start the REST API
+  python -m src.main web                               start API + frontend (ui/) and open browser
+  python -m src.main ingest <cat> <col>                ingest local files
+  python -m src.main ingest-url <cat> <col> <url>      ingest a single URL
+  python -m src.main crawl <cat> <col> <start_url>     crawl an entire site
 
-Ejemplos:
+Examples:
   python -m src.main ingest sociologia Guy-Debord_La-sociedad-del-espectaculo
   python -m src.main ingest-url sociologia debord https://sitio.com/articulo
   python -m src.main crawl react hooks https://react.dev/learn
@@ -73,7 +73,7 @@ def _cmd_api() -> None:
 
 
 def _wait_for_port(host: str, port: int, timeout: float) -> bool:
-    """Sondea host:port hasta que acepte conexiones TCP o venza el timeout."""
+    """Polls host:port until it accepts TCP connections or the timeout expires."""
     import socket
     import time
 
@@ -89,19 +89,20 @@ def _wait_for_port(host: str, port: int, timeout: float) -> bool:
 
 def _cmd_web() -> None:
     """
-    Levanta la API (in-process, como `api`) y el dev server de Vite de
-    ui/ (subproceso) en paralelo, y abre el navegador en la URL del
-    frontend apenas ambos responden.
+    Starts the API (in-process, like `api`) and the Vite dev server for
+    ui/ (subprocess) in parallel, and opens the browser to the frontend
+    URL as soon as both are ready.
 
-    Por qué la API corre en un thread y no en un subproceso separado:
-    reutiliza exactamente la misma configuración/lifespan que `_cmd_api`
-    sin duplicar el comando `uvicorn.run(...)` en dos lugares. El
-    frontend sí necesita ser un subproceso real porque es un proceso
-    Node/Vite independiente (pnpm/npm), no algo importable en Python.
+    Why the API runs in a thread and not a separate subprocess:
+    it reuses exactly the same configuration/lifespan as `_cmd_api`
+    without duplicating the `uvicorn.run(...)` command in two places.
+    The frontend does need to be a real subprocess because it is an
+    independent Node/Vite process (pnpm/npm), not something importable
+    in Python.
 
-    Ctrl+C detiene ambos: primero el subproceso de Vite, después el
-    servidor uvicorn (server.should_exit = True), y se espera a que el
-    thread de la API termine antes de salir.
+    Ctrl+C stops both: first the Vite subprocess, then the uvicorn
+    server (server.should_exit = True), and waits for the API thread
+    to finish before exiting.
     """
     import shutil
     import subprocess
@@ -119,18 +120,18 @@ def _cmd_web() -> None:
     ui_dir = project_root / "ui"
 
     if not ui_dir.exists():
-        print(f"\n  No se encontró el directorio del frontend en {ui_dir}\n")
+        print(f"\n  Frontend directory not found at {ui_dir}\n")
         sys.exit(1)
 
     pkg_manager = shutil.which("pnpm") or shutil.which("npm")
     if pkg_manager is None:
         print(
-            "\n  No se encontró 'pnpm' ni 'npm' en el PATH.\n"
-            "  Instalá Node.js (y opcionalmente pnpm) para poder levantar ui/.\n"
+            "\n  Neither 'pnpm' nor 'npm' found in PATH.\n"
+            "  Install Node.js (and optionally pnpm) to run ui/.\n"
         )
         sys.exit(1)
 
-    # --- API: mismo server que `_cmd_api`, corriendo en un thread propio ---
+    # --- API: same server as `_cmd_api`, running in its own thread ---
     server_config = uvicorn.Config(
         "src.api.app:app",
         host=settings.api_host,
@@ -141,32 +142,31 @@ def _cmd_web() -> None:
     server = uvicorn.Server(server_config)
     api_thread = threading.Thread(target=server.run, name="uvicorn-api", daemon=True)
 
-    # --- Frontend: dev server de Vite como subproceso ---
+    # --- Frontend: Vite dev server as subprocess ---
     ui_process: subprocess.Popen[bytes] | None = None
 
-    # Vite por defecto sirve en 5173 (o el siguiente puerto libre si está
-    # ocupado, pero no hay forma de saberlo de antemano sin parsear su
-    # stdout). 5173 cubre el caso normal de desarrollo local.
+    # Vite serves on 5173 by default (or the next free port if occupied,
+    # but there's no way to know without parsing its stdout). 5173 covers
+    # the normal local development case.
     #
-    # "localhost" y NO "127.0.0.1": Node (y por lo tanto Vite) resuelve
-    # el host "localhost" con la política de DNS del propio Node, que en
-    # versiones recientes puede preferir ::1 (IPv6) sobre 127.0.0.1
-    # según el sistema -- si Vite terminó bindeado a ::1, un probe TCP
-    # explícito a 127.0.0.1 nunca conecta y el timeout salta aunque Vite
-    # esté listo (esto pasaba antes: el log de Vite mostraba "ready" pero
-    # _wait_for_port igual reportaba timeout). socket.create_connection
-    # con un hostname (en vez de una IP literal) prueba todas las
-    # direcciones que devuelva getaddrinfo, en el mismo orden que
-    # preferiría el navegador -- coincide con lo que Vite haya bindeado
-    # realmente, sea IPv4 o IPv6.
+    # "localhost" and NOT "127.0.0.1": Node (and therefore Vite) resolves
+    # the "localhost" host using Node's own DNS policy, which in recent
+    # versions may prefer ::1 (IPv6) over 127.0.0.1 depending on the
+    # system -- if Vite ended up bound to ::1, an explicit TCP probe to
+    # 127.0.0.1 never connects and the timeout fires even though Vite is
+    # ready (this used to happen: Vite's log would show "ready" but
+    # _wait_for_port would still report a timeout). socket.create_connection
+    # with a hostname (instead of a literal IP) tries all addresses
+    # returned by getaddrinfo, in the same order the browser would prefer
+    # -- matching whatever Vite actually bound to, whether IPv4 or IPv6.
     frontend_host = "localhost"
     frontend_port = 5173
     frontend_url = f"http://{frontend_host}:{frontend_port}"
 
-    print(f"\n  Levantando API en http://{settings.api_host}:{settings.api_port} ...")
+    print(f"\n  Starting API at http://{settings.api_host}:{settings.api_port} ...")
     api_thread.start()
 
-    print(f"  Levantando frontend (ui/) con '{Path(pkg_manager).name} run dev' ...")
+    print(f"  Starting frontend (ui/) with '{Path(pkg_manager).name} run dev' ...")
     ui_process = subprocess.Popen(
         [pkg_manager, "run", "dev"],
         cwd=str(ui_dir),
@@ -175,24 +175,25 @@ def _cmd_web() -> None:
     try:
         api_ready = _wait_for_port(settings.api_host, settings.api_port, timeout=20.0)
         if not api_ready:
-            logger.warning("[web] La API no respondió en el tiempo esperado.")
+            logger.warning("[web] API did not respond within the expected time.")
 
         ui_ready = _wait_for_port(frontend_host, frontend_port, timeout=30.0)
         if ui_ready:
-            print(f"  Abriendo {frontend_url} en el navegador...\n")
+            print(f"  Opening {frontend_url} in the browser...\n")
             webbrowser.open(frontend_url)
         else:
             print(
-                f"\n  El frontend no respondió en {frontend_url} dentro del "
-                "tiempo esperado. Revisá la salida de Vite arriba (puede "
-                "estar usando otro puerto) y abrí la URL manualmente.\n"
+                f"\n  Frontend did not respond at {frontend_url} within the "
+                "expected time. Check the Vite output above (it may be "
+                "using a different port) and open the URL manually.\n"
             )
 
-        # Bloquea acá con la vida del subproceso de Vite -- Ctrl+C lo
-        # interrumpe y cae al finally, que apaga todo en orden.
+        # Blocks here with the lifetime of the Vite subprocess -- Ctrl+C
+        # interrupts it and falls through to finally, which shuts everything
+        # down in order.
         ui_process.wait()
     except KeyboardInterrupt:
-        print("\n  Cerrando frontend y API...")
+        print("\n  Closing frontend and API...")
     finally:
         if ui_process is not None and ui_process.poll() is None:
             ui_process.terminate()
@@ -203,13 +204,13 @@ def _cmd_web() -> None:
 
         server.should_exit = True
         api_thread.join(timeout=10)
-        print("  Listo.\n")
+        print("  Done.\n")
 
 
 def _cmd_ingest(args: list[str]) -> None:
     if len(args) != 2:
-        print("Uso: python -m src.main ingest <categoria> <coleccion>")
-        print("Ej:  python -m src.main ingest sociologia Guy-Debord_La-sociedad")
+        print("Usage: python -m src.main ingest <category> <collection>")
+        print("E.g.:  python -m src.main ingest sociologia Guy-Debord_La-sociedad")
         sys.exit(1)
     sys.argv = ["ingest", args[0], args[1]]
     from src.ingest.ingest import main as ingest_main
@@ -219,12 +220,12 @@ def _cmd_ingest(args: list[str]) -> None:
 
 def _cmd_ingest_url(args: list[str]) -> None:
     """
-    Ingesta una URL puntual (una sola pagina).
-    Equivale a: python -m src.ingest.web_ingest <cat> <col> <url>
+    Ingests a single URL (one page).
+    Equivalent to: python -m src.ingest.web_ingest <cat> <col> <url>
     """
     if len(args) != 3:
-        print("Uso: python -m src.main ingest-url <categoria> <coleccion> <url>")
-        print("Ej:  python -m src.main ingest-url sociologia debord https://sitio.com/articulo")
+        print("Usage: python -m src.main ingest-url <category> <collection> <url>")
+        print("E.g.:  python -m src.main ingest-url sociologia debord https://sitio.com/articulo")
         sys.exit(1)
     sys.argv = ["ingest-url", args[0], args[1], args[2]]
     from src.ingest.web_ingest import main as web_ingest_main
@@ -234,25 +235,25 @@ def _cmd_ingest_url(args: list[str]) -> None:
 
 def _cmd_crawl(args: list[str]) -> None:
     """
-    Rastrea un sitio completo siguiendo enlaces (BFS) dentro del mismo dominio.
+    Crawls an entire site by following links (BFS) within the same domain.
 
-    Como funciona realmente (no es escaneo de rutas del arbol del sitio,
-    no infiere /hijo/nieto por estructura de URL):
-      1. Visita start_url, extrae y chunkea su contenido.
-      2. Busca todos los <a href> de esa pagina que apunten al mismo
-         dominio (comparacion estricta de netloc -- 'www.x.com' != 'x.com').
-      3. Encola esos enlaces y repite hasta agotar la cola o alcanzar
-         settings.max_pages.
-    Solo descubre paginas efectivamente enlazadas desde alguna pagina ya
-    visitada -- no adivina URLs que existen pero no estan enlazadas.
+    How it actually works (it's not a sitemap path scan, it doesn't
+    infer /child/grandchild from URL structure):
+      1. Visits start_url, extracts and chunks its content.
+      2. Finds all <a href> on that page pointing to the same domain
+         (strict netloc comparison -- 'www.x.com' != 'x.com').
+      3. Enqueues those links and repeats until the queue is exhausted
+         or settings.max_pages is reached.
+    Only discovers pages effectively linked from some already-visited
+    page -- it doesn't guess URLs that exist but aren't linked.
 
-    Internamente web_crawler.py recibe una sola 'collection' (sin separar
-    categoria), asi que aqui componemos f"{categoria}/{coleccion}" antes
-    de invocarlo -- mismo patron de argumentos que ingest e ingest-url.
+    Internally web_crawler.py receives a single 'collection' (without
+    separating category), so here we compose f"{category}/{collection}"
+    before invoking it -- same argument pattern as ingest and ingest-url.
     """
     if len(args) != 3:
-        print("Uso: python -m src.main crawl <categoria> <coleccion> <start_url>")
-        print("Ej:  python -m src.main crawl react hooks https://react.dev/learn")
+        print("Usage: python -m src.main crawl <category> <collection> <start_url>")
+        print("E.g.:  python -m src.main crawl react hooks https://react.dev/learn")
         sys.exit(1)
     category, collection_name, start_url = args
     sys.argv = ["crawl", category, collection_name, start_url]
@@ -289,8 +290,8 @@ def main() -> None:
     cmd = args[0]
 
     if cmd not in COMMANDS:
-        print(f"\n  Comando desconocido: '{cmd}'")
-        print("  Usa: python -m src.main --help\n")
+        print(f"\n  Unknown command: '{cmd}'")
+        print("  Use: python -m src.main --help\n")
         sys.exit(1)
 
     fn, n_extra_args = COMMANDS[cmd]

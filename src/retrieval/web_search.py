@@ -1,29 +1,29 @@
 """
-Búsqueda web vía Tavily, usada como fuente de retrieval complementaria o
-alternativa a las colecciones locales (ver QueryRequest.web_search en
-src/api/schemas/chat.py y su uso en src/api/routers/chat.py).
+Web search via Tavily, used as a complementary or alternative retrieval source
+to local collections (see QueryRequest.web_search in src/api/schemas/chat.py
+and its usage in src/api/routers/chat.py).
 
-Por qué Tavily y no golpear un motor de búsqueda directo: hacer scraping
-de Google/Bing viola sus ToS y es frágil (el HTML cambia sin aviso).
-Tavily está pensado específicamente para RAG/LLMs -- devuelve snippets
-ya limpios, con URL, vía una API HTTP simple (mismo patrón que ya usás
-para el resto de HTTP externo con `requests`, ver src/ingest/).
+Why Tavily instead of hitting a search engine directly: scraping
+Google/Bing violates their ToS and is fragile (HTML changes without notice).
+Tavily is designed specifically for RAG/LLMs -- it returns clean snippets
+with URLs via a simple HTTP API (same pattern already used for external HTTP
+with `requests`, see src/ingest/).
 
-Este módulo NUNCA deja que un fallo acá tumbe el request completo: toda
-excepción (timeout, red, JSON inválido, HTTP 4xx/5xx) se atrapa, se
-loguea, y se devuelve un WebSearchOutcome con resultados vacíos -- el
-router decide qué hacer con eso (ver chat.py). La única distinción que
-SÍ se propaga es "se agotó la cuota" (status=QUOTA_EXCEEDED) vs.
-"cualquier otro fallo" (status=ERROR): son la misma "sin resultados"
-para el pipeline de generación, pero requieren UX distinta (ver
-GenerationSection.tsx -- un fallo de red transitorio no debería
-deshabilitar el botón "Web", pero agotar el free tier de Tavily sí
-debería avisarle al usuario en vez de fallar en silencio cada vez).
+This module NEVER lets a failure here take down the full request: every
+exception (timeout, network, invalid JSON, HTTP 4xx/5xx) is caught, logged,
+and returned as a WebSearchOutcome with empty results -- the router decides
+what to do with that (see chat.py). The only distinction that IS propagated
+is "quota exhausted" (status=QUOTA_EXCEEDED) vs.
+"any other failure" (status=ERROR): they are the same "no results" for the
+generation pipeline, but require different UX (see GenerationSection.tsx --
+a transient network failure should not disable the "Web" button, but
+exhausting the Tavily free tier should warn the user instead of failing
+silently every time).
 """
 
 from __future__ import annotations
 
-from enum import Enum
+from enum import StrEnum
 
 import requests
 from pydantic import BaseModel
@@ -33,32 +33,31 @@ from src.utils.logger import logger
 
 TAVILY_ENDPOINT = "https://api.tavily.com/search"
 
-# Códigos HTTP documentados por Tavily para límites de cuenta (ver SDK
-# oficial tavily-python: ambos se mapean a ForbiddenError).
-#   432 = Plan Limit Exceeded (se agotaron los créditos del plan, ej. el
-#         free tier de 1000/mes).
-#   433 = Pay-As-You-Go Limit Exceeded (tope de gasto configurado en la
-#         cuenta, para cuentas con PAYGO habilitado).
-# Fuente: https://docs.tavily.com (research endpoint) y
-# https://github.com/tavily-ai/tavily-n8n-node (tabla de errores).
+# HTTP codes documented by Tavily for account limits (see official SDK
+# tavily-python: both map to ForbiddenError).
+#   432 = Plan Limit Exceeded (plan credits exhausted, e.g. the
+#         free tier of 1000/month).
+#   433 = Pay-As-You-Go Limit Exceeded (spending cap configured on the
+#         account, for accounts with PAYGO enabled).
+# Source: https://docs.tavily.com (research endpoint) and
+# https://github.com/tavily-ai/tavily-n8n-node (error table).
 TAVILY_QUOTA_EXCEEDED_STATUS_CODES = frozenset({432, 433})
 
 
 class WebSearchResult(BaseModel):
     title: str
     url: str
-    content: str  # snippet ya resumido por Tavily, no el HTML crudo
+    content: str  # snippet already summarized by Tavily, not raw HTML
 
 
-class WebSearchStatus(str, Enum):
+class WebSearchStatus(StrEnum):
     OK = "ok"
-    # Se agotaron los créditos de la cuenta de Tavily (free tier u otro
-    # plan) -- distinto de un fallo transitorio: no tiene sentido
-    # reintentar hasta que cambie el mes/plan (ver
-    # settings.web_search_quota_exceeded en el frontend).
+    # Tavily account credits exhausted (free tier or other plan) --
+    # unlike a transient failure: retrying until the month/plan changes
+    # makes no sense (see settings.web_search_quota_exceeded in the frontend).
     QUOTA_EXCEEDED = "quota_exceeded"
-    # Cualquier otro fallo: sin API key, feature apagada, timeout, error
-    # de red, JSON inválido, u otro código HTTP no-2xx.
+    # Any other failure: missing API key, feature disabled, timeout,
+    # network error, invalid JSON, or any non-2xx HTTP code.
     ERROR = "error"
 
 
@@ -69,19 +68,21 @@ class WebSearchOutcome(BaseModel):
 
 def search_web(query: str, max_results: int | None = None) -> WebSearchOutcome:
     """
-    Devuelve como máximo max_results snippets de la web para `query`,
-    junto con un status que distingue "sin resultados por cuota agotada"
-    de cualquier otro motivo (ver WebSearchStatus). Nunca lanza excepción.
+    Returns up to max_results web snippets for `query`, along with a status
+    distinguishing "no results due to quota exhausted" from any other reason
+    (see WebSearchStatus). Never raises an exception.
     """
     if not settings.web_search_enabled:
-        logger.warning("[web_search] WEB_SEARCH_ENABLED=false -- se omite la búsqueda.")
+        logger.warning("[web_search] WEB_SEARCH_ENABLED=false -- search skipped.")
         return WebSearchOutcome(results=[], status=WebSearchStatus.ERROR)
 
     if not settings.tavily_api_key:
-        logger.warning("[web_search] TAVILY_API_KEY no configurada -- se omite la búsqueda.")
+        logger.warning("[web_search] TAVILY_API_KEY not configured -- search skipped.")
         return WebSearchOutcome(results=[], status=WebSearchStatus.ERROR)
 
-    effective_max_results = max_results or settings.web_search_max_results
+    effective_max_results = (
+        max_results if max_results is not None else settings.web_search_max_results
+    )
 
     try:
         response = requests.post(
@@ -89,33 +90,33 @@ def search_web(query: str, max_results: int | None = None) -> WebSearchOutcome:
             json={
                 "api_key": settings.tavily_api_key,
                 "query": query,
-                "search_depth": "basic",
+                "search_depth": settings.web_search_depth,
                 "max_results": effective_max_results,
-                "include_answer": False,
+                "include_answer": settings.web_search_include_answer,
             },
             timeout=settings.web_search_timeout,
         )
     except requests.RequestException as e:
-        logger.warning(f"[web_search] Fallo la consulta a Tavily: {e}")
+        logger.warning(f"[web_search] Tavily request failed: {e}")
         return WebSearchOutcome(results=[], status=WebSearchStatus.ERROR)
 
     if response.status_code in TAVILY_QUOTA_EXCEEDED_STATUS_CODES:
         logger.warning(
-            f"[web_search] Cuota de Tavily agotada (HTTP {response.status_code}) -- "
-            "revisá tu plan en https://app.tavily.com."
+            f"[web_search] Tavily quota exceeded (HTTP {response.status_code}) -- "
+            "check your plan at https://app.tavily.com."
         )
         return WebSearchOutcome(results=[], status=WebSearchStatus.QUOTA_EXCEEDED)
 
     if not response.ok:
         logger.warning(
-            f"[web_search] Tavily devolvio HTTP {response.status_code}: {response.text[:200]}"
+            f"[web_search] Tavily returned HTTP {response.status_code}: {response.text[:200]}"
         )
         return WebSearchOutcome(results=[], status=WebSearchStatus.ERROR)
 
     try:
         payload = response.json()
     except ValueError:
-        logger.warning("[web_search] Respuesta de Tavily no es JSON valido.")
+        logger.warning("[web_search] Tavily response is not valid JSON.")
         return WebSearchOutcome(results=[], status=WebSearchStatus.ERROR)
 
     results: list[WebSearchResult] = []
@@ -127,5 +128,5 @@ def search_web(query: str, max_results: int | None = None) -> WebSearchOutcome:
             continue
         results.append(WebSearchResult(title=title, url=url, content=content))
 
-    logger.info(f"[web_search] Tavily devolvio {len(results)} resultado(s) para: {query!r}")
+    logger.info(f"[web_search] Tavily returned {len(results)} result(s) for: {query!r}")
     return WebSearchOutcome(results=results, status=WebSearchStatus.OK)
