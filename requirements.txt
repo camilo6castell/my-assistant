@@ -1,24 +1,57 @@
-# Generado a partir de los imports reales del proyecto (no existía
-# requirements.txt en el zip original — agregado para que el proyecto
-# sea instalable de forma reproducible).
-#
-# Fuente de verdad real: pyproject.toml [project.dependencies] -- este
-# archivo se mantiene igual porque el proyecto corre in-place (python -m
-# src.main, sin [build-system] en pyproject.toml, ver comentario ahí) y
-# `pip install -r requirements.txt` sigue siendo la forma de instalar.
-openai>=1.40.0
-fastapi>=0.111.0
-uvicorn>=0.30.0
-pydantic>=2.7.0
-pydantic-settings>=2.3.0
-faiss-cpu>=1.8.0
-sentence-transformers>=3.0.0
-beautifulsoup4>=4.12.0
-requests>=2.32.0
-pypdf>=4.0.0
-readability-lxml>=0.8.0
-tiktoken>=0.7.0
-
-# Opcional -- solo si usás el backend "ollama_native" (ver
-# src/llm/backends/ollama_native.py, import lazy a propósito).
-# ollama>=0.3.0
+annotated-doc==0.0.5
+annotated-types==0.8.0
+anyio==4.14.2
+attrs==26.1.0
+beautifulsoup4==4.15.0
+certifi==2026.7.22
+cffi==2.1.0
+chardet==7.4.3
+charset-normalizer==3.4.9
+click==8.4.2
+cryptography==49.0.0
+cssselect==1.5.0
+distro==1.9.0
+faiss-cpu==1.14.3
+fastapi==0.141.1
+h11==0.16.0
+httpcore==1.0.9
+httpcore2==2.9.1
+httpx==0.28.1
+httpx2==2.9.1
+idna==3.18
+jiter==0.16.0
+jsonschema==4.26.0
+jsonschema-specifications==2025.9.1
+lxml==6.1.1
+lxml_html_clean==0.4.5
+mcp==2.0.0
+mcp-types==2.0.0
+numpy==2.4.6
+ollama==0.6.2
+openai==2.50.0
+opentelemetry-api==1.44.0
+packaging==26.2
+pycparser==3.0
+pydantic==2.13.4
+pydantic-settings==2.14.2
+pydantic_core==2.46.4
+PyJWT==2.13.0
+pypdf==6.14.2
+python-dotenv==1.2.2
+python-multipart==0.0.32
+readability-lxml==0.8.4.1
+referencing==0.37.0
+regex==2026.7.19
+requests==2.34.2
+rpds-py==2026.6.3
+sniffio==1.3.1
+soupsieve==2.9.1
+sse-starlette==3.4.6
+starlette==1.3.1
+tiktoken==0.13.0
+tqdm==4.70.0
+truststore==0.10.4
+typing-inspection==0.4.2
+typing_extensions==4.16.0
+urllib3==2.7.0
+uvicorn==0.52.0

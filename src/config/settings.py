@@ -108,8 +108,6 @@ class Settings(BaseSettings):
     @field_validator(
         "embedder",
         "llm_rol_generate",
-        "llm_rol_reformulate",
-        "llm_rol_review",
         "llm_rol_supplement",
         mode="after",
     )
