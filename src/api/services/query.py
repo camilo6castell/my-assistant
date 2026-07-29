@@ -146,7 +146,7 @@ def answer_web_only(
     reformulate -> review) in this case: that pipeline is designed
     around local vector retrieval characteristics -- confidence measures
     chunk_index spread / source dominance over FAISS results (see
-    settings.confidence_limit and src/retrieval/search.py), something
+    src/retrieval/search.py), something
     that has no analogue in web search results. Forcing web results
     through that logic would require redesigning the agent's notion of
     "confidence"; instead, when there are no collections, both endpoints

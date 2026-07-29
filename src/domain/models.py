@@ -34,6 +34,4 @@ class LLMRole(StrEnum):
     """A pipeline point that needs an LLM."""
 
     GENERATE = "generate"
-    REFORMULATE = "reformulate"
-    REVIEW = "review"
     WEB_SUPPLEMENT = "web_supplement"

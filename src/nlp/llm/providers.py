@@ -192,9 +192,9 @@ def list_provider_configs() -> dict[str, ProviderConfig]:
     the internal path to resolve a provider by name; this is only for
     listing all at once (GET /api/v1/config/providers).
 
-    Keys are role names ("generate", "reformulate", "review",
-    "web_supplement"), not backends -- each role is its own "provider"
-    in this architecture (see module docstring).
+    Keys are role names ("generate", "web_supplement"), not backends
+    -- each role is its own "provider" in this architecture (see module
+    docstring).
     """
     return _build_provider_table()
 

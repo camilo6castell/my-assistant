@@ -242,8 +242,6 @@ class Settings(BaseSettings):
     # src/nlp/llm/backends/ -- graph.py, nodes.py or generate.py
     # never need to be touched.
     llm_rol_generate: str = Field(default="")
-    llm_rol_reformulate: str = Field(default="")
-    llm_rol_review: str = Field(default="")
     # Named differently from LLMRole.WEB_SUPPLEMENT on purpose: in
     # .env.providers the role is called "SUPPLEMENT" (shorter), the full
     # internal name ("web_supplement") only lives in the enum. The mapping
@@ -261,19 +259,10 @@ class Settings(BaseSettings):
         """
         raw_by_role: dict[LLMRole, tuple[str, str]] = {
             LLMRole.GENERATE: ("LLM_ROL_GENERATE", self.llm_rol_generate),
-            LLMRole.REFORMULATE: ("LLM_ROL_REFORMULATE", self.llm_rol_reformulate),
-            LLMRole.REVIEW: ("LLM_ROL_REVIEW", self.llm_rol_review),
             LLMRole.WEB_SUPPLEMENT: ("LLM_ROL_SUPPLEMENT", self.llm_rol_supplement),
         }
         var_name, raw = raw_by_role[role]
         return _split_backend_model(raw, var_name)
-
-    # Agent -- thematic focus threshold for the LangGraph graph.
-    # With 1 collection, measures chunk_index spread (lower = match).
-    # With N collections, measures source dominance (higher = match).
-    # Overridable in .env: CONFIDENCE_LIMIT=0.20
-    confidence_limit: float = Field(default=0.79, ge=0.0, le=1.0)
-    max_review_attempts: int = Field(default=1, ge=0)
 
     # Context guard -- token estimation safety margins
     context_guard_safety_margin: float = Field(default=0.10, ge=0.0, le=0.5)
