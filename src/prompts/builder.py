@@ -53,8 +53,8 @@ GROUNDING:
 CITATION:
 
 - Cite immediately after the claim it supports -- never batch citations at the end of a paragraph.
-- Format: (Source, p. X). Use the exact source name and page found in the source metadata; never invent or approximate one.
-- When a claim rests on more than one source (agreement, contrast, complementary views), cite all of them together: (Source A, p. X; Source B, p. Y).
+- Format: ({{source name}}, p. {{page}}). Use the exact source name and page found in the source metadata; never invent or approximate one.
+- When a claim rests on more than one source (agreement, contrast, complementary views), cite all of them together: ({{source A}}, p. {{page A}}; {{source B}}, p. {{page B}}).
 - If a source has no page metadata, cite it by name only -- do not invent a page number.
 
 STYLE:
@@ -359,7 +359,7 @@ RULES:
 - Preserve all correct information from the rejected answer.
 - Modify only what is necessary.
 - Keep every statement fully grounded in the retrieved context.
-- Cite each claim immediately after it (Source, p. X), combining sources when a claim rests on more than one.
+- Cite each claim immediately after it ({{source name}}, p. {{page}}), combining sources when a claim rests on more than one.
 - Never introduce external knowledge.
 - Never expose the retrieval mechanism (no "according to the provided context" style phrasing).
 - Respond in the same language as the original question.

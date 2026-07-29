@@ -58,6 +58,18 @@ _MODELS: dict[str, dict[str, Any]] = {
             "enable_thinking": False,
         },
     },
+    "qwen3.6-moe:35b-a3b": {
+        "timeout": 600,
+        "temperature": 0.0,
+        "max_tokens": 4096,
+        "top_p": 1.0,
+        "presence_penalty": 0.0,
+        "frequency_penalty": 0.0,
+        "extra_body": {
+            "top_k": 20,
+            "enable_thinking": False,
+        },
+    },
 }
 
 _CONTEXT_WINDOWS: dict[str, int] = {
