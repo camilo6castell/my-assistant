@@ -1,12 +1,5 @@
 import logging
 
-from src.config.settings import settings
-
-settings.log_path.mkdir(
-    parents=True,
-    exist_ok=True,
-)
-
 FORMAT: str = "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
 
 logging.basicConfig(

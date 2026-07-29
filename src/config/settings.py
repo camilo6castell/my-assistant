@@ -14,7 +14,7 @@ files that already import directly (e.g.: from src.config.settings import CHUNK_
 
 from pathlib import Path
 
-from pydantic import Field, ValidationInfo, field_validator
+from pydantic import Field, ValidationInfo, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from src.domain.models import LLMRole
@@ -57,7 +57,7 @@ class Settings(BaseSettings):
     )
 
     # Root
-    ai_home: Path = Field(default=Path("/srv/ai"))
+    ai_home: Path = Field(default_factory=lambda: Path.home() / "Documents" / "my-assistant")
 
     # Paths: Derived paths are computed properties
     @property
@@ -263,6 +263,13 @@ class Settings(BaseSettings):
         }
         var_name, raw = raw_by_role[role]
         return _split_backend_model(raw, var_name)
+
+    @model_validator(mode="after")
+    def _ensure_dirs(self) -> "Settings":
+        self.data_path.mkdir(parents=True, exist_ok=True)
+        self.log_path.mkdir(parents=True, exist_ok=True)
+        self.vector_store_path.mkdir(parents=True, exist_ok=True)
+        return self
 
     # Context guard -- token estimation safety margins
     context_guard_safety_margin: float = Field(default=0.10, ge=0.0, le=0.5)
