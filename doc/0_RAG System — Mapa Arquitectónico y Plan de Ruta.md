@@ -321,13 +321,13 @@ LLMRole.REFORMULATE → settings.role_spec() → ("ollama", "qwen3.5:2b")
 
 `ProviderConfig` (dataclass frozen):
 ```python
-name: str           # "generate", "review", etc.
-backend: str        # "flm", "ollama", "gemini"
+name: str  # "generate", "review", etc.
+backend: str  # "flm", "ollama", "gemini"
 base_url: str
 api_key: str
 model: str
-client: str         # "openai_compat", "ollama_native"
-capabilities: str   # → archivo en src/config/models/
+client: str  # "openai_compat", "ollama_native"
+capabilities: str  # → archivo en src/config/models/
 ```
 
 Los clientes concretos (`LLMClient`) se cachean por
@@ -422,12 +422,15 @@ Archivo: `src/domain/models.py`
 ```python
 class TurnMemory(BaseModel, frozen=True):
     """Un turno de la conversación."""
+
     user: str
     assistant: str
 
+
 class ChatMode(StrEnum):
-    SOFT = "SOFT"   # Síntesis profunda
-    HARD = "HARD"   # Solo lo explícito
+    SOFT = "SOFT"  # Síntesis profunda
+    HARD = "HARD"  # Solo lo explícito
+
 
 class LLMRole(StrEnum):
     GENERATE = "generate"

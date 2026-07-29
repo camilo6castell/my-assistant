@@ -282,9 +282,19 @@ class Settings(BaseSettings):
     # Embeddings
     embedding_batch_size: int = Field(default=64, gt=0)
 
+    # Demo endpoint (POST /api/v1/demo/query)
+    demo_max_concurrency: int = Field(default=1, ge=1)
+    demo_max_tokens: int | None = Field(default=None)
+
     # API
     api_host: str = Field(default="127.0.0.1")
     api_port: int = Field(default=8000, gt=0)
+
+    # MCP Server
+    mcp_host: str = Field(default="127.0.0.1")
+    mcp_port: int = Field(default=8100, gt=0)
+    mcp_bearer_token: str = Field(default="")
+    mcp_allowed_hosts: list[str] = Field(default_factory=lambda: ["127.0.0.1", "localhost"])
 
     # ======================================================
     # WEB SEARCH (Tavily)

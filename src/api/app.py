@@ -8,14 +8,11 @@ same endpoints -- there are no per-client API files; separation
 is by functional domain (see src/api/routers/).
 
 Endpoints (all under /api/v1, see routers/ for details):
-  chat.py        /collections, /query, /query/agent  -- regular functions
-                                                          (includes the case with
-                                                          no context source at all --
-                                                          see _answer_raw in
-                                                          routers/chat.py)
-  files.py       /files                               -- upload + ephemeral collections
-  config.py      /config/providers                    -- per-provider capabilities (read-only)
-  attachments.py /attachments                         -- ad-hoc single-use
+  chat.py        /collections, /query               -- regular functions
+  demo.py        /demo/query                         -- streaming demo
+  files.py       /files                              -- upload + ephemeral collections
+  config.py      /config/providers                   -- per-provider capabilities (read-only)
+  attachments.py /attachments                        -- ad-hoc single-use
                                                           attachments (see
                                                           src/context/attachments.py)
 
@@ -43,8 +40,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from src.api import deps
-from src.api.routers import attachments, chat, config, files
-from src.graph import build_rag_graph
+from src.api.routers import attachments, chat, config, demo, files
 from src.utils.logger import logger
 
 # How often inactive ephemeral conversations are checked -- more frequent
@@ -63,9 +59,6 @@ async def _cleanup_loop() -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
-    logger.info("[api] Compiling RAG graph...")
-    deps.set_rag_graph(build_rag_graph())
-
     cleanup_task = asyncio.create_task(_cleanup_loop())
     logger.info("[api] API ready.")
 
@@ -81,7 +74,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
 app = FastAPI(
     title="MyAssistant RAG API",
-    description="REST API for the local RAG system with LangGraph.",
+    description="REST API for the local RAG system.",
     version="1.1.0",
     lifespan=lifespan,
 )
@@ -99,6 +92,7 @@ app.include_router(chat.router, prefix="/api/v1")
 app.include_router(files.router, prefix="/api/v1")
 app.include_router(config.router, prefix="/api/v1")
 app.include_router(attachments.router, prefix="/api/v1")
+app.include_router(demo.router, prefix="/api/v1")
 
 
 @app.exception_handler(Exception)

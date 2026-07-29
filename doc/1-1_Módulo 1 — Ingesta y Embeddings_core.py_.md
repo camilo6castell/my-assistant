@@ -48,6 +48,7 @@ Veamos cada una en detalle.
 ```python
 # src/ingest/core.py:28
 
+
 def chunk_text(text: str) -> list[str]:
     text = text.strip()
 
@@ -106,6 +107,7 @@ para evitar un bucle infinito.
 
 ```python
 # src/ingest/core.py:54
+
 
 def encode_chunks(chunks: list[str]) -> np.ndarray:
     logger.info(
@@ -182,6 +184,7 @@ class MiNuevoEncoder(EmbeddingEncoder):
         # tu lógica aquí
         return embeddings
 
+
 # Registrar en el factory
 _BACKEND_MAP["mi_backend"] = MiNuevoEncoder
 ```
@@ -195,6 +198,7 @@ llaman a `get_encoder().encode()`.
 
 ```python
 # src/ingest/core.py:67
+
 
 def build_metadata(
     source: str,
@@ -228,16 +232,17 @@ acompaña a cada chunk.
 ```python
 # src/storage/faiss_store.py:47
 
+
 class ChunkMetadata(BaseModel):
     model_config = ConfigDict(frozen=True)
 
-    source: str         # Nombre del archivo o URL
-    source_type: str    # "file", "url"
-    page: int           # Número de página
-    text: str           # Texto del fragmento
-    chunk_index: int    # Índice del chunk dentro del archivo/URL
-    collection: str     # Colección a la que pertenece (e.g. "sociologia/1984")
-    file_id: str | None # Solo para archivos efímeros (None en ingesta normal)
+    source: str  # Nombre del archivo o URL
+    source_type: str  # "file", "url"
+    page: int  # Número de página
+    text: str  # Texto del fragmento
+    chunk_index: int  # Índice del chunk dentro del archivo/URL
+    collection: str  # Colección a la que pertenece (e.g. "sociologia/1984")
+    file_id: str | None  # Solo para archivos efímeros (None en ingesta normal)
 ```
 
 **`frozen=True`**: una vez creado, el objeto no se puede modificar.

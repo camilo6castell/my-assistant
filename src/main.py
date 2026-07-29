@@ -5,6 +5,7 @@ Usage:
   python -m src.main                                   interactive menu
   python -m src.main chat                              go directly to chat
   python -m src.main api                               start the REST API
+  python -m src.main mcp                               start the MCP server (Streamable HTTP)
   python -m src.main web                               start API + frontend (ui/) and open browser
   python -m src.main ingest <cat> <col>                ingest local files
   python -m src.main ingest-url <cat> <col> <url>      ingest a single URL
@@ -15,6 +16,7 @@ Examples:
   python -m src.main ingest-url sociologia debord https://sitio.com/articulo
   python -m src.main crawl react hooks https://react.dev/learn
   python -m src.main api
+  python -m src.main mcp
   python -m src.main web
 """
 
@@ -67,6 +69,22 @@ def _cmd_api() -> None:
         "src.api.app:app",
         host=settings.api_host,
         port=settings.api_port,
+        reload=False,
+        log_level="warning",
+    )
+
+
+def _cmd_mcp() -> None:
+    import uvicorn
+
+    from src.config.settings import settings
+    from src.mcp_server.server import create_app
+
+    app = create_app()
+    uvicorn.run(
+        app,
+        host=settings.mcp_host,
+        port=settings.mcp_port,
         reload=False,
         log_level="warning",
     )
@@ -272,6 +290,7 @@ COMMANDS: dict[str, tuple[CommandFn, int]] = {
     "chat": (_cmd_chat, 0),
     "api": (_cmd_api, 0),
     "web": (_cmd_web, 0),
+    "mcp": (_cmd_mcp, 0),
     "ingest": (_cmd_ingest, 2),
     "ingest-url": (_cmd_ingest_url, 3),
     "crawl": (_cmd_crawl, 3),

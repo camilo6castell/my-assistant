@@ -192,9 +192,27 @@ results, confidence = search(question, mode, collections)
 
 ```python
 SUPPORTED_SUFFIXES = {
-    ".txt", ".md", ".json", ".py", ".js", ".ts", ".tsx", ".jsx",
-    ".java", ".yaml", ".yml", ".toml", ".csv", ".sql", ".sh",
-    ".env", ".cfg", ".ini", ".xml", ".css", ".html",
+    ".txt",
+    ".md",
+    ".json",
+    ".py",
+    ".js",
+    ".ts",
+    ".tsx",
+    ".jsx",
+    ".java",
+    ".yaml",
+    ".yml",
+    ".toml",
+    ".csv",
+    ".sql",
+    ".sh",
+    ".env",
+    ".cfg",
+    ".ini",
+    ".xml",
+    ".css",
+    ".html",
 }
 ```
 
@@ -270,7 +288,7 @@ class FileUploadResponse(BaseModel):
     file_id: str
     filename: str
     chunk_count: int
-    attached_to_collection: str | None = None   # None si es efímero
+    attached_to_collection: str | None = None  # None si es efímero
 ```
 
 ### GET `/api/v1/files/{conversation_id}` — Listar archivos efímeros
@@ -374,7 +392,7 @@ Tanto `EphemeralStore` como `AttachmentStore` tienen `sweep_expired()`, ejecutad
 async def _cleanup_loop():
     while True:
         await asyncio.sleep(CLEANUP_INTERVAL)
-        ephemeral_store.sweep_expired(EPHEMERAL_TTL)   # 6 horas
+        ephemeral_store.sweep_expired(EPHEMERAL_TTL)  # 6 horas
         attachment_store.sweep_expired(ATTACHMENT_TTL)
 ```
 

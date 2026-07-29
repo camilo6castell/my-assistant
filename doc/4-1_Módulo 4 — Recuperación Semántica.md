@@ -129,8 +129,8 @@ Total bruto: 150 SearchResult (con duplicados)
 `index.search(query, top_k_initial)` devuelve dos arrays paralelos:
 
 ```python
-scores  = [[0.89, 0.85, 0.81, ...]]   # similitudes coseno, de mayor a menor
-indices = [[47,   203,  891,  ...]]   # posiciones en metadata[]
+scores = [[0.89, 0.85, 0.81, ...]]  # similitudes coseno, de mayor a menor
+indices = [[47, 203, 891, ...]]  # posiciones en metadata[]
 ```
 
 `idx == -1` es el caso borde: si el índice tiene menos vectores que `top_k_initial`, FAISS rellena con `-1`. Se descarta.
@@ -203,7 +203,7 @@ La interpretación de los sueños requiere considerar...
 ## El cierre: top_k_final y confidence
 
 ```python
-final_results = results[:top_k_final]   # HARD: 5, SOFT: 7
+final_results = results[:top_k_final]  # HARD: 5, SOFT: 7
 
 if not final_results:
     return [], 0.0

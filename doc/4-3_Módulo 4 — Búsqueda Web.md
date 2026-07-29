@@ -32,15 +32,18 @@ WEB_SEARCH_INCLUDE_ANSWER=false   # si Tavily debe incluir su propia respuesta
 
 TAVILY_ENDPOINT = "https://api.tavily.com/search"
 
+
 class WebSearchResult(BaseModel):
     title: str
     url: str
-    content: str     # snippet ya resumido por Tavily, no HTML crudo
+    content: str  # snippet ya resumido por Tavily, no HTML crudo
+
 
 class WebSearchStatus(StrEnum):
     OK = "ok"
-    QUOTA_EXCEEDED = "quota_exceeded"   # créditos de Tavily agotados
-    ERROR = "error"                     # cualquier otro fallo
+    QUOTA_EXCEEDED = "quota_exceeded"  # créditos de Tavily agotados
+    ERROR = "error"  # cualquier otro fallo
+
 
 class WebSearchOutcome(BaseModel):
     results: list[WebSearchResult]
@@ -153,9 +156,9 @@ def supplement_with_web(
     try:
         outcome = search_web(question)
         if outcome.status == WebSearchStatus.QUOTA_EXCEEDED:
-            return answer, [], True        # propagar cuota agotada
+            return answer, [], True  # propagar cuota agotada
         if not outcome.results:
-            return answer, [], False       # sin resultados, sin cambios
+            return answer, [], False  # sin resultados, sin cambios
 
         supplement_prompt = build_web_supplement_prompt(
             question=question,
@@ -174,7 +177,7 @@ def supplement_with_web(
         return (f"{answer}\n\n{supplement}", web_sources, False)
 
     except Exception as e:
-        return answer, [], False   # falla silenciosa: la respuesta principal no se modifica
+        return answer, [], False  # falla silenciosa: la respuesta principal no se modifica
 ```
 
 Características clave:
@@ -189,6 +192,7 @@ Características clave:
 
 ```python
 # src/prompts/builder.py
+
 
 def build_web_supplement_system_prompt() -> str:
     return """
@@ -245,7 +249,7 @@ class QueryRequest(BaseModel):
     mode: str
     collections: list[str]
     chat_history: list[dict[str, str]]
-    web_search: bool = False          # default: sin búsqueda web
+    web_search: bool = False  # default: sin búsqueda web
     generation: GenerationOptions | None = None
     conversation_id: str | None = None
 ```

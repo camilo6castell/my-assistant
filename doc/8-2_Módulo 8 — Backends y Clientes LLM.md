@@ -9,9 +9,11 @@ Este módulo documenta la capa de transporte que se comunica con los proveedores
 ```python
 # src/nlp/llm/backends/base.py
 
+
 class ChatTurn(TypedDict):
     role: Literal["system", "user", "assistant"]
     content: str
+
 
 class LLMClient(Protocol):
     """Cualquier forma de completar un chat: OpenAI-compatible, Ollama nativo, etc."""
@@ -45,6 +47,7 @@ Es el tipo de cada mensaje en la lista que se envía al LLM. `build_messages()` 
 
 ```python
 # src/nlp/llm/backends/openai_compat.py
+
 
 class OpenAICompatClient:
     def __init__(self, base_url: str, api_key: str) -> None:
@@ -91,9 +94,11 @@ Algunos runtimes (como FastFlowLM en NPU) pueden devolver HTTP 200 con un body q
 ```python
 # src/nlp/llm/backends/ollama_native.py
 
+
 class OllamaNativeClient:
     def __init__(self, host: str) -> None:
         import ollama  # lazy import
+
         self._client = ollama.Client(host=host)
 
     def complete(self, kwargs: dict[str, Any]) -> str | None:
@@ -126,9 +131,9 @@ Antes de que un cliente reciba los kwargs, `generate.py` llama a `build_kwargs()
 
 ```python
 kwargs = build_kwargs(
-    config.capabilities,   # "flm" | "ollama" | "gemini"
-    config.model,          # "qwen3.5:9b" | "gemini-2.0-flash"
-    messages,              # list[ChatTurn]
+    config.capabilities,  # "flm" | "ollama" | "gemini"
+    config.model,  # "qwen3.5:9b" | "gemini-2.0-flash"
+    messages,  # list[ChatTurn]
     max_tokens=...,
     think=...,
     extra=...,

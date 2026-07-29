@@ -14,10 +14,10 @@ La arquitectura tiene dos ejes independientes:
 
 ```python
 class LLMRole(StrEnum):
-    GENERATE      = "generate"       # genera la respuesta final
-    REFORMULATE   = "reformulate"    # reescribe la query para mejorar recall
-    REVIEW        = "review"         # evalúa grounding y citación
-    WEB_SUPPLEMENT = "web_supplement" # complementa con información de la web
+    GENERATE = "generate"  # genera la respuesta final
+    REFORMULATE = "reformulate"  # reescribe la query para mejorar recall
+    REVIEW = "review"  # evalúa grounding y citación
+    WEB_SUPPLEMENT = "web_supplement"  # complementa con información de la web
 ```
 
 Cada role elige, en `.env.providers`, qué backend + qué modelo lo sirve. Los dos ejes son independientes: dos roles pueden compartir backend con diferentes modelos, o compartir modelo con diferentes backends.
@@ -31,13 +31,13 @@ Cada role elige, en `.env.providers`, qué backend + qué modelo lo sirve. Los d
 ```python
 @dataclass(frozen=True)
 class ProviderConfig:
-    name: str           # nombre del role que resolvió esta config (ej. "generate")
-    backend: str        # "flm" | "ollama" | "gemini"
-    base_url: str       # URL del backend
-    api_key: str        # credencial
-    model: str          # nombre del modelo
-    client: str         # "openai_compat" | "ollama_native"
-    capabilities: str   # key en src/config/models/ para las capacidades del modelo
+    name: str  # nombre del role que resolvió esta config (ej. "generate")
+    backend: str  # "flm" | "ollama" | "gemini"
+    base_url: str  # URL del backend
+    api_key: str  # credencial
+    model: str  # nombre del modelo
+    client: str  # "openai_compat" | "ollama_native"
+    capabilities: str  # key en src/config/models/ para las capacidades del modelo
 ```
 
 Es un dataclass `frozen=True` (inmutable). El campo `name` tiene `compare=False`: dos roles con el mismo backend+modelo comparten el mismo cliente cacheado, independientemente de su nombre de role.
@@ -54,10 +54,11 @@ def _backend_url_table() -> dict[str, str]:
         "gemini": settings.llm_gemini_url,
     }
 
+
 def _backend_api_key_table() -> dict[str, str]:
     return {
-        "flm": "not-needed",      # FastFlowLM local no valida la key
-        "ollama": "not-needed",   # Ollama local no valida la key
+        "flm": "not-needed",  # FastFlowLM local no valida la key
+        "ollama": "not-needed",  # Ollama local no valida la key
         "gemini": settings.gemini_api_key,  # Gemini sí necesita la real
     }
 ```
@@ -66,9 +67,9 @@ def _backend_api_key_table() -> dict[str, str]:
 
 ```python
 _BACKEND_CLIENT: dict[str, str] = {
-    "flm":     "openai_compat",    # FastFlowLM habla el protocolo OpenAI
-    "ollama":  "ollama_native",    # Ollama usa su cliente nativo
-    "gemini":  "openai_compat",    # Gemini tiene endpoint compatible con OpenAI
+    "flm": "openai_compat",  # FastFlowLM habla el protocolo OpenAI
+    "ollama": "ollama_native",  # Ollama usa su cliente nativo
+    "gemini": "openai_compat",  # Gemini tiene endpoint compatible con OpenAI
 }
 ```
 
@@ -90,6 +91,7 @@ Agregar un nuevo tipo de cliente (ej. un cliente nativo de Claude) requiere: cre
 ```python
 def _build_provider_table() -> dict[str, ProviderConfig]:
     return {role.value: _provider_config_for_role(role) for role in LLMRole}
+
 
 def _provider_config_for_role(role: LLMRole) -> ProviderConfig:
     backend, model = settings.role_spec(role)
@@ -131,12 +133,13 @@ def _client_for(config: ProviderConfig) -> LLMClient:
 
 ```python
 def get_provider(name: str) -> ProviderConfig:
-    """ Retorna la configuración para un role (ej. "generate"). """
+    """Retorna la configuración para un role (ej. "generate")."""
     table = _build_provider_table()
     return table[name]
 
+
 def get_client(name: str) -> tuple[LLMClient, ProviderConfig]:
-    """ Retorna (client, config) listo para usar con LLMClient.complete(). """
+    """Retorna (client, config) listo para usar con LLMClient.complete()."""
     config = get_provider(name)
     return _client_for(config), config
 ```

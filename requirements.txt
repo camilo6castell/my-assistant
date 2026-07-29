@@ -7,7 +7,6 @@
 # src.main, sin [build-system] en pyproject.toml, ver comentario ahí) y
 # `pip install -r requirements.txt` sigue siendo la forma de instalar.
 openai>=1.40.0
-langgraph>=0.2.0
 fastapi>=0.111.0
 uvicorn>=0.30.0
 pydantic>=2.7.0

@@ -1,15 +1,10 @@
-import { Bot, Brain, FlaskConical, Globe } from "lucide-react"
+import { Brain, FlaskConical, Globe, Cpu } from "lucide-react"
 import { DEMO_MODE, DEMO_MODE_EXPLANATION } from "@/lib/demo"
+import { detectSendMode } from "@/lib/sendMessage"
 import { cn } from "@/lib/utils"
 import { useConversationsStore } from "@/stores/conversationsStore"
 import type { ProvidersResponse } from "@/types/api"
 import type { Conversation } from "@/types/chat"
-
-const AGENT_EXPLANATION =
-  "Agent mode: evaluates the answer with a second LLM (reviewer) before " +
-  "delivering it; if it detects hallucinations or a lack of grounding in " +
-  "the context, it asks for a regeneration with feedback. Slower, but " +
-  "more reliable."
 
 const WEB_SEARCH_EXPLANATION =
   "Complements the answer with a web search (Tavily). With no active " +
@@ -27,7 +22,7 @@ const WEB_SEARCH_QUOTA_EXCEEDED_EXPLANATION =
   "your plan at https://app.tavily.com, or wait for the next billing cycle."
 
 type Enhancement = {
-  key: "web" | "think" | "agent" | "demo"
+  key: "web" | "think" | "demo"
   label: string
   icon: typeof Globe
   active: boolean
@@ -44,9 +39,9 @@ export function ResponseModeSection({
   conversation: Conversation
   providers: ProvidersResponse | undefined
 }) {
+  const currentMode = detectSendMode()
   const setMode = useConversationsStore((s) => s.setMode)
   const setGeneration = useConversationsStore((s) => s.setGeneration)
-  const setUseAgent = useConversationsStore((s) => s.setUseAgent)
   const setUseWebSearch = useConversationsStore((s) => s.setUseWebSearch)
   const webSearchQuotaExceeded = useConversationsStore((s) => s.webSearchQuotaExceeded)
   const setWebSearchQuotaExceeded = useConversationsStore((s) => s.setWebSearchQuotaExceeded)
@@ -62,13 +57,15 @@ export function ResponseModeSection({
       key: "web",
       label: "Web",
       icon: Globe,
-      active: !DEMO_MODE && conversation.useWebSearch,
-      disabled: DEMO_MODE || webSearchQuotaExceeded,
+      active: !DEMO_MODE && currentMode !== "client_agent" && conversation.useWebSearch,
+      disabled: DEMO_MODE || currentMode === "client_agent" || webSearchQuotaExceeded,
       title: DEMO_MODE
         ? DEMO_MODE_EXPLANATION
-        : webSearchQuotaExceeded
-          ? WEB_SEARCH_QUOTA_EXCEEDED_EXPLANATION
-          : WEB_SEARCH_EXPLANATION,
+        : currentMode === "client_agent"
+          ? "Web search is not available when the in-browser agent is active."
+          : webSearchQuotaExceeded
+            ? WEB_SEARCH_QUOTA_EXCEEDED_EXPLANATION
+            : WEB_SEARCH_EXPLANATION,
       onToggle: () => setUseWebSearch(conversation.id, !conversation.useWebSearch),
     },
     {
@@ -83,15 +80,6 @@ export function ResponseModeSection({
           ? THINK_EXPLANATION
           : `The active model (${activeProvider?.model ?? "no provider"}) doesn't have reasoning mode configured.`,
       onToggle: () => setGeneration(conversation.id, { thinkMode: !effectiveThink }),
-    },
-    {
-      key: "agent",
-      label: "Agent",
-      icon: Bot,
-      active: !DEMO_MODE && conversation.useAgent,
-      disabled: DEMO_MODE,
-      title: DEMO_MODE ? DEMO_MODE_EXPLANATION : AGENT_EXPLANATION,
-      onToggle: () => setUseAgent(conversation.id, !conversation.useAgent),
     },
     ...(DEMO_MODE
       ? [
@@ -135,12 +123,24 @@ export function ResponseModeSection({
         </div>
       </div>
 
+      {/* Pipeline indicator */}
+      {!DEMO_MODE && (
+        <div className="flex items-center gap-1.5 rounded-lg border border-border/40 bg-overlay/30 px-2.5 py-1.5">
+          <Cpu className="size-3 text-muted-foreground/60" />
+          <span className="text-[11px] text-muted-foreground/70">
+            {currentMode === "client_agent"
+              ? "Full agent pipeline (in-browser)"
+              : "Simple pipeline (backend streaming)"}
+          </span>
+        </div>
+      )}
+
       {/* Enhancements -- compact cards */}
       <div className="space-y-2">
         <span className="block text-[11px] font-medium uppercase tracking-wider text-muted-foreground/60">
           Enhancements
         </span>
-        <div className={cn("grid gap-1.5", DEMO_MODE ? "grid-cols-4" : "grid-cols-3")}>
+        <div className={cn("grid gap-1.5", DEMO_MODE ? "grid-cols-3" : "grid-cols-2")}>
           {enhancements.map(({ key, label, icon: Icon, active, disabled, title, onToggle, variant }) => (
             <button
               key={key}

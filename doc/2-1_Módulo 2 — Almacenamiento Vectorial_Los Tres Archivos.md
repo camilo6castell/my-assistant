@@ -26,7 +26,7 @@ La primera pregunta natural es: **¿por qué tres archivos y no uno?** Cada uno 
         "page": 12,
         "text": "El espectáculo no es un conjunto de imágenes...",
         "chunk_index": 0,
-        "collection": "sociologia/debord"
+        "collection": "sociologia/debord",
     },
     {
         "source": "La-sociedad-del-espectaculo.pdf",
@@ -34,7 +34,7 @@ La primera pregunta natural es: **¿por qué tres archivos y no uno?** Cada uno 
         "page": 12,
         "text": "...sino una relación social entre personas mediatizada",
         "chunk_index": 1,
-        "collection": "sociologia/debord"
+        "collection": "sociologia/debord",
     },
     # ... un dict por cada chunk indexado
 ]
@@ -51,11 +51,14 @@ Puedes pensar en esto como la tabla de una base de datos donde la primary key es
 ```python
 # Shape: (N, 384) donde N = número total de chunks
 # Ejemplo con 3 chunks:
-array([
-    [ 0.21, -0.54,  0.88,  0.03, ... ],  # fila 0 → vector de metadata[0]
-    [ 0.19, -0.51,  0.90,  0.01, ... ],  # fila 1 → vector de metadata[1]
-    [-0.72,  0.33, -0.11,  0.95, ... ],  # fila 2 → vector de metadata[2]
-], dtype=float32)
+array(
+    [
+        [0.21, -0.54, 0.88, 0.03, ...],  # fila 0 → vector de metadata[0]
+        [0.19, -0.51, 0.90, 0.01, ...],  # fila 1 → vector de metadata[1]
+        [-0.72, 0.33, -0.11, 0.95, ...],  # fila 2 → vector de metadata[2]
+    ],
+    dtype=float32,
+)
 ```
 
 Es la matriz de embeddings guardada en formato numpy binario. Numpy tiene su propio formato `.npy` que es extremadamente eficiente — carga la matriz entera en memoria con un solo `mmap` sin parsear nada.

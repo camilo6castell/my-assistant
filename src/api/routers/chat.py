@@ -1,6 +1,6 @@
 """
 "chat" router -- the application's regular functions: ask a
-question (linear pipeline or LangGraph agent) and list collections.
+question (linear pipeline) and list collections.
 
 Stateless design (see docstring of src/api/app.py): the client re-sends
 collections and chat_history with every request. The only partial
@@ -11,16 +11,12 @@ are merged with the persisted collections before retrieval.
 
 from __future__ import annotations
 
-from typing import cast
-
 from fastapi import APIRouter, Depends, HTTPException
-from langgraph.graph.state import CompiledStateGraph
 
 from src.api.deps import (
     get_attachment_store,
     get_context_manager,
     get_ephemeral_store,
-    get_rag_graph,
 )
 from src.api.schemas.chat import (
     CollectionsResponse,
@@ -39,13 +35,10 @@ from src.api.services.query import (
     resolve_ephemeral,
     supplement_with_web,
 )
-from src.config.models import get_supports
 from src.config.settings import settings
 from src.context.attachments import AttachmentStore
 from src.context.ephemeral import EphemeralStore
 from src.context.manager import ContextManager
-from src.domain.models import LLMRole
-from src.graph.state import RAGState
 from src.nlp.llm.context_guard import ContextLimitExceeded, check_context_fit
 from src.nlp.llm.generate import ask_llm
 from src.nlp.llm.providers import get_provider
@@ -98,9 +91,9 @@ def _validate_generation_options(request: QueryRequest) -> None:
     if generation is None:
         return
 
-    provider_name = LLMRole.GENERATE.value
+    provider_name = "generate"
     config = get_provider(provider_name)
-    supports = get_supports(config.capabilities, config.model)
+    supports = config.capabilities
 
     if generation.think_mode is not None and "think_mode" not in supports:
         raise HTTPException(
@@ -225,14 +218,14 @@ async def query(
                 system_prompt=build_system_prompt(),
                 prompt=prompt,
                 chat_memory=chat_memory,
-                provider=LLMRole.GENERATE.value,
+                provider="generate",
                 max_tokens=gen_kwargs["max_tokens"],
             )
 
             answer = ask_llm(
                 prompt=prompt,
                 chat_memory=chat_memory,
-                provider=LLMRole.GENERATE.value,
+                provider="generate",
                 **gen_kwargs,
             )
 
@@ -267,162 +260,6 @@ async def query(
         answer=answer,
         confidence=confidence,
         collections_used=[c["collection_name"] for c in collections],
-        used_web_search=used_web_search,
-        web_sources=web_sources or None,
-        web_search_quota_exceeded=quota_exceeded,
-    )
-
-
-@router.post("/query/agent", response_model=QueryResponse)
-async def query_agent(
-    request: QueryRequest,
-    ephemeral_store: EphemeralStore = Depends(get_ephemeral_store),
-    attachment_store: AttachmentStore = Depends(get_attachment_store),
-    rag_graph: CompiledStateGraph[RAGState] = Depends(get_rag_graph),
-) -> QueryResponse:
-    """
-    LangGraph pipeline: retrieve -> evaluate -> [reformulate ->] generate -> review -> [correct].
-
-    Same three cases as /query (see its docstring), integrated without
-    touching the graph for the two that skip it:
-
-      Case raw -- no collections/ephemeral and no web_search: uses
-      answer_raw(), same as /query. The entire graph is skipped -- with
-      no retrieved context there is nothing for review/correct to
-      evaluate.
-
-      Case A -- no collections/files, web_search=True: uses
-      answer_web_only(), the same simple path as /query. See its
-      docstring for why (confidence/reformulate/review are designed
-      around local vector retrieval, with no meaningful analogue for
-      web results).
-
-      Case B -- collections present: the graph runs exactly as before
-      this feature (retrieve -> evaluate -> ... -> review ->
-      [correct]), finishes, and ONLY THEN is the web complement
-      attempted on the `answer` already reviewed/corrected by the graph
-      -- the same supplement_with_web() used by /query, best-effort and
-      cannot alter what the graph already decided. Ad-hoc attachments, if
-      any, travel in RAGState.attachments and generate_node injects them
-      into the final prompt (see src/graph/nodes.py).
-    """
-    logger.info(
-        f"[api] POST /query/agent | collections={request.collections} "
-        f"| mode={request.mode} | question={request.question!r} "
-        f"| web_search={request.web_search}"
-    )
-
-    _validate_web_search(request)
-    _validate_generation_options(request)
-
-    try:
-        collections = resolve_collections(request.collections)
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
-
-    ephemeral = resolve_ephemeral(request.conversation_id, ephemeral_store)
-    if ephemeral is not None:
-        collections = [*collections, ephemeral]
-
-    attachments = fetch_attachments(request.conversation_id, attachment_store)
-
-    chat_memory = build_chat_memory(request.chat_history)
-    used_web_search = False
-    web_sources: list[WebSource] = []
-    quota_exceeded = False
-
-    try:
-        if not collections and not request.web_search:
-            # Case raw -- see answer_raw().
-            answer = answer_raw(request, chat_memory, attachments)
-            confidence = 0.0
-            reformulated = False
-
-        elif not collections:
-            # Case A -- see answer_web_only docstring.
-            answer, web_sources = answer_web_only(request, chat_memory, attachments)
-            confidence = 0.0
-            reformulated = False
-            used_web_search = True
-
-        else:
-            # Normal case: the graph runs exactly as before this feature --
-            # neither graph/state.py (except the new attachments field) nor
-            # graph/nodes.py changed their retrieval/review logic.
-            # top_k_initial/top_k_final/max_turns no longer live in RAGState
-            # (see its docstring in src/graph/state.py): retrieve_node and
-            # generate_node resolve them internally against settings, without
-            # per-request overrides.
-            gen_kwargs = generation_kwargs(request.generation)
-
-            initial_state: RAGState = {
-                "question": request.question,
-                "mode": request.mode,
-                "collections": collections,
-                "chat_memory": chat_memory,
-                "results": [],
-                "confidence": 0.0,
-                "reformulated": False,
-                "answer": "",
-                "review_passed": False,
-                "review_feedback": "",
-                "review_attempts": 0,
-                "max_tokens": gen_kwargs["max_tokens"],
-                "think_mode": gen_kwargs["think_mode"],
-                "extra": gen_kwargs["extra"],
-                "attachments": attachments,
-            }
-
-            # CompiledStateGraph.invoke() is typed in the library as
-            # `dict[str, Any] | Any` (not the generic StateT), so an explicit
-            # cast is more honest here than blindly ignoring the error: it
-            # documents the exact point where LangGraph's precision ends and
-            # ours begins.
-            #
-            # ContextLimitExceeded can escape from generate_node (see its
-            # docstring in src/graph/nodes.py) -- it is translated to 413
-            # here, same as in /query.
-            final_state = cast(RAGState, rag_graph.invoke(initial_state))
-
-            answer = final_state["answer"]
-
-            if not answer:
-                raise HTTPException(
-                    status_code=422,
-                    detail="No relevant context found for the given question and collections.",
-                )
-
-            confidence = final_state["confidence"]
-            reformulated = final_state["reformulated"]
-
-            # Case B: the graph has already finished (including review/correct);
-            # this can only append a paragraph at the end, never reopens the
-            # graph's review cycle or modifies what it already decided.
-            if request.web_search:
-                answer, web_sources, quota_exceeded = supplement_with_web(
-                    question=request.question,
-                    answer=answer,
-                    generation=request.generation,
-                )
-                used_web_search = bool(web_sources)
-    except ContextLimitExceeded as e:
-        raise HTTPException(status_code=413, detail=e.as_detail()) from e
-    except ValueError as e:
-        raise HTTPException(status_code=422, detail=e.args[0]) from e
-
-    # Single-use ad-hoc attachments -- see AttachmentStore docstring.
-    consume_attachments(request.conversation_id, attachment_store)
-
-    logger.info(
-        f"[api] POST /query/agent | respondiendo | answer_len={len(answer)} "
-        f"| used_web_search={used_web_search}"
-    )
-
-    return QueryResponse(
-        answer=answer,
-        confidence=confidence,
-        collections_used=[c["collection_name"] for c in collections],
-        reformulated=reformulated,
         used_web_search=used_web_search,
         web_sources=web_sources or None,
         web_search_quota_exceeded=quota_exceeded,

@@ -283,13 +283,14 @@ de Firefox) para hacer eso.
 ```python
 # src/ingest/http.py:18
 
+
 def extract_main_content(url: str) -> str | None:
     try:
         logger.info(f"Downloading content: {url}")
         response: requests.Response = requests.get(url, timeout=10)
         response.raise_for_status()
 
-        doc: Document = Document(response.text)       # readability-lxml
+        doc: Document = Document(response.text)  # readability-lxml
         soup: BeautifulSoup = BeautifulSoup(doc.summary(), "html.parser")
         text: str = soup.get_text(separator="\n")
 
@@ -393,12 +394,12 @@ función para construir metadata:
 
 ```python
 build_metadata(
-    source=...,        # nombre de archivo o URL
-    source_type=...,   # "file" o "url"
-    page=...,          # número de página
-    chunk=...,         # texto del fragmento
-    chunk_index=...,   # índice dentro del archivo/URL
-    collection=...,    # "category/collection_name"
+    source=...,  # nombre de archivo o URL
+    source_type=...,  # "file" o "url"
+    page=...,  # número de página
+    chunk=...,  # texto del fragmento
+    chunk_index=...,  # índice dentro del archivo/URL
+    collection=...,  # "category/collection_name"
 )
 ```
 

@@ -185,10 +185,10 @@ Construye el array de mensajes en el formato estándar de la API `chat/completio
 
 ```python
 [
-    {"role": "system",    "content": "Eres un experto RAG..."},
-    {"role": "user",      "content": "pregunta anterior"},       # turno 1
-    {"role": "assistant", "content": "respuesta anterior"},      # turno 1
-    {"role": "user",      "content": "<<< prompt actual >>>"},   # turno actual
+    {"role": "system", "content": "Eres un experto RAG..."},
+    {"role": "user", "content": "pregunta anterior"},  # turno 1
+    {"role": "assistant", "content": "respuesta anterior"},  # turno 1
+    {"role": "user", "content": "<<< prompt actual >>>"},  # turno actual
 ]
 ```
 
@@ -274,13 +274,13 @@ Versión simplificada para operaciones internas como reformulación y review. No
 ```python
 @dataclass(frozen=True)
 class ProviderConfig:
-    name: str         # nombre del rol (ej. "generate") — solo para logging
-    backend: str      # "flm" | "ollama" | "gemini"
-    base_url: str     # URL del backend
-    api_key: str      # credencial
-    model: str        # nombre del modelo (ej. "qwen3.5:9b")
-    client: str       # "openai_compat" | "ollama_native"
-    capabilities: str # key en src/config/models/ para las capacidades del modelo
+    name: str  # nombre del rol (ej. "generate") — solo para logging
+    backend: str  # "flm" | "ollama" | "gemini"
+    base_url: str  # URL del backend
+    api_key: str  # credencial
+    model: str  # nombre del modelo (ej. "qwen3.5:9b")
+    client: str  # "openai_compat" | "ollama_native"
+    capabilities: str  # key en src/config/models/ para las capacidades del modelo
 ```
 
 `get_client(name)` resuelve el `ProviderConfig` para un rol dado y devuelve `(LLMClient, ProviderConfig)`. El `LLMClient` es un protocolo — `generate.py` nunca interactúa directamente con el proveedor HTTP.

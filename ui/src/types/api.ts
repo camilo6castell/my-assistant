@@ -115,6 +115,13 @@ export interface AttachmentsResponse {
  * en src/llm/context_guard.py. Devuelto tanto por /query, /query/agent
  * como por /query cuando cae en el caso sin colecciones/efímeros/web_search (mismo guard reutilizado en los tres casos, ver check_context_fit en src/llm/context_guard.py).
  */
+/** Espejo de src/api/schemas/demo.py -- enviado a POST /api/v1/demo/query. */
+export interface DemoQueryRequest {
+  question: string
+  collections: string[]
+  mode: "SOFT" | "HARD"
+}
+
 export interface ContextLimitExceededDetail {
   error: "context_limit_exceeded"
   estimated_tokens: number

@@ -20,36 +20,14 @@ Token syntax:
                          → mix of exact and namespaces
 """
 
-import warnings
-from typing import cast
-
-from langgraph.graph.state import CompiledStateGraph
-
 from src.cli.session import ChatSession
 from src.context.manager import LoadedCollection
 from src.context.models import SearchResult
 from src.context.selector import match_contexts
-from src.graph import RAGState, build_rag_graph
 from src.nlp.llm.generate import ask_llm
 from src.nlp.llm.roles import LLMRole
 from src.prompts.builder import build_prompt
 from src.retrieval.search import format_context_chunks, search
-
-# Compiled graph, cached once per process (same pattern as api/app.py lifespan).
-_compiled_graph = None
-
-
-def _get_graph() -> CompiledStateGraph[RAGState]:
-    global _compiled_graph
-    if _compiled_graph is None:
-        _compiled_graph = build_rag_graph()
-    return _compiled_graph
-
-
-warnings.filterwarnings(
-    "ignore",
-    message="You're using a BertTokenizerFast tokenizer.*",
-)
 
 HELP: str = """
 
@@ -63,7 +41,6 @@ HELP: str = """
   /clear              unload all contexts
   /reset              clear conversation memory
   /mode               toggle mode (STRICT / INTERPRETIVE)
-  /agent              enable / disable agent mode (LangGraph)
   /help               show this help
   /exit               return to main menu
 
@@ -72,11 +49,6 @@ HELP: str = """
     sociologia/debord             → exact collection
     sociologia react              → two namespaces
     sociologia/debord react/hooks → mix of exact and namespaces
-
-  Agent mode:
-    When active, each question passes through a LangGraph graph that
-    evaluates the confidence of the results. If low, it automatically
-    reformulates the query and retries before generating the response.
 ═════════════════════════════════════════════════════════════════════════
 
 """
@@ -233,89 +205,6 @@ def _handle_question(session: ChatSession, question: str) -> None:
     session.add_to_memory(user=question, assistant=answer)
 
 
-# ======================================================
-# /agent HANDLER (LangGraph)
-# ======================================================
-
-
-def _handle_agent_question(session: ChatSession, question: str) -> None:
-    """
-    Question handler variant with adaptive retrieval via LangGraph.
-
-    Differences from the linear pipeline (_handle_question):
-      - If initial results confidence is low, the graph reformulates
-        the query and retries once before generating.
-      - The flow is a state graph (retrieve → evaluate → generate /
-        reformulate → retrieve → generate) instead of a linear chain.
-      - Shows whether reformulation was triggered so the user knows.
-
-    The graph is compiled on first use and reused across subsequent
-    calls within the same session (build_rag_graph is cached in the
-    _graph attribute of ChatSession extended by start_chat).
-    """
-    collections: list[LoadedCollection] = session.context_manager.get_loaded_collections()
-
-    if not collections:
-        print("\n  Load a context first.  E.g., /context liberty\n")
-        return
-
-    print("\n  [agent] Executing RAG graph...\n")
-
-    # The compiled graph is cached once per process (see _get_graph()).
-    graph = _get_graph()
-
-    initial_state: RAGState = {
-        "question": question,
-        "mode": session.mode,
-        "collections": collections,
-        "chat_memory": session.chat_memory,
-        "results": [],
-        "confidence": 0.0,
-        "reformulated": False,
-        "answer": "",
-        "review_passed": False,
-        "review_feedback": "",
-        "review_attempts": 0,
-        "max_tokens": None,
-        "think_mode": None,
-        "extra": None,
-        # The CLI has no ad-hoc file attachments (that is a web API
-        # feature -- see src/context/attachments.py and
-        # src/api/routers/chat.py); empty list = generate_node injects
-        # nothing extra into the prompt (see inject_attachments() in
-        # src/prompts/builder.py, which returns `question` unmodified
-        # if `attachments` is empty).
-        "attachments": [],
-    }
-
-    # CompiledStateGraph.invoke() is typed in the library as
-    # `dict[str, Any] | Any` (not as the generic StateT), so an explicit
-    # cast is more honest here than blindly ignoring the error: it
-    # documents exactly the point where LangGraph's precision ends and
-    # ours begins (same pattern as src/api/app.py).
-    final_state = cast(RAGState, graph.invoke(initial_state))
-
-    answer = final_state["answer"]
-    confidence = final_state["confidence"]
-    reformulated = final_state["reformulated"]
-
-    if not answer or answer == "No relevant context found for your question.":
-        print("  No relevant context found.\n")
-        return
-
-    if reformulated:
-        print("  [agent] Low confidence in initial search → query reformulated automatically.\n")
-
-    print("  Answer:\n")
-    print(answer)
-    print(f"\n  [confidence: {confidence:.4f}]")
-    if reformulated:
-        print("  [reformulated: yes]")
-    print()
-
-    session.add_to_memory(user=question, assistant=answer)
-
-
 def start_chat(session: ChatSession) -> None:
     print("\n═════════════════════════════════════════════════════════════════════════")
     print("  Welcome to the RAG-chat!\n")
@@ -371,17 +260,8 @@ def start_chat(session: ChatSession) -> None:
             print(f"\n  Mode: {mode}\n")
             continue
 
-        if command == "/agent":
-            session.toggle_agent()
-            status = "ON" if session.agent_active else "OFF"
-            print(f"\n  Agent: {status}\n")
-            continue
-
         if command.startswith("/"):
             print(f"\n  Unknown command: {command!r}  (type '/help')\n")
             continue
 
-        if session.agent_active:
-            _handle_agent_question(session, command)
-        else:
-            _handle_question(session, command)
+        _handle_question(session, command)

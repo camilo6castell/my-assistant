@@ -1,24 +1,23 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
 import { nanoid } from "nanoid";
 import { Navigate, useParams } from "react-router-dom";
 import {
   apiErrorMessage,
   isWebSearchQuotaExceededError,
-  postQuery,
 } from "@/lib/api/client";
 import {
-  askGeminiDemo,
-  buildAttachmentsContext,
   DEMO_MODE,
-  type DemoAnswer,
+  callDemoEndpointStream,
 } from "@/lib/demo";
+import {
+  sendMessage,
+  detectSendMode,
+} from "@/lib/sendMessage";
 import { useConversationsStore } from "@/stores/conversationsStore";
 import {
   useDemoAttachmentsStore,
-  selectDemoFiles,
 } from "@/stores/demoAttachmentsStore";
 import type { ChatMessage } from "@/types/chat";
-import type { QueryResponse } from "@/types/api";
 import { MessageInput } from "./MessageInput";
 import { MessageList } from "./MessageList";
 
@@ -52,50 +51,23 @@ export function ChatView() {
   const setWebSearchQuotaExceeded = useConversationsStore(
     (s) => s.setWebSearchQuotaExceeded,
   );
-  const queryClient = useQueryClient();
-  const demoAttachments = useDemoAttachmentsStore(
-    selectDemoFiles(conversation?.id ?? null),
-  );
   const clearDemoAttachments = useDemoAttachmentsStore((s) => s.clearFiles);
-
-  const sendMutation = useMutation<QueryResponse | DemoAnswer, unknown, string>(
-    {
-      mutationFn: (text: string) => {
-        if (!conversation) throw new Error("Conversation not found");
-
-        if (DEMO_MODE) {
-          return askGeminiDemo({
-            question: text,
-            history: toHistory(conversation.messages),
-            attachmentsContext: buildAttachmentsContext(demoAttachments),
-          });
-        }
-
-        return postQuery(
-          {
-            question: text,
-            collections: conversation.activeCollections,
-            mode: conversation.mode,
-            chat_history: toHistory(conversation.messages),
-            conversation_id: conversation.id,
-            generation: {
-              max_tokens: conversation.generation.maxTokens,
-              think_mode: conversation.generation.thinkMode,
-            },
-            web_search: conversation.useWebSearch,
-          },
-          conversation.useAgent,
-        );
-      },
-    },
-  );
+  const [isSending, setIsSending] = useState(false);
 
   if (!conversationId || !conversation) {
     return <Navigate to="/" replace />;
   }
 
-  function handleSend(text: string) {
+  function handleDeleteMessage(messageId: string) {
     if (!conversation) return;
+    deleteMessage(conversation.id, messageId);
+  }
+
+  async function handleSend(text: string) {
+    if (!conversation || isSending) return;
+    setIsSending(true);
+    const mode = detectSendMode();
+
     const userMsg: ChatMessage = {
       id: nanoid(),
       role: "user",
@@ -109,56 +81,97 @@ export function ChatView() {
       content: "",
       createdAt: Date.now(),
       isPending: true,
-      pendingLabel: !DEMO_MODE ? "compacting the response" : undefined,
+      pendingLabel: mode === "demo_endpoint" ? "streaming response" : "compacting the response",
     };
 
     addMessage(conversation.id, userMsg);
     addMessage(conversation.id, pendingMsg);
 
-    sendMutation.mutate(text, {
-      onSuccess: (data) => {
-        if ("isDemo" in data) {
-          updateMessage(conversation.id, assistantId, {
-            content: data.answer,
-            isPending: false,
-          });
-          clearDemoAttachments(conversation.id);
-          return;
-        }
-
-        updateMessage(conversation.id, assistantId, {
-          content: data.answer,
-          confidence: data.confidence,
-          collectionsUsed: data.collections_used,
-          reformulated: data.reformulated,
-          usedWebSearch: data.used_web_search,
-          webSources: data.web_sources ?? undefined,
-          isPending: false,
-        });
-        if (data.web_search_quota_exceeded) {
-          setWebSearchQuotaExceeded(true);
-        }
-        queryClient.invalidateQueries({
-          queryKey: ["attachments", conversation.id],
-        });
+    const baseParams = {
+      question: text,
+      collections: conversation.activeCollections,
+      mode: conversation.mode,
+      chatHistory: toHistory(conversation.messages),
+      conversationId: conversation.id,
+      generation: {
+        maxTokens: conversation.generation.maxTokens,
+        thinkMode: conversation.generation.thinkMode,
       },
-      onError: (error) => {
+      webSearch: conversation.useWebSearch,
+    };
+
+    if (mode === "demo_endpoint") {
+      try {
+        await callDemoEndpointStream(
+          {
+            question: text,
+            collections: conversation.activeCollections,
+            mode: conversation.mode,
+          },
+          (chunk) => {
+            const msgs = useConversationsStore.getState().conversations
+              .find((c) => c.id === conversation.id)?.messages ?? [];
+            const current = msgs.find((m) => m.id === assistantId);
+            updateMessage(conversation.id, assistantId, {
+              content: (current?.content ?? "") + chunk,
+            });
+          },
+          () => {
+            updateMessage(conversation.id, assistantId, {
+              isPending: false,
+            });
+          },
+          (error) => {
+            updateMessage(conversation.id, assistantId, {
+              content: error,
+              isPending: false,
+              isError: true,
+            });
+          },
+        );
+      } catch (err) {
         updateMessage(conversation.id, assistantId, {
-          content: apiErrorMessage(error),
+          content: apiErrorMessage(err),
           isPending: false,
           isError: true,
         });
-        if (DEMO_MODE) return;
-        if (isWebSearchQuotaExceededError(error)) {
+      } finally {
+        setIsSending(false);
+      }
+      return;
+    }
+
+    try {
+      const result = await sendMessage(baseParams);
+      if (result) {
+        updateMessage(conversation.id, assistantId, {
+          content: result.content,
+          confidence: result.confidence,
+          collectionsUsed: result.collectionsUsed,
+          reformulated: result.reformulated,
+          usedWebSearch: result.usedWebSearch,
+          webSources: result.webSources,
+          isPending: false,
+        });
+        if (result.webSearchQuotaExceeded) {
           setWebSearchQuotaExceeded(true);
         }
-      },
-    });
-  }
-
-  function handleDeleteMessage(messageId: string) {
-    if (!conversation) return;
-    deleteMessage(conversation.id, messageId);
+        if (mode === "demo") {
+          clearDemoAttachments(conversation.id);
+        }
+      }
+    } catch (err) {
+      updateMessage(conversation.id, assistantId, {
+        content: apiErrorMessage(err),
+        isPending: false,
+        isError: true,
+      });
+      if (!DEMO_MODE && isWebSearchQuotaExceededError(err)) {
+        setWebSearchQuotaExceeded(true);
+      }
+    } finally {
+      setIsSending(false);
+    }
   }
 
   return (
@@ -172,7 +185,7 @@ export function ChatView() {
       <MessageInput
         conversation={conversation}
         onSend={handleSend}
-        disabled={sendMutation.isPending}
+        disabled={isSending}
       />
     </div>
   );

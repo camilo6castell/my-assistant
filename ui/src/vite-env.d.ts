@@ -8,6 +8,9 @@ interface ImportMetaEnv {
   readonly VITE_GEMINI_BASE_URL?: string
   readonly VITE_GEMINI_API_KEY?: string
   readonly VITE_GEMINI_MODEL?: string
+  /** MCP server connection -- see src/lib/mcp.ts. */
+  readonly VITE_MCP_BASE_URL?: string
+  readonly VITE_MCP_BEARER_TOKEN?: string
 }
 
 interface ImportMeta {

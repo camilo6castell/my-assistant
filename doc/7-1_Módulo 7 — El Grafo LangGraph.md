@@ -21,7 +21,7 @@ graph.add_edge(_RETRIEVE, _EVALUATE)
 # Edge condicional: evaluate puede ir a generate o a reformulate
 graph.add_conditional_edges(
     _EVALUATE,
-    route_after_evaluate,                          # función que lee el estado
+    route_after_evaluate,  # función que lee el estado
     {_REFORMULATE: _REFORMULATE, _GENERATE: _GENERATE},  # mapa de opciones
 )
 ```
@@ -37,31 +37,31 @@ El estado compartido entre todos los nodos. Tiene 15 campos:
 ```python
 class RAGState(TypedDict):
     # Datos de entrada del usuario
-    question:        str                        # pregunta actual (puede ser reformulada)
-    mode:            str                        # ChatMode.SOFT | ChatMode.HARD
-    collections:     list[LoadedCollection]     # colecciones FAISS activas
-    chat_memory:     list[TurnMemory]           # historial de la conversación
+    question: str  # pregunta actual (puede ser reformulada)
+    mode: str  # ChatMode.SOFT | ChatMode.HARD
+    collections: list[LoadedCollection]  # colecciones FAISS activas
+    chat_memory: list[TurnMemory]  # historial de la conversación
 
     # Resultado de la recuperación
-    results:         list[SearchResult]         # chunks recuperados por retrieve_node
-    confidence:      float                      # score promedio de top-K
-    reformulated:    bool                       # True si ya se reformuló (evita loops)
+    results: list[SearchResult]  # chunks recuperados por retrieve_node
+    confidence: float  # score promedio de top-K
+    reformulated: bool  # True si ya se reformuló (evita loops)
 
     # Resultado de la generación
-    answer:          str                        # respuesta generada
+    answer: str  # respuesta generada
 
     # Ciclo de revisión
-    review_passed:   bool                       # True si el reviewer aprobó
-    review_feedback: str                        # motivo de rechazo del reviewer
-    review_attempts: int                        # intentos de corrección (evita loops)
+    review_passed: bool  # True si el reviewer aprobó
+    review_feedback: str  # motivo de rechazo del reviewer
+    review_attempts: int  # intentos de corrección (evita loops)
 
     # Overrides de generación (None = behavior por defecto)
-    max_tokens:      int | None                 # límite de tokens de salida
-    think_mode:      bool | None                # modo de razonamiento (si el modelo lo soporta)
-    extra:           dict[str, Any] | None      # parámetros específicos del backend
+    max_tokens: int | None  # límite de tokens de salida
+    think_mode: bool | None  # modo de razonamiento (si el modelo lo soporta)
+    extra: dict[str, Any] | None  # parámetros específicos del backend
 
     # Adjuntos
-    attachments:     list[tuple[str, str]]      # archivos adjuntos (nombre, contenido)
+    attachments: list[tuple[str, str]]  # archivos adjuntos (nombre, contenido)
 ```
 
 ### `RAGStateUpdate` — el tipo de retorno de los nodos
@@ -110,12 +110,12 @@ Son overrides de generación que viajan desde el endpoint HTTP hasta los nodos d
 Cada nodo tiene un nombre constante que se usa tanto al registrarse en el grafo como en los edges condicionales:
 
 ```python
-_RETRIEVE   = "retrieve"
-_EVALUATE   = "evaluate"
+_RETRIEVE = "retrieve"
+_EVALUATE = "evaluate"
 _REFORMULATE = "reformulate"
-_GENERATE   = "generate"
-_REVIEW     = "review"
-_CORRECT    = "correct"
+_GENERATE = "generate"
+_REVIEW = "review"
+_CORRECT = "correct"
 ```
 
 ---
@@ -251,7 +251,7 @@ def review_node(state: RAGState) -> RAGStateUpdate:
         passed = bool(result.get("passed", True))
         feedback = str(result.get("feedback", ""))
     except (json.JSONDecodeError, AttributeError):
-        passed = True   # fallback: aprueba si no puede parsear
+        passed = True  # fallback: aprueba si no puede parsear
         feedback = ""
 
     return {
@@ -308,19 +308,19 @@ def build_rag_graph():
     graph = StateGraph(RAGState)
 
     # Nodos
-    graph.add_node(_RETRIEVE,    retrieve_node)
-    graph.add_node(_EVALUATE,    evaluate_node)
+    graph.add_node(_RETRIEVE, retrieve_node)
+    graph.add_node(_EVALUATE, evaluate_node)
     graph.add_node(_REFORMULATE, reformulate_node)
-    graph.add_node(_GENERATE,    generate_node)
-    graph.add_node(_REVIEW,      review_node)
-    graph.add_node(_CORRECT,     correct_node)
+    graph.add_node(_GENERATE, generate_node)
+    graph.add_node(_REVIEW, review_node)
+    graph.add_node(_CORRECT, correct_node)
 
     # Edges fijos
     graph.set_entry_point(_RETRIEVE)
-    graph.add_edge(_RETRIEVE,    _EVALUATE)
-    graph.add_edge(_REFORMULATE, _RETRIEVE)    # reformulate → retrieve (segunda pasada)
-    graph.add_edge(_GENERATE,    _REVIEW)
-    graph.add_edge(_CORRECT,     _REVIEW)      # correct → review (loop)
+    graph.add_edge(_RETRIEVE, _EVALUATE)
+    graph.add_edge(_REFORMULATE, _RETRIEVE)  # reformulate → retrieve (segunda pasada)
+    graph.add_edge(_GENERATE, _REVIEW)
+    graph.add_edge(_CORRECT, _REVIEW)  # correct → review (loop)
 
     # Edges condicionales
     graph.add_conditional_edges(

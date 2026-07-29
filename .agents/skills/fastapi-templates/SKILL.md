@@ -78,6 +78,7 @@ from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan events."""
@@ -87,11 +88,8 @@ async def lifespan(app: FastAPI):
     # Shutdown
     await database.disconnect()
 
-app = FastAPI(
-    title="API Template",
-    version="1.0.0",
-    lifespan=lifespan
-)
+
+app = FastAPI(title="API Template", version="1.0.0", lifespan=lifespan)
 
 # CORS middleware
 app.add_middleware(
@@ -104,14 +102,17 @@ app.add_middleware(
 
 # Include routers
 from app.api.v1.router import api_router
+
 app.include_router(api_router, prefix="/api/v1")
 
 # core/config.py
 from pydantic_settings import BaseSettings
 from functools import lru_cache
 
+
 class Settings(BaseSettings):
     """Application settings."""
+
     DATABASE_URL: str
     SECRET_KEY: str
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
@@ -120,9 +121,11 @@ class Settings(BaseSettings):
     class Config:
         env_file = ".env"
 
+
 @lru_cache()
 def get_settings() -> Settings:
     return Settings()
+
 
 # core/database.py
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
@@ -132,19 +135,12 @@ from app.core.config import get_settings
 
 settings = get_settings()
 
-engine = create_async_engine(
-    settings.DATABASE_URL,
-    echo=True,
-    future=True
-)
+engine = create_async_engine(settings.DATABASE_URL, echo=True, future=True)
 
-AsyncSessionLocal = sessionmaker(
-    engine,
-    class_=AsyncSession,
-    expire_on_commit=False
-)
+AsyncSessionLocal = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
 Base = declarative_base()
+
 
 async def get_db() -> AsyncSession:
     """Dependency for database session."""
@@ -172,6 +168,7 @@ ModelType = TypeVar("ModelType")
 CreateSchemaType = TypeVar("CreateSchemaType", bound=BaseModel)
 UpdateSchemaType = TypeVar("UpdateSchemaType", bound=BaseModel)
 
+
 class BaseRepository(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
     """Base repository for CRUD operations."""
 
@@ -180,28 +177,15 @@ class BaseRepository(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
 
     async def get(self, db: AsyncSession, id: int) -> Optional[ModelType]:
         """Get by ID."""
-        result = await db.execute(
-            select(self.model).where(self.model.id == id)
-        )
+        result = await db.execute(select(self.model).where(self.model.id == id))
         return result.scalars().first()
 
-    async def get_multi(
-        self,
-        db: AsyncSession,
-        skip: int = 0,
-        limit: int = 100
-    ) -> List[ModelType]:
+    async def get_multi(self, db: AsyncSession, skip: int = 0, limit: int = 100) -> List[ModelType]:
         """Get multiple records."""
-        result = await db.execute(
-            select(self.model).offset(skip).limit(limit)
-        )
+        result = await db.execute(select(self.model).offset(skip).limit(limit))
         return result.scalars().all()
 
-    async def create(
-        self,
-        db: AsyncSession,
-        obj_in: CreateSchemaType
-    ) -> ModelType:
+    async def create(self, db: AsyncSession, obj_in: CreateSchemaType) -> ModelType:
         """Create new record."""
         db_obj = self.model(**obj_in.dict())
         db.add(db_obj)
@@ -210,10 +194,7 @@ class BaseRepository(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         return db_obj
 
     async def update(
-        self,
-        db: AsyncSession,
-        db_obj: ModelType,
-        obj_in: UpdateSchemaType
+        self, db: AsyncSession, db_obj: ModelType, obj_in: UpdateSchemaType
     ) -> ModelType:
         """Update record."""
         update_data = obj_in.dict(exclude_unset=True)
@@ -231,25 +212,26 @@ class BaseRepository(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
             return True
         return False
 
+
 # repositories/user_repository.py
 from app.repositories.base_repository import BaseRepository
 from app.models.user import User
 from app.schemas.user import UserCreate, UserUpdate
+
 
 class UserRepository(BaseRepository[User, UserCreate, UserUpdate]):
     """User-specific repository."""
 
     async def get_by_email(self, db: AsyncSession, email: str) -> Optional[User]:
         """Get user by email."""
-        result = await db.execute(
-            select(User).where(User.email == email)
-        )
+        result = await db.execute(select(User).where(User.email == email))
         return result.scalars().first()
 
     async def is_active(self, db: AsyncSession, user_id: int) -> bool:
         """Check if user is active."""
         user = await self.get(db, user_id)
         return user.is_active if user else False
+
 
 user_repository = UserRepository(User)
 ```
@@ -264,17 +246,14 @@ from app.repositories.user_repository import user_repository
 from app.schemas.user import UserCreate, UserUpdate, User
 from app.core.security import get_password_hash, verify_password
 
+
 class UserService:
     """Business logic for users."""
 
     def __init__(self):
         self.repository = user_repository
 
-    async def create_user(
-        self,
-        db: AsyncSession,
-        user_in: UserCreate
-    ) -> User:
+    async def create_user(self, db: AsyncSession, user_in: UserCreate) -> User:
         """Create new user with hashed password."""
         # Check if email exists
         existing = await self.repository.get_by_email(db, user_in.email)
@@ -289,12 +268,7 @@ class UserService:
         user = await self.repository.create(db, UserCreate(**user_in_dict))
         return user
 
-    async def authenticate(
-        self,
-        db: AsyncSession,
-        email: str,
-        password: str
-    ) -> Optional[User]:
+    async def authenticate(self, db: AsyncSession, email: str, password: str) -> Optional[User]:
         """Authenticate user."""
         user = await self.repository.get_by_email(db, email)
         if not user:
@@ -304,10 +278,7 @@ class UserService:
         return user
 
     async def update_user(
-        self,
-        db: AsyncSession,
-        user_id: int,
-        user_in: UserUpdate
+        self, db: AsyncSession, user_id: int, user_in: UserUpdate
     ) -> Optional[User]:
         """Update user."""
         user = await self.repository.get(db, user_id)
@@ -316,12 +287,11 @@ class UserService:
 
         if user_in.password:
             user_in_dict = user_in.dict(exclude_unset=True)
-            user_in_dict["hashed_password"] = get_password_hash(
-                user_in_dict.pop("password")
-            )
+            user_in_dict["hashed_password"] = get_password_hash(user_in_dict.pop("password"))
             user_in = UserUpdate(**user_in_dict)
 
         return await self.repository.update(db, user, user_in)
+
 
 user_service = UserService()
 ```
@@ -341,11 +311,9 @@ from app.api.dependencies import get_current_user
 
 router = APIRouter()
 
+
 @router.post("/", response_model=User, status_code=status.HTTP_201_CREATED)
-async def create_user(
-    user_in: UserCreate,
-    db: AsyncSession = Depends(get_db)
-):
+async def create_user(user_in: UserCreate, db: AsyncSession = Depends(get_db)):
     """Create new user."""
     try:
         user = await user_service.create_user(db, user_in)
@@ -353,18 +321,16 @@ async def create_user(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
+
 @router.get("/me", response_model=User)
-async def read_current_user(
-    current_user: User = Depends(get_current_user)
-):
+async def read_current_user(current_user: User = Depends(get_current_user)):
     """Get current user."""
     return current_user
 
+
 @router.get("/{user_id}", response_model=User)
 async def read_user(
-    user_id: int,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    user_id: int, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)
 ):
     """Get user by ID."""
     user = await user_service.repository.get(db, user_id)
@@ -372,12 +338,13 @@ async def read_user(
         raise HTTPException(status_code=404, detail="User not found")
     return user
 
+
 @router.patch("/{user_id}", response_model=User)
 async def update_user(
     user_id: int,
     user_in: UserUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
     """Update user."""
     if current_user.id != user_id:
@@ -388,11 +355,10 @@ async def update_user(
         raise HTTPException(status_code=404, detail="User not found")
     return user
 
+
 @router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_user(
-    user_id: int,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    user_id: int, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)
 ):
     """Delete user."""
     if current_user.id != user_id:
@@ -418,6 +384,7 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 ALGORITHM = "HS256"
 
+
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     """Create JWT access token."""
     to_encode = data.copy()
@@ -429,13 +396,16 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 
+
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """Verify password against hash."""
     return pwd_context.verify(plain_password, hashed_password)
 
+
 def get_password_hash(password: str) -> str:
     """Hash password."""
     return pwd_context.hash(password)
+
 
 # api/dependencies.py
 from fastapi import Depends, HTTPException, status
@@ -450,10 +420,8 @@ from app.repositories.user_repository import user_repository
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl=f"{settings.API_V1_STR}/auth/login")
 
-async def get_current_user(
-    db: AsyncSession = Depends(get_db),
-    token: str = Depends(oauth2_scheme)
-):
+
+async def get_current_user(db: AsyncSession = Depends(get_db), token: str = Depends(oauth2_scheme)):
     """Get current authenticated user."""
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -491,11 +459,13 @@ from app.core.database import get_db, Base
 
 TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
 
+
 @pytest.fixture(scope="session")
 def event_loop():
     loop = asyncio.get_event_loop_policy().new_event_loop()
     yield loop
     loop.close()
+
 
 @pytest.fixture
 async def db_session():
@@ -503,12 +473,11 @@ async def db_session():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
-    AsyncSessionLocal = sessionmaker(
-        engine, class_=AsyncSession, expire_on_commit=False
-    )
+    AsyncSessionLocal = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
     async with AsyncSessionLocal() as session:
         yield session
+
 
 @pytest.fixture
 async def client(db_session):
@@ -520,18 +489,16 @@ async def client(db_session):
     async with AsyncClient(app=app, base_url="http://test") as client:
         yield client
 
+
 # tests/test_users.py
 import pytest
+
 
 @pytest.mark.asyncio
 async def test_create_user(client):
     response = await client.post(
         "/api/v1/users/",
-        json={
-            "email": "test@example.com",
-            "password": "testpass123",
-            "name": "Test User"
-        }
+        json={"email": "test@example.com", "password": "testpass123", "name": "Test User"},
     )
     assert response.status_code == 201
     data = response.json()

@@ -32,7 +32,7 @@ repo/
 │
 ├── src/
 │   Python 3.11
-│   LangGraph
+│   LangGraph (legacy, see below)
 │   FastAPI
 │   FAISS
 │   Multi-provider LLM pipeline
@@ -46,6 +46,12 @@ repo/
 ```
 
 Backend and frontend are intentionally decoupled.
+
+The **production backend** runs two services:
+- **MCP server** (`python -m src.main mcp`) — Streamable HTTP MCP server exposing `list_collections` and `retrieve_chunks` tools for AI clients.
+- **REST API** (`python -m src.main api`) — FastAPI with `POST /api/v1/query` (linear RAG), `POST /api/v1/demo/query` (streaming demo), file upload, and provider config.
+
+The LangGraph.js agent port lives in `ui/src/graph/` and runs entirely in the browser (see Fases 7–9). The original Python LangGraph agent was removed from the backend in Fase 3 and is no longer present in the codebase.
 
 ---
 
@@ -61,6 +67,7 @@ src/
     graph/
     ingest/
     llm/
+    mcp_server/
     prompts/
     retrieval/
     utils/
@@ -79,9 +86,10 @@ Backend
 
 ```
 src/config/settings.py
-src/graph/graph.py
-src/graph/nodes.py
+src/retrieval/search.py
 src/llm/providers.py
+src/mcp_server/server.py
+src/api/routers/demo.py
 src/main.py
 ```
 
@@ -121,11 +129,7 @@ Large architectural changes should only happen when clearly justified.
 The project follows a layered architecture.
 
 ```
-CLI / API
-
-↓
-
-Graph
+CLI / API / MCP
 
 ↓
 
@@ -141,6 +145,8 @@ External Backends
 ```
 
 Business logic should never bypass these layers.
+
+The LangGraph.js agent (`ui/src/graph/`) runs entirely in the browser and replaced the original Python LangGraph agent (removed in Fase 3).
 
 ---
 
@@ -195,14 +201,6 @@ Generation should never directly query vectorstores.
 
 ---
 
-## Graph
-
-Routing belongs in the graph.
-
-Business nodes should not contain routing decisions unless explicitly intended.
-
----
-
 ## API
 
 The API is stateless.
@@ -215,6 +213,8 @@ Clients send:
 - chat_history
 
 with every request.
+
+Note: `POST /api/v1/query/agent` (the LangGraph agent endpoint) was removed in Fase 3. Only the linear pipeline `/query` remains.
 
 ---
 
@@ -252,21 +252,7 @@ src/llm/providers.py
 
 Create backend implementation if required.
 
-Avoid modifying graph logic.
-
----
-
-## Adding a new graph node
-
-Update
-
-```
-graph.py
-nodes.py
-state.py
-```
-
-Keep node responsibilities small.
+No graph modifications should be necessary (the graph is archived).
 
 ---
 
@@ -464,6 +450,7 @@ Backend
 ```bash
 python -m src.main chat
 python -m src.main api
+python -m src.main mcp
 python -m src.main web
 
 python -m src.main ingest <category> <collection>

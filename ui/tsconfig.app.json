@@ -24,10 +24,14 @@
     "noUnusedParameters": true,
     "erasableSyntaxOnly": true,
     "noFallthroughCasesInSwitch": true,
+    "resolveJsonModule": true,
     /* Path mapping */
     "paths": {
       "@/*": [
         "./src/*"
+      ],
+      "@models/*": [
+        "../src/config/models/*"
       ]
     }
   },

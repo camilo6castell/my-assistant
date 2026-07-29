@@ -12,7 +12,6 @@ authors = [{ name = "Camilo Castellanos" }]
 # pypdf ni readability-lxml pese a que ambos se importan en producción.
 dependencies = [
     "openai>=1.40.0",
-    "langgraph>=0.2.0",
     "fastapi>=0.111.0",
     "uvicorn>=0.30.0",
     "pydantic>=2.7.0",
@@ -23,10 +22,8 @@ dependencies = [
     "requests>=2.32.0",
     "pypdf>=4.0.0",
     "readability-lxml>=0.8.0",
-    # Estimación de tokens para el guard de límite de contexto (ver
-    # src/utils/tokens.py). Aproximación vía cl100k_base, no un
-    # tokenizador exacto por backend -- ver docstring del módulo.
     "tiktoken>=0.7.0",
+    "mcp>=2.0.0",
 ]
 
 [project.optional-dependencies]
@@ -100,7 +97,7 @@ mypy_path = "."
 exclude = ["\\.venv"]
 
 [[tool.mypy.overrides]]
-module = ["sentence_transformers", "faiss", "requests.*", "bs4.*", "readability.*", "pypdf.*", "langgraph.*"]
+module = ["sentence_transformers", "faiss", "requests.*", "bs4.*", "readability.*", "pypdf.*"]
 ignore_missing_imports = true
 
 

@@ -13,6 +13,7 @@ class ChatMode(StrEnum):
     SOFT = "SOFT"
     HARD = "HARD"
 
+
 class TurnMemory(BaseModel):
     model_config = ConfigDict(frozen=True)
     user: str
@@ -28,10 +29,12 @@ class TurnMemory(BaseModel):
 ```python
 # src/cli/modes.py
 from src.domain.models import ChatMode
+
 __all__ = ["ChatMode"]
 
 # src/cli/types.py
 from src.domain.models import TurnMemory
+
 __all__ = ["TurnMemory"]
 ```
 
@@ -65,14 +68,18 @@ Cuatro atributos, cuatro responsabilidades:
 def load_context(self, pattern: str) -> list[str]:
     return self.context_manager.activate(pattern)
 
+
 def unload_context(self, pattern: str) -> list[str]:
     return self.context_manager.deactivate(pattern)
+
 
 def clear_contexts(self) -> None:
     self.context_manager.clear()
 
+
 def get_active_contexts(self) -> list[str]:
     return self.context_manager.get_active()
+
 
 def get_loaded_collections(self) -> list[LoadedCollection]:
     return self.context_manager.get_loaded_collections()
@@ -86,6 +93,7 @@ Todos delegan en `ContextManager` (Módulo 3). El patrón es el mismo: `load_con
 @property
 def mode(self) -> str:
     return ChatMode.SOFT if self.soft_mode else ChatMode.HARD
+
 
 def toggle_mode(self) -> str:
     self.soft_mode = not self.soft_mode
@@ -108,6 +116,7 @@ Alterna entre el pipeline lineal (sin grafo) y el pipeline con LangGraph.
 ```python
 def reset_memory(self) -> None:
     self.chat_memory = []
+
 
 def add_to_memory(self, user: str, assistant: str) -> None:
     self.chat_memory.append(TurnMemory(user=user, assistant=answer))
@@ -150,6 +159,7 @@ Muestra en cada línea de input: contextos activos (solo el basename, no el name
 ```python
 _compiled_graph = None
 
+
 def _get_graph() -> CompiledStateGraph[RAGState]:
     global _compiled_graph
     if _compiled_graph is None:
@@ -166,17 +176,28 @@ def start_chat(session: ChatSession) -> None:
     while True:
         command = input(session.get_prompt_header()).strip()
 
-        if command == "/exit":      break
-        if command == "/help":      print(HELP)
-        if command == "/context":   _handle_context(session, ...)
-        if command == "/remove":    _handle_remove(session, ...)
-        if command == "/list":      _print_available(session)
-        if command == "/active":    _print_active(session)
-        if command == "/clear":     session.clear_contexts()
-        if command == "/reset":     session.reset_memory()
-        if command == "/mode":      session.toggle_mode()
-        if command == "/agent":     session.toggle_agent()
-        if command.startswith("/"): print(f"Unknown command: {command!r}")
+        if command == "/exit":
+            break
+        if command == "/help":
+            print(HELP)
+        if command == "/context":
+            _handle_context(session, ...)
+        if command == "/remove":
+            _handle_remove(session, ...)
+        if command == "/list":
+            _print_available(session)
+        if command == "/active":
+            _print_active(session)
+        if command == "/clear":
+            session.clear_contexts()
+        if command == "/reset":
+            session.reset_memory()
+        if command == "/mode":
+            session.toggle_mode()
+        if command == "/agent":
+            session.toggle_agent()
+        if command.startswith("/"):
+            print(f"Unknown command: {command!r}")
 
         # Texto sin "/" → es una pregunta
         if session.agent_active:

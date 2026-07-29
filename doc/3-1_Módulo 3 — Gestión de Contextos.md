@@ -65,9 +65,9 @@ Esta es la metadata que se persiste en disco junto con cada chunk. Cuando `retri
 
 ```python
 item = metadata[idx]
-text=item.text,
-source=item.source,
-page=item.page,
+text = (item.text,)
+source = (item.source,)
+page = (item.page,)
 ```
 
 El campo `file_id` permite rastrear de qué archivo específico vino cada chunk — esencial para la eliminación de archivos efímeros que veremos en el Módulo 4-2.
@@ -80,7 +80,6 @@ El `ContextManager` es esencialmente un diccionario que actúa como caché de co
 
 ```python
 class ContextManager:
-
     def __init__(self) -> None:
         self.base_path: Path = settings.vector_store_path_for_backend
         self.loaded_contexts: dict[str, LoadedCollection] = {}
@@ -176,7 +175,7 @@ def activate(self, pattern: str) -> list[str]:
 
     for context_name in matches:
         if context_name in self.loaded_contexts:
-            continue                          # ya está en caché, skip
+            continue  # ya está en caché, skip
 
         try:
             raw: RawCollection = load_collection(context_name)
@@ -250,7 +249,7 @@ El Caso 3 es azúcar sintáctico — existe para que el usuario no tenga que rec
 
 ```python
 def match_contexts(raw: str, available_contexts: list[str]) -> list[str]:
-    tokens = raw.strip().split()      # "sociologia react" → ["sociologia", "react"]
+    tokens = raw.strip().split()  # "sociologia react" → ["sociologia", "react"]
 
     seen: set[str] = set()
     result: list[str] = []
@@ -298,6 +297,7 @@ def deactivate(self, pattern: str) -> list[str]:
 
     return removed
 
+
 def clear(self) -> None:
     self.loaded_contexts.clear()
 ```
@@ -311,6 +311,7 @@ def clear(self) -> None:
 ```python
 def get_active(self) -> list[str]:
     return list(self.loaded_contexts.keys())
+
 
 def get_loaded_collections(self) -> list[LoadedCollection]:
     return list(self.loaded_contexts.values())
@@ -328,8 +329,10 @@ Mientras que `ContextManager` maneja la vida en memoria, `delete.py` maneja la e
 def delete_by_source(collection: str, source: str, *, rebuild: bool = True) -> int:
     return delete_by_sources(collection, [source], rebuild=rebuild)
 
+
 def delete_urls(collection: str, urls: Sequence[str], *, rebuild: bool = True) -> int:
     return delete_by_sources(collection, urls, rebuild=rebuild)
+
 
 def delete_url(collection: str, url: str, *, rebuild: bool = True) -> int:
     return delete_by_source(collection, url, rebuild=rebuild)
@@ -353,6 +356,7 @@ class SourceSummary(BaseModel):
     source: str
     source_type: str
     chunks: int
+
 
 def list_sources(collection: str) -> list[SourceSummary]:
     metadata, _ = load_raw(collection)
