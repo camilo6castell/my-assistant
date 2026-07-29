@@ -57,7 +57,7 @@ class Settings(BaseSettings):
     )
 
     # Root
-    ai_home: Path = Field(default_factory=lambda: Path.home() / "Documents" / "my-assistant")
+    ai_home: Path = Field(default_factory=lambda: Path.home() / "Documents" / "ragsody_data")
 
     # Paths: Derived paths are computed properties
     @property
