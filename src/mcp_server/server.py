@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
+from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from typing import Any
 
 from mcp.server import MCPServer
@@ -14,6 +16,11 @@ from src.config.settings import settings
 from src.context.manager import ContextManager
 from src.retrieval.search import search
 from src.utils.logger import logger
+
+# Set by create_app() — captured so the FastAPI lifespan can initialize
+# the MCP session manager when the app is mounted as a sub-app (Starlette
+# does NOT propagate lifespan events to mounted sub-apps).
+_mcp_lifespan_ctx: AbstractAsyncContextManager[None] | None = None
 
 # ======================================================
 # AUTH MIDDLEWARE
@@ -131,6 +138,7 @@ def create_app(streamable_http_path: str = "/mcp") -> Starlette:
         (e.g. mounted at ``"/mcp"`` on the FastAPI app), so the final external
         path matches the client's expectation (e.g. ``"/mcp/"``).
     """
+    global _mcp_lifespan_ctx
     mcp_app = server.streamable_http_app(
         streamable_http_path=streamable_http_path,
         transport_security=TransportSecuritySettings(
@@ -138,6 +146,10 @@ def create_app(streamable_http_path: str = "/mcp") -> Starlette:
             allowed_hosts=settings.mcp_allowed_hosts,
         ),
     )
+
+    # Capture the session manager's run() context so the FastAPI lifespan
+    # can initialize it (mounted sub-app lifespans are not called by Starlette).
+    _mcp_lifespan_ctx = server.session_manager.run()
 
     # CORS first so preflight OPTIONS requests (no auth header) pass
     mcp_app.add_middleware(
@@ -153,3 +165,25 @@ def create_app(streamable_http_path: str = "/mcp") -> Starlette:
     mcp_app.add_middleware(BearerTokenMiddleware)
 
     return mcp_app
+
+
+def get_mcp_lifespan() -> AbstractAsyncContextManager[None]:
+    """Return the MCP session manager's lifecycle context manager.
+
+    Use this in a FastAPI lifespan when the MCP app is mounted,
+    since Starlette does not propagate lifespan events to mounted sub-apps::
+
+        @asynccontextmanager
+        async def lifespan(app):
+            async with get_mcp_lifespan():
+                yield
+    """
+    ctx = _mcp_lifespan_ctx
+    if ctx is not None:
+        return ctx
+
+    @asynccontextmanager
+    async def _noop() -> AsyncIterator[None]:
+        yield
+
+    return _noop()

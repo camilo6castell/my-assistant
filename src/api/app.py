@@ -42,6 +42,7 @@ from fastapi.responses import JSONResponse
 from src.api import deps
 from src.api.routers import attachments, chat, config, demo, files
 from src.mcp_server.server import create_app as create_mcp_app
+from src.mcp_server.server import get_mcp_lifespan
 from src.utils.logger import logger
 
 # How often inactive ephemeral conversations are checked -- more frequent
@@ -63,7 +64,10 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     cleanup_task = asyncio.create_task(_cleanup_loop())
     logger.info("[api] API ready.")
 
-    yield
+    # Mounted sub-app lifespans are not called by Starlette, so we
+    # initialise the MCP session manager ourselves (see server.py:get_mcp_lifespan).
+    async with get_mcp_lifespan():
+        yield
 
     cleanup_task.cancel()
     logger.info("[api] Shutting down API.")
