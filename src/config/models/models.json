@@ -34,7 +34,7 @@
         "timeout": 600,
         "temperature": 0.0,
         "max_tokens": 4096,
-        "top_p": 1.0,
+        "top_p": 0.95,
         "presence_penalty": 1.5,
         "frequency_penalty": 0.0,
         "extra_body": {
@@ -91,7 +91,7 @@
         "options": {
           "temperature": 0.0,
           "num_predict": 4096,
-          "top_p": 1.0,
+          "top_p": 0.95,
           "top_k": 20,
           "presence_penalty": 1.5
         },

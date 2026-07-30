@@ -53,6 +53,10 @@ def build_kwargs(
     kwargs = deepcopy(cast("dict[str, Any]", _lookup(model_name)["kwargs"]))
     options = kwargs.setdefault("options", {})
 
+    ctx = context_window(model_name)
+    if ctx is not None:
+        options["num_ctx"] = ctx
+
     if max_tokens is not None:
         options["num_predict"] = max_tokens
 
