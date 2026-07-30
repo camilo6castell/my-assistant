@@ -44,7 +44,7 @@
       }
     },
     "qwen3.6-moe:35b-a3b": {
-      "context_window": null,
+      "context_window": 64000,
       "kwargs": {
         "timeout": 600,
         "temperature": 0.0,
@@ -61,15 +61,20 @@
   },
   "ollama": {
     "qwen3.5:4b": {
-      "context_window": 32768,
+      "context_window": 64000,
       "kwargs": {
-        "options": {
-          "temperature": 0.0,
-          "num_predict": 4096,
-          "top_p": 1.0,
-          "top_k": 20
-        },
-        "think": false
+        "timeout": 600,
+        "temperature": 0.0,
+        "max_tokens": 32768,
+        "top_p": 0.8,
+        "presence_penalty": 1.5,
+        "frequency_penalty": 0.0,
+        "extra_body": {
+          "top_k": 20,
+          "chat_template_kwargs": {
+            "enable_thinking": false
+          }
+        }
       }
     },
     "deepseek-r1": {
