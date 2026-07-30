@@ -143,7 +143,8 @@ def create_app(streamable_http_path: str = "/mcp") -> Starlette:
         streamable_http_path=streamable_http_path,
         transport_security=TransportSecuritySettings(
             enable_dns_rebinding_protection=True,
-            allowed_hosts=settings.mcp_allowed_hosts,
+            allowed_hosts=[*settings.mcp_allowed_hosts, "127.0.0.1:*", "localhost:*", "192.168.2.24:*"],
+            allowed_origins=["http://localhost:*", "http://127.0.0.1:*", "http://192.168.2.24:*"],
         ),
     )
 
