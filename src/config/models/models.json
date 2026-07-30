@@ -77,10 +77,21 @@
       "context_window": 32768,
       "kwargs": {
         "options": {
-          "temperature": 0.0,
+          "temperature": 0.6,
           "num_predict": 4096,
           "top_p": 0.95,
           "top_k": 20
+        },
+        "think": false
+      }
+    },
+    "deepseek-r1:8b": {
+      "context_window": 32768,
+      "kwargs": {
+        "options": {
+          "temperature": 0.6,
+          "num_predict": 4096,
+          "top_p": 0.95
         },
         "think": false
       }
