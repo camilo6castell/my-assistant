@@ -41,6 +41,7 @@ from fastapi.responses import JSONResponse
 
 from src.api import deps
 from src.api.routers import attachments, chat, config, demo, files
+from src.mcp_server.server import create_app as create_mcp_app
 from src.utils.logger import logger
 
 # How often inactive ephemeral conversations are checked -- more frequent
@@ -93,6 +94,11 @@ app.include_router(files.router, prefix="/api/v1")
 app.include_router(config.router, prefix="/api/v1")
 app.include_router(attachments.router, prefix="/api/v1")
 app.include_router(demo.router, prefix="/api/v1")
+
+# Mount the MCP server under /mcp -- available at http://host:port/mcp/
+# (uses streamable_http_path="/" so the final path after mounting matches)
+mcp_app = create_mcp_app(streamable_http_path="/")
+app.mount("/mcp", mcp_app)
 
 
 @app.exception_handler(Exception)

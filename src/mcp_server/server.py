@@ -118,9 +118,21 @@ async def retrieve_chunks(
 #   - Set MCP_BEARER_TOKEN to a non-empty value as a second line of defense.
 
 
-def create_app() -> Starlette:
+def create_app(streamable_http_path: str = "/mcp") -> Starlette:
+    """
+    Creates the MCP Starlette app.
+
+    Parameters
+    ----------
+    streamable_http_path:
+        Path within this app where the Streamable HTTP protocol is served.
+        Use ``"/mcp"`` for standalone mode (backward compatible).
+        Use ``"/"`` when this app is mounted on another ASGI app under a prefix
+        (e.g. mounted at ``"/mcp"`` on the FastAPI app), so the final external
+        path matches the client's expectation (e.g. ``"/mcp/"``).
+    """
     mcp_app = server.streamable_http_app(
-        streamable_http_path="/mcp",
+        streamable_http_path=streamable_http_path,
         transport_security=TransportSecuritySettings(
             enable_dns_rebinding_protection=True,
             allowed_hosts=settings.mcp_allowed_hosts,
