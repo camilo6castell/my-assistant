@@ -41,6 +41,11 @@ def supports_max_tokens(model_name: str) -> bool:
     return "max_tokens" in _lookup(model_name)["kwargs"]
 
 
+def max_tokens(model_name: str) -> int | None:
+    kwargs = _lookup(model_name)["kwargs"]
+    return kwargs.get("max_tokens")
+
+
 def _set_thinking(extra_body: dict[str, Any], enabled: bool) -> None:
     if "enable_thinking" in extra_body:
         extra_body["enable_thinking"] = enabled

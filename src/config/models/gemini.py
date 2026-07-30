@@ -35,6 +35,11 @@ def supports_max_tokens(model_name: str) -> bool:
     return "max_tokens" in _lookup(model_name)["kwargs"]
 
 
+def max_tokens(model_name: str) -> int | None:
+    kwargs = _lookup(model_name)["kwargs"]
+    return kwargs.get("max_tokens")
+
+
 def build_kwargs(
     model_name: str,
     messages: list[ChatTurn],

@@ -59,6 +59,7 @@ class _ModelBackend(Protocol):
     def supports_thinking(self, model_name: str) -> bool: ...
     def default_think(self, model_name: str) -> bool | None: ...
     def supports_max_tokens(self, model_name: str) -> bool: ...
+    def max_tokens(self, model_name: str) -> int | None: ...
     def context_window(self, model_name: str) -> int | None: ...
 
 
@@ -114,6 +115,10 @@ def get_supports(capabilities_key: str, model_name: str) -> frozenset[str]:
 
 def get_context_window(capabilities_key: str, model_name: str) -> int | None:
     return _module(capabilities_key).context_window(model_name)
+
+
+def get_max_tokens(capabilities_key: str, model_name: str) -> int | None:
+    return _module(capabilities_key).max_tokens(model_name)
 
 
 def get_default_think(capabilities_key: str, model_name: str) -> bool | None:

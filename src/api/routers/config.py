@@ -10,7 +10,12 @@ from __future__ import annotations
 from fastapi import APIRouter
 
 from src.api.schemas.config import ProviderInfo, ProvidersResponse
-from src.config.models import get_default_think, get_supports
+from src.config.models import (
+    get_context_window,
+    get_default_think,
+    get_max_tokens,
+    get_supports,
+)
 from src.domain.models import LLMRole
 from src.nlp.llm.providers import list_provider_configs
 
@@ -46,6 +51,8 @@ async def list_providers() -> ProvidersResponse:
                 model=config.model,
                 supports=sorted(get_supports(config.capabilities, config.model)),
                 default_think=get_default_think(config.capabilities, config.model),
+                context_window=get_context_window(config.capabilities, config.model),
+                max_tokens=get_max_tokens(config.capabilities, config.model),
             )
             for name, config in table.items()
         },

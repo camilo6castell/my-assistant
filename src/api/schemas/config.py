@@ -30,6 +30,12 @@ class ProviderInfo(BaseModel):
     # of the model before the user touches it, instead of starting off
     # by default regardless of what the backend config says.
     default_think: bool | None
+    # Maximum input tokens the model accepts (context window size).
+    # None means unknown/unlimited.
+    context_window: int | None = None
+    # Maximum output tokens the model is configured with by default.
+    # None means no preset limit.
+    max_tokens: int | None = None
 
 
 class ProvidersResponse(BaseModel):
