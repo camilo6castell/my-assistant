@@ -7,7 +7,7 @@
         "temperature": 0.0,
         "max_tokens": 4096,
         "top_p": 0.95,
-        "presence_penalty": 0.0,
+        "presence_penalty": 1.5,
         "frequency_penalty": 0.0,
         "extra_body": {
           "top_k": 20,
@@ -35,7 +35,7 @@
         "temperature": 0.0,
         "max_tokens": 4096,
         "top_p": 1.0,
-        "presence_penalty": 0.0,
+        "presence_penalty": 1.5,
         "frequency_penalty": 0.0,
         "extra_body": {
           "top_k": 20,
@@ -61,20 +61,16 @@
   },
   "ollama": {
     "qwen3.5:4b": {
-      "context_window": 64000,
+      "context_window": 32768,
       "kwargs": {
-        "timeout": 600,
-        "temperature": 0.0,
-        "max_tokens": 32768,
-        "top_p": 0.8,
-        "presence_penalty": 1.5,
-        "frequency_penalty": 0.0,
-        "extra_body": {
+        "options": {
+          "temperature": 0.0,
+          "num_predict": 4096,
+          "top_p": 0.95,
           "top_k": 20,
-          "chat_template_kwargs": {
-            "enable_thinking": false
-          }
-        }
+          "presence_penalty": 1.5
+        },
+        "think": false
       }
     },
     "deepseek-r1": {
@@ -96,7 +92,8 @@
           "temperature": 0.0,
           "num_predict": 4096,
           "top_p": 1.0,
-          "top_k": 20
+          "top_k": 20,
+          "presence_penalty": 1.5
         },
         "think": false
       }
