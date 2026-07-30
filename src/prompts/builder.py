@@ -149,6 +149,7 @@ CITATION:
 
 REQUIREMENTS:
 
+- Write the entire supplement in the same language as the user's original question.
 - Open with one short paragraph, in the same language as the answer above, naturally introducing that this is a web-sourced complement (e.g. an equivalent of "En fuentes web recientes, ...").
 - For each source: a short subheading with the source name, the link below it, and a brief paragraph summarizing its relevant content and how it relates to the original answer.
 - If no web fragment adds anything beyond what the original answer already covers, say so briefly instead of padding the response.
@@ -261,6 +262,9 @@ RULES:
 
 3. Voice
    - Reject phrasing that exposes the retrieval mechanism (e.g. "according to the provided context", "based on the retrieved sources") instead of naturally attributing the claim to its source.
+
+4. Language
+   - Reject if the answer is not in the same language as the original question.
 """  # noqa: E501
 
 
