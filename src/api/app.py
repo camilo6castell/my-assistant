@@ -78,7 +78,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 # ======================================================
 
 app = FastAPI(
-    title="MyAssistant RAG API",
+    title="Ragsody API",
     description="REST API for the local RAG system.",
     version="1.1.0",
     lifespan=lifespan,

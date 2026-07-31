@@ -1,8 +1,8 @@
 <div align="center">
 
-<img src="https://img.shields.io/badge/MyAssistant-RAG%20Multi--Context-0d1117?style=for-the-badge&logo=openai&logoColor=white" alt="MyAssistant RAG" height="60"/>
+<img src="https://img.shields.io/badge/Ragsody-RAG%20Multi--Context-0d1117?style=for-the-badge&logo=openai&logoColor=white" alt="Ragsody RAG" height="60"/>
 
-# MyAssistant [RAG Multi-Context] by Camilo Castellanos
+# Ragsody [RAG Multi-Context] by Camilo Castellanos
 
 **Private semantic memory engine. Local inference. Multi-provider review. Zero data leakage.**
 
@@ -38,7 +38,7 @@
 
 ## Overview
 
-MyAssistant is a **fully local, privacy-first Retrieval-Augmented Generation (RAG) system** designed as a personal semantic memory infrastructure. It allows querying multiple independent knowledge domains — psychoanalysis, philosophy, technical documentation, sociology, etc. — through a linear retrieval pipeline or an MCP server for AI client integration.
+Ragsody is a **fully local, privacy-first Retrieval-Augmented Generation (RAG) system** designed as a personal semantic memory infrastructure. It allows querying multiple independent knowledge domains — psychoanalysis, philosophy, technical documentation, sociology, etc. — through a linear retrieval pipeline or an MCP server for AI client integration.
 
 **Core design principles:**
 
@@ -402,8 +402,8 @@ If `MCP_BEARER_TOKEN` is set, all requests must include an `Authorization: Beare
 ### Install
 
 ```bash
-git clone https://github.com/your-username/my-assistant.git
-cd my-assistant
+git clone https://github.com/your-username/ragsody.git
+cd ragsody
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 ```

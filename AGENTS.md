@@ -1,4 +1,4 @@
-# AGENTS.md — MyAssistant RAG Multi-Context
+# AGENTS.md — Ragsody RAG Multi-Context
 
 > High-signal instructions for AI coding agents (OpenCode, Claude Code, Codex CLI, Gemini CLI, Cursor, Continue).
 > This file describes **how to work in this repository**, not how to use the application.

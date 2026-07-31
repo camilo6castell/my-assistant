@@ -16,7 +16,7 @@ from src.domain.models import LLMRole
 def show_main_menu() -> None:
     print("""
 ╔══════════════════════════╗
-║    My assistant (RAG)    ║
+║      Ragsody (RAG)       ║
 ╠══════════════════════════╣
 ║  1. Start chat           ║
 ║  2. Show contexts        ║

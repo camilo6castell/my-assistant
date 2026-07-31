@@ -52,8 +52,8 @@ class BearerTokenMiddleware(BaseHTTPMiddleware):
 # ======================================================
 
 server = MCPServer(
-    name="MyAssistant RAG",
-    title="MyAssistant RAG MCP Server",
+    name="Ragsody",
+    title="Ragsody MCP Server",
     description="Private semantic memory engine — retrieval and FAISS search over collections.",
     version="1.0.0",
 )

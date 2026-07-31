@@ -1,7 +1,7 @@
 [project]
-name = "myassistant-rag"
+name = "ragsody"
 version = "0.1.0"
-description = "MyAssistant -- private semantic memory engine, local inference, multi-provider LLM review."
+description = "Ragsody -- private semantic memory engine, local inference, multi-provider LLM review."
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
