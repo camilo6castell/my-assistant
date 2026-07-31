@@ -15,6 +15,7 @@ from starlette.responses import JSONResponse, Response
 from src.config.settings import settings
 from src.context.manager import ContextManager
 from src.retrieval.search import search
+from src.retrieval.web_search import WebSearchOutcome, WebSearchStatus, search_web
 from src.utils.logger import logger
 
 # Set by create_app() — captured so the FastAPI lifespan can initialize
@@ -112,6 +113,28 @@ async def retrieve_chunks(
         ],
         "confidence": confidence,
         "collections_used": collections_used,
+    }
+
+
+@server.tool(
+    name="search_web",
+    description=(
+        "Searches the web using Tavily for the given query. "
+        "Returns results with title, url, and content snippet. "
+        "Returns status 'ok', 'quota_exceeded', or 'error'."
+    ),
+)
+async def search_web_tool(
+    query: str,
+    max_results: int | None = None,
+) -> dict[str, object]:
+    outcome: WebSearchOutcome = search_web(query, max_results=max_results)
+    return {
+        "results": [
+            {"title": r.title, "url": r.url, "content": r.content}
+            for r in outcome.results
+        ],
+        "status": outcome.status.value,
     }
 
 

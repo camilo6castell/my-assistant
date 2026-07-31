@@ -45,13 +45,17 @@ repo/
     shadcn/ui
 ```
 
-Backend and frontend are intentionally decoupled.
+Backend and frontend are intentionally decoupled — each has its own model configuration.
+
+**Model configuration is fully independent:**
+- **Backend** reads from `.env.providers` + `src/config/models/models.json` for its own models. Used by `POST /api/v1/query`.
+- **Frontend** reads from `.env` + `ui/src/config/models/models.json` for its own models. Used by the in-browser LangGraph agent.
 
 The **production backend** runs two services:
 - **MCP server** (`python -m src.main mcp`) — Streamable HTTP MCP server exposing `list_collections` and `retrieve_chunks` tools for AI clients.
 - **REST API** (`python -m src.main api`) — FastAPI with `POST /api/v1/query` (linear RAG), `POST /api/v1/demo/query` (streaming demo), file upload, and provider config.
 
-The LangGraph.js agent port lives in `ui/src/graph/` and runs entirely in the browser (see Fases 7–9). The original Python LangGraph agent was removed from the backend in Fase 3 and is no longer present in the codebase.
+The LangGraph.js agent port lives in `ui/src/graph/` and runs entirely in the browser (see Fases 7–9). The original Python LangGraph agent was removed from the backend in Fase 3 and is no longer present in the codebase. The frontend agent uses its own model config (`ui/src/config/models/`) and retrieves context via MCP.
 
 ---
 
@@ -173,7 +177,17 @@ Never hardcode configuration values.
 
 ## Provider Model
 
-LLMs are selected per role.
+LLMs are selected per role. Each project has its OWN provider model:
+
+**Backend** (`src/config/models/`):
+- Reads from `.env.providers` + `src/config/models/models.json`
+- Used by `POST /api/v1/query`
+
+**Frontend** (`ui/src/config/models/`):
+- Reads from `.env` + `ui/src/config/models/models.json`
+- Used by the in-browser LangGraph agent
+
+Both follow the same architecture:
 
 Role
 
@@ -220,7 +234,23 @@ Note: `POST /api/v1/query/agent` (the LangGraph agent endpoint) was removed in F
 
 ## Frontend
 
-Frontend communicates exclusively through the API.
+Frontend communicates through the API for simple queries (`POST /api/v1/query`)
+and through MCP for retrieval when running the in-browser agent.
+
+**Two modes of operation:**
+- **`backend` mode** (default): sends `POST /api/v1/query` to the backend. The backend
+  uses its own model config (`.env.providers`). Simple linear pipeline.
+- **`client_agent` mode** (opt-in via Agent toggle): runs the full LangGraph.js pipeline
+  in the browser (retrieve via MCP → evaluate → reformulate → generate → review → correct).
+  Uses the **frontend's own model config** (`.env` + `ui/src/config/models/models.json`).
+
+**Frontend model configuration lives in:**
+- `.env` — role-to-backend+model mapping (`VITE_LLM_ROL_GENERATE`, etc.)
+- `ui/src/config/models/models.json` — per-model capabilities (context_window, temperature, etc.)
+- `ui/src/config/models/` — TypeScript modules mirroring the Python backend architecture
+
+The frontend does NOT depend on `GET /api/v1/config/providers` for model capabilities.
+It resolves everything from its own `models.json`.
 
 Avoid duplicating backend logic inside React components.
 
@@ -410,8 +440,11 @@ Reuse cached clients whenever possible.
 - Always execute backend commands from repository root.
 - Do not use pip install -e.
 - Embedder changes invalidate indexes.
-- Role configuration lives in .env.providers.
+- Backend role configuration lives in `.env.providers`.
+- Frontend role configuration lives in `.env` (NOT `.env.providers`).
 - Backend/model routing is runtime configurable.
+- Frontend and backend have **independent** `models.json` files: `src/config/models/models.json` (backend) and `ui/src/config/models/models.json` (frontend). Keep them in sync when adding models.
+- The `ui/src/config/models/` directory mirrors `server/src/config/models/` in TypeScript.
 - The web command starts both FastAPI and Vite.
 - pnpm is preferred.
 
