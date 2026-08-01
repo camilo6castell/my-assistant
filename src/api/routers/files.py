@@ -53,6 +53,38 @@ router = APIRouter(prefix="/files", tags=["files"])
 _SUPPORTED_SUFFIXES = {".pdf", ".html", ".txt"}
 
 
+def _validate_collection_name(collection: str) -> None:
+    """
+    Persisted collections live at
+    <vector_store_path_for_backend>/<namespace>/<collection>/
+    (see get_collection_paths), mirroring the ingest CLI's
+    "<category>/<collection>" naming. Enforce exactly two non-empty
+    segments: anything else either escapes the vector store root (path
+    traversal -- `collection` is used directly as a relative path) or
+    persists a layout the UI can never list (ContextManager.list_all
+    only traverses two levels deep).
+    """
+    if "\\" in collection:
+        raise HTTPException(
+            status_code=422,
+            detail="Collection must use forward slashes: 'namespace/collection'.",
+        )
+
+    parts = collection.split("/")
+    if len(parts) != 2 or not all(parts):
+        raise HTTPException(
+            status_code=422,
+            detail="Collection must be in 'namespace/collection' format "
+            "(e.g. 'books/novels').",
+        )
+
+    if any(segment in {".", ".."} for segment in parts):
+        raise HTTPException(
+            status_code=422,
+            detail="Invalid collection name: '.' and '..' are not allowed.",
+        )
+
+
 def _extract_pages(filename: str, raw_bytes: bytes) -> list[tuple[int, str]]:
     """
     Reuse the PDF/HTML/TXT parsing from ingest/ingest.py, which expects
@@ -88,6 +120,15 @@ def _attach_to_persisted_collection(
 ) -> int:
     """Ingest a file into a persisted collection, same as ingest/ingest.py."""
     collection_data: RawCollection = load_collection(collection)
+
+    # Same dedup as ingest/ingest.py: skip files already indexed in this
+    # collection so re-uploads never duplicate embeddings.
+    existing_sources: set[str] = {m.source for m in collection_data["metadata"]}
+    if filename in existing_sources:
+        raise HTTPException(
+            status_code=409,
+            detail=f"'{filename}' is already indexed in collection '{collection}'.",
+        )
 
     new_chunks: list[str] = []
     new_metadata: list[ChunkMetadata] = []
@@ -147,6 +188,9 @@ async def upload_file(
             status_code=422,
             detail="'collection' is required when attach_to_collection=True.",
         )
+
+    if collection:
+        _validate_collection_name(collection)
 
     filename = file.filename or "unnamed_file"
     raw_bytes = await file.read()
