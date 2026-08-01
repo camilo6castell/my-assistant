@@ -445,7 +445,7 @@ Reuse cached clients whenever possible.
 - Backend/model routing is runtime configurable.
 - Frontend and backend have **independent** `models.json` files: `src/config/models/models.json` (backend) and `ui/src/config/models/models.json` (frontend). Keep them in sync when adding models.
 - The `ui/src/config/models/` directory mirrors `server/src/config/models/` in TypeScript.
-- The web command starts both FastAPI and Vite.
+- `server/dev.sh` starts both FastAPI (API + MCP) and the Vite frontend (`./dev.sh` from the server repo, or `CLIENT_DIR=...` if the frontend is elsewhere).
 - pnpm is preferred.
 
 ---
@@ -484,7 +484,10 @@ Backend
 python -m src.main chat
 python -m src.main api
 python -m src.main mcp
-python -m src.main web
+python -m src.main server
+
+# Run backend (API + MCP) and Vite frontend together from one terminal:
+./dev.sh
 
 python -m src.main ingest <category> <collection>
 
