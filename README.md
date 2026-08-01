@@ -255,7 +255,10 @@ Lists all available collections from the vectorstore directory.
 
 ### `POST /api/v1/files`
 
-Upload a file for ephemeral use in a conversation or attach to a persisted collection.
+Upload a file (`.pdf`, `.html`, `.txt`) for ephemeral use in a conversation or attach it to a persisted collection. Multipart form fields: `conversation_id` (required), `attach_to_collection` (`true`/`false`), `collection` (required when attaching, format `namespace/collection`, e.g. `books/novels`).
+
+- `attach_to_collection=false` (default) — processed with the same chunk/embed pipeline but kept **in memory only**, scoped to the conversation (see `src/context/ephemeral.py`).
+- `attach_to_collection=true` — persists the result to disk in `collection`, exactly as if the ingest CLI had run it. Re-uploading a file already indexed in that collection returns `409` (same dedup as `ingest`).
 
 ### `GET /api/v1/files/{conversation_id}`
 
@@ -268,6 +271,24 @@ Delete a single ephemeral file.
 ### `DELETE /api/v1/files/{conversation_id}`
 
 Delete all ephemeral files for a conversation.
+
+### `POST /api/v1/attachments`
+
+Upload a plain-text file (up to 500 KB, UTF-8) to be injected **raw** into the prompt of the conversation's next query — never chunked or embedded. Multipart form field: `conversation_id`. Returns `400`/`413` on unsupported format or oversized file.
+
+### `GET /api/v1/attachments/{conversation_id}`
+
+List pending attachments for a conversation.
+
+### `DELETE /api/v1/attachments/{conversation_id}/{file_id}`
+
+Delete a single pending attachment.
+
+### `DELETE /api/v1/attachments/{conversation_id}`
+
+Delete all pending attachments for a conversation.
+
+Attachments are **single-use**: once `/query` processes a message that included them, they are consumed (deleted) server-side and the list comes back empty — see `src/context/attachments.py`.
 
 ### `GET /api/v1/config/providers`
 
