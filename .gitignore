@@ -23,7 +23,7 @@ __pycache__/
 .ruff_cache/
 
 # Mine
-#doc/
+doc/
 
 # Volcado de diagnóstico opt-in (LLM_DEBUG_DUMP=true, ver src/llm/generate.py)
 debug_last_llm_request.json
