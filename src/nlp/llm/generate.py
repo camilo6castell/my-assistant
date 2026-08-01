@@ -22,7 +22,7 @@ Generation overrides (max_tokens/think_mode/extra):
   (_MODELS[model]["temperature"]) and never overwritten here. There
   previously existed settings.llm_temperature (.env) which was applied
   ALWAYS as a default when no override was provided, silently masking
-  the model's real value (e.g. qwen3.5:9b configured with
+  the model's real value (e.g. qwen3.5:4b configured with
   temperature=0.0 in _MODELS but still showing 0.2 because _complete()
   overwrote it before build_kwargs was reached). Removed on purpose: if
   a real per-request temperature override is ever needed, add it back
@@ -47,7 +47,7 @@ from src.config.models import build_kwargs, get_supports
 from src.config.settings import settings
 from src.domain.models import TurnMemory
 from src.nlp.llm.backends.base import ChatTurn
-from src.nlp.llm.providers import ProviderConfig, get_client
+from src.nlp.llm.providers import ProviderConfig, get_client_for, get_provider
 from src.prompts.builder import build_system_prompt
 from src.utils.logger import logger
 
@@ -185,34 +185,26 @@ def _dump_request_for_debug(kwargs: dict[str, Any]) -> None:
         logger.warning(f"[debug] Could not dump request for debug: {e}")
 
 
-def _complete(
+def _complete_once(
     *,
+    config: ProviderConfig,
     messages: list[ChatTurn],
-    provider_name: str,
     log_prefix: str,
     max_tokens: int | None,
     think_mode: bool | None,
     extra: ExtraFields | None,
 ) -> str | None:
     """
-    Builds the resolved kwargs (via src.config.models.build_kwargs) and
-    hands them to the LLMClient of the provider -- this module does not
+    Single attempt against one ProviderConfig (primary or fallback):
+    builds the resolved kwargs via src.config.models.build_kwargs and
+    hands them to that config's cached LLMClient -- this module does not
     know (nor need to know) whether that ends up talking to OpenAI,
     FastFlowLM, or native Ollama.
 
-    Does not receive `temperature`: no override is ever passed here, so
-    build_kwargs() always leaves the value intact that is already in
-    _MODELS[model] for the active model (see module docstring).
-
-    Returns None (never raises) if the model responded empty or if the
-    call failed -- each public function decides its own fallback
-    (ask_llm returns an error message visible to the user;
-    ask_llm_internal returns the original prompt unchanged).
+    Returns None if the model responded empty, raises if the call failed.
     """
-    client, config = get_client(provider_name)
+    client = get_client_for(config)
     supports = get_supports(config.capabilities, config.model)
-
-    _validate_think(think_mode, config)
 
     kwargs = build_kwargs(
         config.capabilities,
@@ -224,7 +216,7 @@ def _complete(
     )
 
     logger.info(
-        f"{log_prefix}Querying LLM | provider={provider_name} | model={config.model} "
+        f"{log_prefix}Querying LLM | provider={config.name} | model={config.model} "
         f"| timeout={settings.llm_timeout}s"
         + (f" | max_tokens={max_tokens}" if max_tokens is not None else "")
         + (f" | think={think_mode}" if think_mode is not None else "")
@@ -240,7 +232,78 @@ def _complete(
     if settings.llm_debug_dump:
         _dump_request_for_debug(kwargs)
 
-    content = client.complete(kwargs)
+    return client.complete(kwargs)
+
+
+def _complete(
+    *,
+    messages: list[ChatTurn],
+    provider_name: str,
+    log_prefix: str,
+    max_tokens: int | None,
+    think_mode: bool | None,
+    extra: ExtraFields | None,
+) -> str | None:
+    """
+    Runs the primary provider for `provider_name`; if it errors or
+    responds empty AND a fallback is configured for that role
+    (LLM_ROL_*_FALLBACK in .env.providers), retries once on the fallback
+    -- a degraded path that drops the primary's think_mode override (the
+    fallback model may not support it). If both fail, the original
+    primary exception is re-raised (no silent swallow); if the primary
+    failed with no fallback configured, it raises as before.
+
+    Returns None (never raises) only when the model(s) responded empty
+    -- each public function decides its own fallback (ask_llm returns an
+    error message visible to the user; ask_llm_internal returns the
+    original prompt unchanged).
+    """
+    config = get_provider(provider_name)
+    _validate_think(think_mode, config)
+
+    first_exc: Exception | None = None
+    try:
+        content = _complete_once(
+            config=config,
+            messages=messages,
+            log_prefix=log_prefix,
+            max_tokens=max_tokens,
+            think_mode=think_mode,
+            extra=extra,
+        )
+    except Exception as exc:
+        first_exc = exc
+        content = None
+
+    if not content and config.fallback is not None:
+        logger.warning(
+            f"{log_prefix}Primary LLM {'errored' if first_exc else 'returned empty'} "
+            f"(provider={config.name} | model={config.model})"
+            + (f" | error={first_exc!r}" if first_exc is not None else "")
+            + f" -- retrying on fallback model={config.fallback.model}"
+        )
+        try:
+            content = _complete_once(
+                config=config.fallback,
+                messages=messages,
+                log_prefix=f"{log_prefix}[fallback] ",
+                max_tokens=max_tokens,
+                think_mode=None,
+                extra=extra,
+            )
+        except Exception as fallback_exc:
+            logger.error(
+                f"{log_prefix}Fallback LLM also failed (model={config.fallback.model}): "
+                f"{fallback_exc!r}"
+            )
+            if first_exc is not None:
+                raise first_exc from None
+            raise fallback_exc from None
+    elif not content and first_exc is not None:
+        # No fallback configured: keep the previous behavior of
+        # propagating the provider error.
+        raise first_exc
+
     if not content:
         logger.warning(f"{log_prefix}Model returned empty response.")
         return None

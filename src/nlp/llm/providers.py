@@ -18,7 +18,7 @@ Design (two independent axes):
     LLM_GEMINI_URL, GEMINI_API_KEY) -- see _backend_url_table()/
     _BACKEND_CLIENT below.
   - ROLE: each pipeline step (see LLMRole in src/nlp/llm/roles.py)
-    chooses, in .env.providers (LLM_ROLE_GENERATE=flm,qwen3.5:9b, etc.
+    chooses, in .env.providers (LLM_ROL_GENERATE=ollama,qwen3.5:4b, etc.
     -- see Settings.role_spec()), which backend + which model serves it.
     A role's `capabilities` is directly its backend: WHICH file in
     src/config/models/ to look at to know what its model accepts
@@ -26,9 +26,16 @@ Design (two independent axes):
     description, knows nothing about HTTP.
 
   Both axes are independent on purpose: two roles can share a backend
-  with different models (GENERATE=flm,qwen3.5:9b vs
-  SUPPLEMENT=flm,qwen3.5:2b), or share a model with different backends,
-  without one needing to know about the other.
+  with different models (GENERATE=ollama,qwen3.5:4b vs
+  SUPPLEMENT=gemini,gemini-2.5-flash-lite), or share a model with
+  different backends, without one needing to know about the other.
+
+  Each role can also carry an optional FALLBACK (LLM_ROL_*_FALLBACK in
+  .env.providers, see Settings.role_fallback_spec()): a second
+  backend+model resolved into a ProviderConfig attached to the primary's
+  `.fallback`, used by generate.py when the primary errors or returns an
+  empty response. A typical setup runs the primary on a cloud model
+  (gemini) with a local model (ollama) as backup.
 
   - Concrete clients are cached by (backend, base_url, api_key, client)
     -- not by role: two roles with the same backend+model end up
@@ -60,7 +67,7 @@ Why this instead of the previous getattr(settings, f"{prefix}_base_url"):
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from functools import cache
 
 from src.config.settings import settings
@@ -141,12 +148,48 @@ class ProviderConfig:
     # the previous design where a generic HTTP backend
     # ("openai_compat") could serve different capabilities.
     capabilities: str
+    # Optional degraded path for the same role (LLM_ROL_*_FALLBACK in
+    # .env.providers): a second backend+model used by generate.py when the
+    # primary errors or returns an empty response. compare=False so it does
+    # not participate in the client cache key -- two primaries that share
+    # backend+model keep sharing one client even if their fallbacks differ.
+    fallback: ProviderConfig | None = field(compare=False, default=None)
+
+
+def _build_config(*, name: str, backend: str, model: str) -> ProviderConfig:
+    """Resolves a single (backend, model) pair into a concrete ProviderConfig."""
+    backend_urls = _backend_url_table()
+    try:
+        base_url = backend_urls[backend]
+        api_key = _backend_api_key_table()[backend]
+        client = _BACKEND_CLIENT[backend]
+    except KeyError:
+        valid = ", ".join(sorted(backend_urls))
+        raise ValueError(
+            f"Unknown LLM backend: {backend!r} (role {name!r}). Valid: {valid}"
+        ) from None
+
+    if not base_url:
+        raise ValueError(
+            f"Backend {backend!r} (role {name!r}) has no URL configured "
+            f"-- LLM_{backend.upper()}_URL is missing in .env.providers."
+        )
+
+    return ProviderConfig(
+        name=name,
+        backend=backend,
+        base_url=base_url,
+        api_key=api_key,
+        model=model,
+        client=client,
+        capabilities=backend,
+    )
 
 
 def _build_provider_table() -> dict[str, ProviderConfig]:
     """
     Resolves a ProviderConfig for each LLMRole, reading backend+model
-    from settings.role_spec(role) (.env.providers: LLM_ROLE_*).
+    from settings.role_spec(role) (.env.providers: LLM_ROL_*).
 
     Built as a function (not at module level) so values reflect settings
     at call time, not at import time -- useful in tests that mutate
@@ -157,32 +200,21 @@ def _build_provider_table() -> dict[str, ProviderConfig]:
 
 def _provider_config_for_role(role: LLMRole) -> ProviderConfig:
     backend, model = settings.role_spec(role)
-    backend_urls = _backend_url_table()
-    try:
-        base_url = backend_urls[backend]
-        api_key = _backend_api_key_table()[backend]
-        client = _BACKEND_CLIENT[backend]
-    except KeyError:
-        valid = ", ".join(sorted(backend_urls))
-        raise ValueError(
-            f"Unknown LLM backend: {backend!r} (role {role.value!r}). Valid: {valid}"
-        ) from None
+    config = _build_config(name=role.value, backend=backend, model=model)
 
-    if not base_url:
-        raise ValueError(
-            f"Backend {backend!r} (role {role.value!r}) has no URL configured "
-            f"-- LLM_{backend.upper()}_URL is missing in .env.providers."
+    fallback_spec = settings.role_fallback_spec(role)
+    if fallback_spec is not None:
+        fb_backend, fb_model = fallback_spec
+        config = replace(
+            config,
+            fallback=_build_config(
+                name=f"{role.value}_fallback",
+                backend=fb_backend,
+                model=fb_model,
+            ),
         )
 
-    return ProviderConfig(
-        name=role.value,
-        backend=backend,
-        base_url=base_url,
-        api_key=api_key,
-        model=model,
-        client=client,
-        capabilities=backend,
-    )
+    return config
 
 
 def list_provider_configs() -> dict[str, ProviderConfig]:
@@ -243,3 +275,15 @@ def get_client(name: str) -> tuple[LLMClient, ProviderConfig]:
     """Returns (client, config) ready to use with LLMClient.complete()."""
     config = get_provider(name)
     return _client_for(config), config
+
+
+def get_client_for(config: ProviderConfig) -> LLMClient:
+    """
+    Returns the cached LLMClient for an already-resolved ProviderConfig.
+
+    Used by generate.py to reach the fallback client (a ProviderConfig
+    already built and attached to the primary's `.fallback`), keeping
+    `_client_for` private and the client cache keyed by
+    backend/base_url/api_key/model/client.
+    """
+    return _client_for(config)

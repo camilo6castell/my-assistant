@@ -74,8 +74,7 @@ def _validate_collection_name(collection: str) -> None:
     if len(parts) != 2 or not all(parts):
         raise HTTPException(
             status_code=422,
-            detail="Collection must be in 'namespace/collection' format "
-            "(e.g. 'books/novels').",
+            detail="Collection must be in 'namespace/collection' format (e.g. 'books/novels').",
         )
 
     if any(segment in {".", ".."} for segment in parts):

@@ -35,6 +35,7 @@ from src.api.services.query import (
     resolve_ephemeral,
     supplement_with_web,
 )
+from src.config.models import get_supports
 from src.config.settings import settings
 from src.context.attachments import AttachmentStore
 from src.context.ephemeral import EphemeralStore
@@ -93,7 +94,7 @@ def _validate_generation_options(request: QueryRequest) -> None:
 
     provider_name = "generate"
     config = get_provider(provider_name)
-    supports = config.capabilities
+    supports = get_supports(config.capabilities, config.model)
 
     if generation.think_mode is not None and "think_mode" not in supports:
         raise HTTPException(

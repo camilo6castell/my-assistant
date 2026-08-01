@@ -41,8 +41,7 @@ from fastapi.responses import JSONResponse
 
 from src.api import deps
 from src.api.routers import attachments, chat, config, demo, files
-from src.mcp_server.server import create_app as create_mcp_app
-from src.mcp_server.server import get_mcp_lifespan
+from src.mcp_server.server import create_app as create_mcp_app, get_mcp_lifespan
 from src.utils.logger import logger
 
 # How often inactive ephemeral conversations are checked -- more frequent

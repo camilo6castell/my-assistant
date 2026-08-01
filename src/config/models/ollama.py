@@ -39,7 +39,7 @@ def supports_max_tokens(model_name: str) -> bool:
 
 def max_tokens(model_name: str) -> int | None:
     options = _lookup(model_name)["kwargs"].get("options", {})
-    return options.get("num_predict")
+    return cast("int | None", options.get("num_predict"))
 
 
 def build_kwargs(

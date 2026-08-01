@@ -245,7 +245,7 @@ and through MCP for retrieval when running the in-browser agent.
   Uses the **frontend's own model config** (`.env` + `ui/src/config/models/models.json`).
 
 **Frontend model configuration lives in:**
-- `.env` — role-to-backend+model mapping (`VITE_LLM_ROL_GENERATE`, etc.)
+- `.env` — role-to-backend+model mapping (`LLM_ROL_GENERATE`, `LLM_ROL_SUPPLEMENT`, etc.)
 - `ui/src/config/models/models.json` — per-model capabilities (context_window, temperature, etc.)
 - `ui/src/config/models/` — TypeScript modules mirroring the Python backend architecture
 

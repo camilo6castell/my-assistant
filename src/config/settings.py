@@ -23,10 +23,10 @@ from src.domain.models import LLMRole
 def _split_backend_model(raw: str, var_name: str) -> tuple[str, str]:
     """
     Parses the "backend,model" format used by EMBEDDER and LLM_ROL_* in
-    .env.providers (e.g. "flm,qwen3.5:9b" -> ("flm", "qwen3.5:9b")).
+    .env.providers (e.g. "ollama,qwen3.5:4b" -> ("ollama", "qwen3.5:4b")).
 
     The split is only on the FIRST comma: the model name can legitimately
-    contain ':' (Ollama/FastFlowLM tags, e.g. "qwen3.5:9b"), so we
+    contain ':' (Ollama/FastFlowLM tags, e.g. "qwen3.5:4b"), so we
     never split on that.
     """
     backend, sep, model = raw.partition(",")
@@ -115,6 +115,21 @@ class Settings(BaseSettings):
     def _validate_backend_model_format(cls, v: str, info: ValidationInfo) -> str:
         """Fails fast at startup if EMBEDDER/LLM_ROL_* are not in 'backend,model' format."""
         if info.field_name is not None:
+            _split_backend_model(v, info.field_name.upper())
+        return v
+
+    @field_validator(
+        "llm_rol_generate_fallback",
+        "llm_rol_supplement_fallback",
+        mode="after",
+    )
+    @classmethod
+    def _validate_fallback_backend_model_format(cls, v: str, info: ValidationInfo) -> str:
+        """
+        Same 'backend,model' check as the required LLM_ROL_*, but empty is
+        valid: an empty fallback means "no fallback for this role".
+        """
+        if v and info.field_name is not None:
             _split_backend_model(v, info.field_name.upper())
         return v
 
@@ -239,6 +254,10 @@ class Settings(BaseSettings):
     # src/config/models/ + (if a new client is needed) one in
     # src/nlp/llm/backends/ -- graph.py, nodes.py or generate.py
     # never need to be touched.
+    #
+    # Each role may also declare an optional fallback (LLM_ROL_*_FALLBACK,
+    # see role_fallback_spec()): a secondary backend+model used by
+    # generate.py when the primary errors or returns an empty response.
     llm_rol_generate: str = Field(default="")
     # Named differently from LLMRole.WEB_SUPPLEMENT on purpose: in
     # .env.providers the role is called "SUPPLEMENT" (shorter), the full
@@ -246,10 +265,19 @@ class Settings(BaseSettings):
     # between both is in role_spec() below -- the only place that knows it.
     llm_rol_supplement: str = Field(default="")
 
+    # Optional fallback per role (LLM_ROL_*_FALLBACK in .env.providers).
+    # Same "backend,model" format as the primary; empty = no fallback.
+    # When configured, generate.py retries the call on the fallback if the
+    # primary errors or returns an empty response -- e.g. a cloud model
+    # (gemini) with a local model (ollama) as backup so the pipeline keeps
+    # working when the external provider is unavailable.
+    llm_rol_generate_fallback: str = Field(default="")
+    llm_rol_supplement_fallback: str = Field(default="")
+
     def role_spec(self, role: LLMRole) -> tuple[str, str]:
         """
         Returns the (backend, model) configured for `role`, e.g.
-        role_spec(LLMRole.GENERATE) -> ("flm", "qwen3.5:9b").
+        role_spec(LLMRole.GENERATE) -> ("ollama", "qwen3.5:4b").
 
         Single lookup point for role -> (backend, model). The call sites
         (src/nlp/llm/providers.py, src/nlp/llm/context_guard.py) never
@@ -260,6 +288,24 @@ class Settings(BaseSettings):
             LLMRole.WEB_SUPPLEMENT: ("LLM_ROL_SUPPLEMENT", self.llm_rol_supplement),
         }
         var_name, raw = raw_by_role[role]
+        return _split_backend_model(raw, var_name)
+
+    def role_fallback_spec(self, role: LLMRole) -> tuple[str, str] | None:
+        """
+        Returns the (backend, model) configured as fallback for `role`
+        (LLM_ROL_*_FALLBACK in .env.providers), or None if no fallback is
+        configured. Same format and lookup rules as role_spec().
+        """
+        raw_by_role: dict[LLMRole, tuple[str, str]] = {
+            LLMRole.GENERATE: ("LLM_ROL_GENERATE_FALLBACK", self.llm_rol_generate_fallback),
+            LLMRole.WEB_SUPPLEMENT: (
+                "LLM_ROL_SUPPLEMENT_FALLBACK",
+                self.llm_rol_supplement_fallback,
+            ),
+        }
+        var_name, raw = raw_by_role[role]
+        if not raw:
+            return None
         return _split_backend_model(raw, var_name)
 
     @model_validator(mode="after")

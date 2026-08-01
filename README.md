@@ -128,11 +128,24 @@ The system uses a **provider-per-role** architecture (`src/nlp/llm/providers.py`
 - **Role** — picks a `backend,model` pair directly:
 
   ```bash
-  LLM_ROL_GENERATE=flm,qwen3.5:9b
-  LLM_ROL_SUPPLEMENT=flm,qwen3.5:9b
+  LLM_ROL_GENERATE=ollama,qwen3.5:4b
+  LLM_ROL_SUPPLEMENT=ollama,qwen3.5:4b
   ```
 
 Roles sharing the same `backend,model` share a single cached client instead of opening a duplicate connection.
+
+### Fallback per role
+
+Each role can also define an **optional fallback** (`LLM_ROL_*_FALLBACK`, same `backend,model` format). When configured, the pipeline retries the call on the fallback if the primary **errors or returns an empty response** — e.g. a cloud model with a local model as backup, so queries keep working when the external provider is unavailable or rate-limits:
+
+```bash
+LLM_ROL_GENERATE=gemini,gemini-2.5-flash-lite
+LLM_ROL_SUPPLEMENT=gemini,gemini-2.5-flash-lite
+LLM_ROL_GENERATE_FALLBACK=ollama,qwen3.5:4b
+LLM_ROL_SUPPLEMENT_FALLBACK=ollama,qwen3.5:4b
+```
+
+Empty or absent `LLM_ROL_*_FALLBACK` = no fallback for that role (current behavior, error/empty response propagates as before). The fallback retry drops the primary's `think_mode` override, since the fallback model may not support it. The streaming demo endpoint (`/demo/query`) always uses the primary provider — streaming cannot be transparently retried on another backend.
 
 ### Privacy guarantee
 
@@ -451,8 +464,12 @@ EMBEDDER_OLLAMA_URL=http://127.0.0.1:11434
 EMBEDDER=ollama,bge-m3
 
 # LLM per role: backend,model
-LLM_ROL_GENERATE=flm,qwen3.5:9b
-LLM_ROL_SUPPLEMENT=flm,qwen3.5:9b
+LLM_ROL_GENERATE=gemini,gemini-2.5-flash-lite
+LLM_ROL_SUPPLEMENT=gemini,gemini-2.5-flash-lite
+
+# Optional fallback per role (used if the primary errors / returns empty)
+LLM_ROL_GENERATE_FALLBACK=ollama,qwen3.5:4b
+LLM_ROL_SUPPLEMENT_FALLBACK=ollama,qwen3.5:4b
 ```
 
 ### Create vectorstore directory
@@ -555,6 +572,8 @@ All configuration is managed via Pydantic Settings (`src/config/settings.py`) an
 | `GEMINI_API_KEY`       | —                                                           | Gemini API key                                     |
 | `LLM_ROL_GENERATE`     | —                                                           | `backend,model` for answer generation              |
 | `LLM_ROL_SUPPLEMENT`   | —                                                           | `backend,model` for the web-supplement decision    |
+| `LLM_ROL_GENERATE_FALLBACK` | —                                                     | Optional `backend,model` fallback for generation   |
+| `LLM_ROL_SUPPLEMENT_FALLBACK` | —                                                  | Optional `backend,model` fallback for supplement   |
 | `EMBEDDER_FLM_URL`     | —                                                           | FLM embedding endpoint                             |
 | `EMBEDDER_OLLAMA_URL`  | —                                                           | Ollama embedding endpoint                          |
 | `WEB_SEARCH_ENABLED`   | `False`                                                     | Enable Tavily web search                           |

@@ -12,11 +12,11 @@ from src.config.models import (
 
 class TestGetSupports:
     def test_returns_frozenset(self) -> None:
-        result = get_supports("flm", "qwen3.5:9b")
+        result = get_supports("ollama", "qwen3.5:4b")
         assert isinstance(result, frozenset)
 
     def test_includes_extra(self) -> None:
-        result = get_supports("flm", "qwen3.5:9b")
+        result = get_supports("ollama", "qwen3.5:4b")
         assert "extra" in result
 
     def test_unknown_backend_raises(self) -> None:
@@ -26,7 +26,7 @@ class TestGetSupports:
 
 class TestGetContextWindow:
     def test_returns_int_or_none(self) -> None:
-        result = get_context_window("flm", "qwen3.5:9b")
+        result = get_context_window("ollama", "qwen3.5:4b")
         assert result is None or isinstance(result, int)
 
     def test_unknown_backend_raises(self) -> None:
@@ -36,7 +36,7 @@ class TestGetContextWindow:
 
 class TestGetDefaultThink:
     def test_returns_bool_or_none(self) -> None:
-        result = get_default_think("flm", "qwen3.5:9b")
+        result = get_default_think("ollama", "qwen3.5:4b")
         assert result is None or isinstance(result, bool)
 
     def test_unknown_backend_raises(self) -> None:

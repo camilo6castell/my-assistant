@@ -6,7 +6,7 @@ Usage:
   python -m src.main chat                              go directly to chat
   python -m src.main api                               start the REST API
   python -m src.main mcp                               start the MCP server (Streamable HTTP)
-  python -m src.main server                            start API + MCP in a single process (recommended)
+  python -m src.main server                            start API + MCP in one process (recommended)
 
   python -m src.main ingest <cat> <col>                ingest local files
   python -m src.main ingest-url <cat> <col> <url>      ingest a single URL
@@ -114,9 +114,6 @@ def _cmd_mcp() -> None:
         reload=False,
         log_level="warning",
     )
-
-
-
 
 
 def _cmd_ingest(args: list[str]) -> None:
