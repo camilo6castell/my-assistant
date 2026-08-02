@@ -16,7 +16,7 @@ from __future__ import annotations
 from src.config.models import get_context_window
 from src.config.settings import settings
 from src.domain.models import TurnMemory
-from src.nlp.llm.providers import get_client
+from src.nlp.llm.providers import get_provider
 from src.utils.tokens import estimate_tokens
 
 # Safety margin over the token estimate -- tiktoken/heuristic will
@@ -78,7 +78,15 @@ def check_context_fit(
     preferable to breaking requests over incomplete configuration data.
     Filling in that value is what activates the guard for that model.
     """
-    _, config = get_client(provider)
+    config = get_provider(provider)
+    # NOTE: get_provider, NOT get_client -- this guard only needs the
+    # model's context_window (config.capabilities/config.model), never a
+    # live connection. get_client would CONSTRUCT the LLM client here,
+    # which requires valid credentials: with e.g. GEMINI_API_KEY unset,
+    # the OpenAI SDK raises at construction time and a token-estimation
+    # check would 500 the request before the LLM fallback in
+    # src/nlp/llm/generate.py ever ran. The guard must stay fail-open on
+    # transport concerns; only generate.py should care about them.
     limit = get_context_window(config.capabilities, config.model)
     if limit is None:
         return

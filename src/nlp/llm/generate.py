@@ -299,6 +299,12 @@ def _complete(
             if first_exc is not None:
                 raise first_exc from None
             raise fallback_exc from None
+        if content:
+            logger.warning(
+                f"{log_prefix}FALLBACK USED -- answer came from "
+                f"backend={config.fallback.backend} | model={config.fallback.model} "
+                f"(primary backend={config.backend} | model={config.model} unavailable)"
+            )
     elif not content and first_exc is not None:
         # No fallback configured: keep the previous behavior of
         # propagating the provider error.
